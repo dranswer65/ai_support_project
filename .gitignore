@@ -1,6 +1,17 @@
+# secrets
 .env
 *.env
-secrets.json
-config.json
+
+# logs
+logs/
+*.log
+
+# local data
+kpi.txt
+
+# test keys
+stripe_test.py
+
+# python
 __pycache__/
 *.pyc
