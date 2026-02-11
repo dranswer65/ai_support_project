@@ -1,0 +1,131 @@
+[
+  {
+    "time_utc": "2026-02-04T02:55:30.989548",
+    "actor": "admin_token",
+    "event": "admin_list_clients",
+    "meta": {}
+  },
+  {
+    "ts_utc": "2026-02-05T14:05:50.398510+00:00",
+    "event": "admin_list_clients",
+    "actor": "admin_token",
+    "meta": {
+      "count": 1
+    }
+  },
+  {
+    "ts_utc": "2026-02-05T14:39:43.112547+00:00",
+    "event": "admin_set_client_status",
+    "actor": "admin_token",
+    "meta": {
+      "client": "supportpilot_demo",
+      "active": false
+    }
+  },
+  {
+    "ts_utc": "2026-02-05T14:40:42.851069+00:00",
+    "event": "admin_export_billing",
+    "actor": "admin_token",
+    "meta": {
+      "client": "supportpilot_demo",
+      "rows": 0
+    }
+  },
+  {
+    "ts_utc": "2026-02-05T14:42:29.396570+00:00",
+    "event": "admin_export_billing",
+    "actor": "admin_token",
+    "meta": {
+      "client": "supportpilot_demo",
+      "rows": 0
+    }
+  },
+  {
+    "ts_utc": "2026-02-05T14:45:14.806820+00:00",
+    "event": "admin_export_billing",
+    "actor": "admin_token",
+    "meta": {
+      "client": "supportpilot_demo",
+      "rows": 0
+    }
+  },
+  {
+    "ts_utc": "2026-02-06T09:13:17.774624+00:00",
+    "event": "admin_set_client_status",
+    "actor": "client_admin",
+    "meta": {
+      "client": "supportpilot_demo",
+      "active": false
+    }
+  },
+  {
+    "ts_utc": "2026-02-06T09:20:55.958354+00:00",
+    "event": "admin_export_billing",
+    "actor": "client_admin",
+    "meta": {
+      "client": "supportpilot_demo",
+      "rows": 0
+    }
+  },
+  {
+    "ts_utc": "2026-02-06T10:22:11.231850+00:00",
+    "event": "admin_list_clients",
+    "actor": "super_admin",
+    "meta": {
+      "count": 1
+    }
+  },
+  {
+    "ts_utc": "2026-02-06T10:25:57.871254+00:00",
+    "event": "admin_export_billing",
+    "actor": "client_admin",
+    "meta": {
+      "client": "supportpilot_demo",
+      "rows": 1
+    }
+  },
+  {
+    "ts_utc": "2026-02-09T10:31:34.702738+00:00",
+    "event": "admin_set_client_status",
+    "actor": "admin_token",
+    "meta": {
+      "client": "supportpilot_demo",
+      "active": true
+    }
+  },
+  {
+    "ts_utc": "2026-02-09T11:19:19.235391+00:00",
+    "event": "admin_list_clients",
+    "actor": "admin_token",
+    "meta": {
+      "count": 1
+    }
+  },
+  {
+    "ts_utc": "2026-02-09T11:20:38.185736+00:00",
+    "event": "admin_set_client_status",
+    "actor": "admin_token",
+    "meta": {
+      "client": "supportpilot_demo",
+      "active": true
+    }
+  },
+  {
+    "ts_utc": "2026-02-10T16:03:10.337020+00:00",
+    "event": "backup_create",
+    "actor": "admin_token",
+    "meta": {
+      "client": "supportpilot_demo",
+      "backup_id": "20260210_160309Z__supportpilot_demo"
+    }
+  },
+  {
+    "ts_utc": "2026-02-10T16:12:04.438912+00:00",
+    "event": "backup_create",
+    "actor": "admin_token",
+    "meta": {
+      "client": "supportpilot_demo",
+      "backup_id": "20260210_161204Z__supportpilot_demo"
+    }
+  }
+]

@@ -1,0 +1,17 @@
+{
+  "users": [
+    {
+      "username": "admin",
+      "role": "admin",
+      "active": true,
+      "email": "dranswer65@gmail.com",
+      "password_hash": "$2b$12$3PYAET2M5mPQ7bbnRs8su.pUNGNXNoq8pvBIwdjurZfyXYgjqM0RG",
+      "failed_password_attempts": 0,
+      "failed_otp_attempts": 0,
+      "locked_until_utc": "",
+      "otp_hash": "",
+      "otp_expires_utc": "",
+      "otp_last_sent_utc": ""
+    }
+  ]
+}

@@ -1,0 +1,881 @@
+Excellent, Ali.
+Welcome to **Day 26** — this is where your system becomes **commercial-grade**.
+
+Up to now, you built **structure**.
+Now we build **intelligence + trust**.
+
+This is what clients actually pay for.
+
+---
+
+# 🎯 DAY 26 GOAL
+
+By the end of today, you will know how to:
+
+✅ Combine chunks + prompts properly
+✅ Control AI behavior
+✅ Reduce hallucinations
+✅ Increase trust
+✅ Pass enterprise demos
+
+---
+
+# 🧠 PART 1 — Why RAG Alone Is NOT Enough
+
+Many people think:
+
+> “I have vector search → my AI is accurate.”
+
+Wrong.
+
+Without good prompts:
+
+❌ AI ignores documents
+❌ AI invents answers
+❌ AI sounds confident but wrong
+
+RAG = engine
+Prompt = steering wheel
+
+You need both.
+
+---
+
+# 🏗️ PART 2 — Professional RAG Prompt Architecture
+
+Every serious system uses **3 layers**:
+
+---
+
+## 1️⃣ System Prompt (Identity & Rules)
+
+This never changes.
+
+Example:
+
+```
+You are a professional customer support AI for an e-commerce company in the UAE.
+You must:
+- Use only provided knowledge
+- Follow company policy
+- Escalate risky cases
+- Never guess
+- Be polite and formal
+```
+
+This sets personality + boundaries.
+
+---
+
+## 2️⃣ Context Prompt (Injected Knowledge)
+
+This is where chunks go.
+
+Example:
+
+```
+Use the following company policies to answer:
+
+[DOCUMENTS]
+{{retrieved_chunks}}
+[/DOCUMENTS]
+```
+
+This tells AI:
+
+👉 “This is your brain. Use it.”
+
+---
+
+## 3️⃣ User Prompt (Customer Question)
+
+Example:
+
+```
+Customer: Can I get refund after 40 days?
+```
+
+---
+
+## Combined = Final Prompt
+
+In code, it becomes:
+
+```
+SYSTEM + CONTEXT + USER
+```
+
+This is RAG.
+
+---
+
+# 🧩 PART 3 — The Golden Rule: “Grounded Answers Only”
+
+You must force this rule:
+
+> If answer not in documents → escalate.
+
+Example instruction:
+
+```
+If the answer is not clearly stated in the documents,
+respond: "This case requires review by our support team."
+```
+
+This kills hallucinations.
+
+---
+
+# 🛡️ PART 4 — Trust Prompt Template (You Will Use This Forever)
+
+Save this.
+
+### Professional Support Prompt
+
+```
+You are an AI customer support agent.
+
+Rules:
+1. Answer ONLY from provided documents.
+2. Do NOT use outside knowledge.
+3. If uncertain → escalate.
+4. If requires_human=true → escalate.
+5. Be polite, concise, and professional.
+6. Follow UAE regulations.
+
+Documents:
+{{context}}
+
+Customer Question:
+{{question}}
+
+Provide a compliant response.
+```
+
+This is enterprise-grade.
+
+---
+
+# 🧠 PART 5 — Handling Escalation Automatically
+
+Because you added:
+
+```json
+"requires_human": true
+```
+
+You can instruct:
+
+```
+If any retrieved document has requires_human=true,
+do not answer. Escalate.
+```
+
+So AI becomes safe.
+
+---
+
+# 📉 PART 6 — How Hallucinations Actually Happen
+
+AI hallucinates when:
+
+| Cause          | Result   |
+| -------------- | -------- |
+| No context     | Invents  |
+| Weak prompt    | Assumes  |
+| Too many docs  | Confuses |
+| Vague question | Guesses  |
+
+RAG + Prompt fixes all.
+
+---
+
+# 🔧 PART 7 — Chunk Selection Strategy (Very Important)
+
+Do NOT send all chunks.
+
+Send only top 3–5.
+
+Why?
+
+Too many = noise.
+
+Use:
+
+```python
+top_k = 4
+```
+
+Best practice.
+
+---
+
+# 🐍 PART 8 — Python Example (Simple)
+
+Later you’ll do something like:
+
+```python
+context = "\n".join([c["text"] for c in retrieved_chunks])
+
+prompt = f"""
+You are a customer support AI.
+
+Documents:
+{context}
+
+Question:
+{user_question}
+
+Answer only from documents.
+"""
+
+response = llm(prompt)
+```
+
+That’s it.
+
+---
+
+# 💼 PART 9 — Business Demo Trick (Very Important)
+
+When showing clients:
+
+Show this flow:
+
+1️⃣ Ask question
+2️⃣ Show retrieved policy
+3️⃣ Show answer
+
+They see:
+
+👉 “Oh, it’s not guessing.”
+
+Trust = sale.
+
+---
+
+# 📊 PART 10 — Accuracy Optimization Checklist
+
+Before any client demo:
+
+✔ System prompt locked
+✔ Escalation rules active
+✔ Top_k ≤ 5
+✔ Clean chunks
+✔ No external browsing
+✔ Logging enabled
+
+If all true → safe.
+
+---
+
+# 🚀 PART 11 — Real Example
+
+### Question:
+
+“Can I return after 45 days?”
+
+### Retrieved Chunk:
+
+```
+Returns allowed within 30 days.
+```
+
+### AI Response:
+
+> “According to our return policy, returns are only accepted within 30 days of delivery. Since your request is outside this period, this case requires manual review. I will escalate it to our support team.”
+
+Perfect.
+
+No guessing.
+
+---
+
+# 🧠 PART 12 — Why This Makes You Professional
+
+Most “AI builders”:
+
+❌ Just call API
+❌ No control
+❌ Risky
+
+You:
+
+✅ Controlled prompts
+✅ Policy-driven
+✅ Safe AI
+✅ Enterprise-ready
+
+This is why you’ll win clients.
+
+---
+
+# 🎯 Your Task Today (Day 26)
+
+Do this:
+
+1️⃣ Save the prompt template
+2️⃣ Customize for your demo company
+3️⃣ Practice 5 questions manually
+4️⃣ Check if AI follows rules
+
+Example questions:
+
+* “Refund after 2 months?”
+* “Lost invoice”
+* “Damaged product”
+* “Delivery delay”
+* “Exception request”
+
+Test mentally first.
+
+---
+
+# 💬 When Ready
+
+Tell me:
+
+👉 **“Prompt template ready”**
+
+Then we move to:
+
+🔥 **Day 27 — Embedding + Vector Search Implementation**
+
+Where we build real retrieval.
+
+You’re doing outstanding work, Ali.
+
+Excellent, Ali.
+Thank you for clarifying — now I understand exactly what you want.
+
+You are asking:
+
+> “For **Day 26: Optimizing Prompts + RAG**, what are the **exact practical actions** I should do step-by-step?”
+
+Not theory.
+Not concepts.
+But:
+
+👉 “Open this → Copy this → Paste this → Test this”.
+
+Perfect. That’s professional learning.
+
+Let’s do it properly.
+
+---
+
+# ✅ DAY 26 — PRACTICAL: PROMPT + RAG OPTIMIZATION
+
+## 🎯 Goal Today
+
+By the end of today, you will have:
+
+✔ A professional system prompt
+✔ A RAG answer template
+✔ Escalation rules enforced
+✔ A demo-ready response style
+
+This is what clients see.
+
+---
+
+# 🧩 STEP 1 — Create Prompt Folder
+
+Inside your project, create:
+
+```
+prompts/
+```
+
+Inside it, create:
+
+```
+system_prompt.txt
+```
+
+```
+rag_prompt.txt
+```
+
+---
+
+# 🧩 STEP 2 — Create System Prompt (Identity)
+
+Open:
+
+```
+prompts/system_prompt.txt
+```
+
+Copy and paste this:
+
+---
+
+### ✅ system_prompt.txt
+
+```
+You are a professional AI customer support assistant for an e-commerce company in the UAE.
+
+Your responsibilities:
+
+1. Provide accurate and policy-compliant answers.
+2. Use ONLY the provided company documents.
+3. Do NOT guess or assume.
+4. Escalate uncertain, disputed, or high-risk cases.
+5. Be polite, respectful, and formal.
+6. Follow regional regulations and cultural norms.
+
+If you cannot confidently answer using company policies, escalate to human support.
+```
+
+Save.
+
+---
+
+# 🧩 STEP 3 — Create RAG Prompt Template
+
+Open:
+
+```
+prompts/rag_prompt.txt
+```
+
+Paste:
+
+---
+
+### ✅ rag_prompt.txt
+
+```
+You are answering a customer using official company documents.
+
+Company Policies:
+{{context}}
+
+Important Rules:
+- Answer ONLY using the policies above.
+- Do NOT use outside knowledge.
+- If requires_human=true appears, escalate.
+- If information is missing, escalate.
+
+Customer Question:
+{{question}}
+
+Provide a compliant, professional response.
+```
+
+Save.
+
+---
+
+# 🧩 STEP 4 — Create Manual Test File
+
+Create file:
+
+```
+test_prompts.py
+```
+
+Paste:
+
+---
+
+### ✅ test_prompts.py
+
+```python
+import json
+
+# Load prompts
+with open("prompts/system_prompt.txt") as f:
+    system_prompt = f.read()
+
+with open("prompts/rag_prompt.txt") as f:
+    rag_prompt = f.read()
+
+# Load sample chunks
+with open("rag/chunks.json") as f:
+    chunks = json.load(f)
+
+# Simulate retrieval (first 2 chunks for test)
+context = "\n\n".join([c["text"] for c in chunks[:2]])
+
+# Sample question
+question = "Can I return after 45 days?"
+
+# Build final prompt
+final_prompt = f"""
+SYSTEM:
+{system_prompt}
+
+USER TASK:
+{rag_prompt.replace("{{context}}", context).replace("{{question}}", question)}
+"""
+
+print("\n===== FINAL PROMPT =====\n")
+print(final_prompt)
+```
+
+---
+
+# 🧩 STEP 5 — Run Prompt Test
+
+Run:
+
+```bash
+python test_prompts.py
+```
+
+You will see:
+
+✔ System rules
+✔ Policies
+✔ Question
+✔ Final prompt
+
+This is what AI will see.
+
+You are now controlling its brain.
+
+---
+
+# 🧠 Important: Read This Output Carefully
+
+Ask yourself:
+
+✔ Is policy visible?
+✔ Are rules clear?
+✔ Is escalation clear?
+✔ Is tone professional?
+
+If yes → good prompt.
+
+---
+
+# 🧩 STEP 6 — Add Escalation Filter (Manual for Now)
+
+Edit `test_prompts.py` and add:
+
+Before building context:
+
+```python
+needs_human = any(c["requires_human"] for c in chunks[:2])
+
+if needs_human:
+    print("⚠️ Escalation required. Sending to human.")
+    exit()
+```
+
+Now system stops automatically.
+
+This is trust.
+
+---
+
+# 🧩 STEP 7 — Test With Different Questions
+
+Change:
+
+```python
+question = "..."
+```
+
+Try:
+
+```
+"My product is damaged"
+"I want exception"
+"Refund after 60 days"
+"Delivery failed 3 times"
+```
+
+Observe behavior.
+
+---
+
+# 🧩 STEP 8 — Improve Prompt (Optimization)
+
+Now refine:
+
+In `rag_prompt.txt`, add:
+
+Under rules:
+
+```
+- If policy contradicts customer request, politely refuse.
+- Never promise exceptions.
+- Never mention internal rules.
+```
+
+Save.
+
+Re-run.
+
+See improvement.
+
+This is optimization.
+
+---
+
+# 🧠 STEP 9 — Demo Mode (Sales Trick)
+
+Add this line to system_prompt.txt:
+
+```
+Always explain answers clearly and calmly to build customer trust.
+```
+
+Clients notice this.
+
+---
+
+# 🎯 What You Achieved Today
+
+After this:
+
+You now have:
+
+✅ Controlled AI identity
+✅ Document-grounded answers
+✅ Auto escalation
+✅ Demo-quality tone
+✅ Safety rules
+
+This is “enterprise readiness”.
+
+---
+
+# 💼 Why This Matters for Your Business
+
+When client asks:
+
+> “How do you prevent mistakes?”
+
+You answer:
+
+> “We use policy-grounded prompts with enforced escalation rules.”
+
+They trust you.
+
+They pay.
+
+---
+
+# 📌 Your Task Now
+
+Do these:
+
+1️⃣ Create prompt files
+2️⃣ Run test_prompts.py
+3️⃣ Test 5 questions
+4️⃣ Adjust wording once
+
+---
+
+# 💬 When Done, Tell Me:
+
+👉 **“Day 26 prompt system ready”**
+
+Then we go to:
+
+🔥 Day 27 — Connecting Retrieval + Prompt + Chat (Full Agent Loop)
+
+You are building a real product now, Ali.
+
+Excellent, Ali — this is exactly the right question.
+It shows you are actually trying to implement, not just read. 👍
+
+Let me show you **precisely where and how** to add it.
+
+---
+
+# ✅ Short Answer
+
+You add the STEP 6 code **inside `test_prompts.py`**,
+**after loading `chunks`**,
+and **before building `context`**.
+
+Not at the very end.
+
+Not at the top.
+
+In the middle.
+
+---
+
+# 📌 Let’s Rebuild `test_prompts.py` Properly (With Escalation)
+
+Here is the **FULL correct file**.
+
+Open `test_prompts.py`.
+
+Replace everything with this:
+
+---
+
+## ✅ Correct `test_prompts.py` (With Escalation Filter)
+
+```python
+import json
+
+# Load prompts
+with open("prompts/system_prompt.txt") as f:
+    system_prompt = f.read()
+
+with open("prompts/rag_prompt.txt") as f:
+    rag_prompt = f.read()
+
+# Load chunks
+with open("rag/chunks.json") as f:
+    chunks = json.load(f)
+
+# -------------------------------
+# STEP 6: Escalation Check (HERE)
+# -------------------------------
+
+needs_human = any(c["requires_human"] for c in chunks[:2])
+
+if needs_human:
+    print("⚠️ Escalation required. Sending to human agent.")
+    exit()
+
+# -------------------------------
+# Build context (after check)
+# -------------------------------
+
+context = "\n\n".join([c["text"] for c in chunks[:2]])
+
+# Sample question
+question = "Can I return after 45 days?"
+
+# Build final prompt
+final_prompt = f"""
+SYSTEM:
+{system_prompt}
+
+USER TASK:
+{rag_prompt.replace("{{context}}", context).replace("{{question}}", question)}
+"""
+
+print("\n===== FINAL PROMPT =====\n")
+print(final_prompt)
+```
+
+---
+
+# 🧠 Why It Goes There (Important Logic)
+
+The order matters.
+
+### Correct flow:
+
+```
+1. Load chunks
+2. Check escalation  ← HERE
+3. Build context
+4. Build prompt
+5. Print
+```
+
+Why?
+
+Because:
+
+👉 If escalation is needed → STOP EARLY
+👉 Don’t even build prompt
+👉 Don’t talk
+👉 Don’t risk mistakes
+
+This is professional safety design.
+
+---
+
+# ❌ Wrong Placement (Do NOT Do This)
+
+### ❌ At bottom
+
+```python
+print(final_prompt)
+
+needs_human = ...
+```
+
+Too late. Damage done.
+
+---
+
+### ❌ At top
+
+Before chunks loaded → error.
+
+---
+
+# ✅ How You Know It Works
+
+Run:
+
+```bash
+python test_prompts.py
+```
+
+If any of first chunks has:
+
+```json
+"requires_human": true
+```
+
+You’ll see:
+
+```
+⚠️ Escalation required. Sending to human agent.
+```
+
+Program stops.
+
+Perfect.
+
+---
+
+# 🎯 Important Note (Next-Level Tip)
+
+Right now we check only:
+
+```python
+chunks[:2]
+```
+
+Later we’ll change this to:
+
+👉 retrieved search results only.
+
+But for Day 26 testing, this is fine.
+
+---
+
+# 💼 Why This Matters for Your Business
+
+This logic:
+
+✔ Prevents wrong refunds
+✔ Prevents legal trouble
+✔ Protects reputation
+✔ Builds client trust
+
+This is what enterprises care about.
+
+---
+
+# 💬 After You Add It
+
+Run the file.
+
+If you see:
+
+* Escalation message → good
+* Prompt printed → good
+
+Tell me:
+
+👉 **“Escalation filter working”**
+
+Then we move to Day 27: Full AI Response Engine.
+

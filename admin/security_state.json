@@ -1,0 +1,30 @@
+{
+  "known_devices": {},
+  "failed_logins": [
+    {
+      "ts": "2026-02-04T12:44:46+00:00",
+      "username": "admin",
+      "ip": "local"
+    },
+    {
+      "ts": "2026-02-04T12:45:18+00:00",
+      "username": "admin",
+      "ip": "local"
+    },
+    {
+      "ts": "2026-02-04T12:47:47+00:00",
+      "username": "admin",
+      "ip": "local"
+    },
+    {
+      "ts": "2026-02-04T12:48:01+00:00",
+      "username": "admin",
+      "ip": "local"
+    },
+    {
+      "ts": "2026-02-04T12:48:12+00:00",
+      "username": "admin",
+      "ip": "local"
+    }
+  ]
+}

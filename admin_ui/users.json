@@ -1,0 +1,28 @@
+{
+  "users": [
+    {
+      "username": "superadmin",
+      "role": "admin",
+      "active": true,
+      "email": "you@supportpilot.ai",
+      "client_name": "*",
+      "password_hash": "BCRYPT_HASH_HERE"
+    },
+    {
+      "username": "spdemo_admin",
+      "role": "client_admin",
+      "active": true,
+      "email": "client@company.com",
+      "client_name": "supportpilot_demo",
+      "password_hash": "BCRYPT_HASH_HERE"
+    },
+    {
+      "username": "spdemo_viewer",
+      "role": "viewer",
+      "active": true,
+      "email": "viewer@company.com",
+      "client_name": "supportpilot_demo",
+      "password_hash": "BCRYPT_HASH_HERE"
+    }
+  ]
+}

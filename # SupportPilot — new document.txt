@@ -1,0 +1,2028 @@
+# SupportPilot — Returns & Refunds Knowledge Base
+
+**Brand:** SupportPilot
+**Admin:** supportpilot_demo
+**Support Email:** [support@supportpilot.ai](mailto:support@supportpilot.ai)
+**Support Phone:** 0555000001
+**Region:** UAE
+
+---
+
+## 1. Returns Overview
+
+Customers can return eligible products using **three methods**:
+
+1. Online return request
+2. Return to store
+3. Call to arrange pickup
+
+All returns must meet the eligibility criteria defined in the Returns Policy.
+
+---
+
+## 2. Online Return Request (Household Products Only)
+
+### Steps:
+
+1. Log in to **My Account** → **Order History**.
+2. Select the order and choose the items to return.
+3. Click **Return Selected Items**.
+4. Complete the return slip from the delivery package or order confirmation email.
+5. Pack items securely in their **original packaging**.
+6. Courier partner will contact the customer to schedule pickup.
+7. Customer hands over the package and receives an acknowledgement receipt.
+
+### Refund Timeline:
+
+* 2–3 business days: Item received
+* 2 business days: Quality check
+* 4–15 business days: Refund credited (bank/card/PayPal/Tabby)
+
+### Cash Payments:
+
+* Registered users: Refund to **My Credit**
+* Guest users: **Return Voucher** issued
+
+---
+
+## 3. Return to Store (UAE Stores)
+
+### Steps:
+
+1. Pack products (excluding Scheduled Delivery items) in original packaging.
+2. Bring items and invoice to any SupportPilot partner store in the UAE.
+3. Authorized staff accepts the return.
+4. Refund is processed after quality check.
+
+### Refund Options:
+
+* **Cash payment:** Cash refund / Credit Note / My Credit
+* **Card payment:** Refund to card or Credit Note
+* **PayPal / Tabby:** Refund to PayPal/Tabby or Credit Note
+
+### Important Notes:
+
+* Scheduled Delivery items cannot be returned in-store.
+* Product codes and labels must be intact.
+
+---
+
+## 4. Call to Schedule a Pickup
+
+### Steps:
+
+1. Pack items in original packaging.
+2. Call **0555000001** to request a return pickup.
+3. Courier partner schedules pickup.
+4. Item is collected and acknowledgement provided.
+
+### Refund Options:
+
+* Card / PayPal / Tabby → Original payment method
+* Cash payments → Bank transfer or My Credit
+* Guest users → Return Voucher
+
+---
+
+## 5. Products Not Eligible for Online Returns
+
+Online return requests are **not allowed** for:
+
+* Furniture
+* Mattresses
+* Assembled products
+
+Customers must use **store return** or **call pickup** for these items.
+
+---
+
+## 6. Packaging Requirement
+
+Returns are **only accepted in original packaging**. Items without original packaging are not eligible for return.
+
+---
+
+## 7. Refund Methods & Timelines
+
+### Credit / Debit Card:
+
+* 2–3 days: Item received
+* 2 days: Quality check
+* 2–15 days: Bank processing
+
+### PayPal:
+
+* 2–3 days: Item received
+* 2 days: Quality check
+* 4–15 days: PayPal processing
+
+### Cash on Delivery:
+
+* Online return → My Credit (registered) or Return Voucher (guest)
+* Store return → Cash / Credit Note / My Credit
+* Pickup return → Bank transfer or My Credit
+
+---
+
+## 8. My Credit, Return Vouchers & Credit Notes
+
+* **Single-use only**
+* **Valid for 6 months** from issue date
+* Usable online and in-store
+
+---
+
+## 9. Refund After Return Completion
+
+* Return received: 2–3 business days
+* Quality check: 2 business days
+
+### Cash Payment Options:
+
+* Instant My Credit (registered users)
+* Return Voucher emailed within 48 hours (guest users)
+* Bank transfer: Additional 7 days after submitting bank details
+
+---
+
+## 10. Refund After Order Cancellation
+
+* **Card / PayPal / Tabby:** Refunded to original payment method (4–15 business days)
+* **Cash on Delivery:** No refund as payment was not collected
+
+---
+
+## 11. Escalation & Support Guidance (AI Agent)
+
+Escalate to human agent when:
+
+* Refund exceeds SLA
+* Courier pickup failed
+* Damaged or incorrect item disputes
+* Customer threatens legal action
+
+Provide calm acknowledgement, confirm details, and transfer to human support.
+
+---
+
+# SupportPilot — Tracking & Delivery Knowledge Base
+
+## 1. Delivery Overview
+
+SupportPilot offers multiple delivery options depending on **product type**, **location**, and **order time**. Delivery details are always shown at checkout before payment.
+
+---
+
+## 2. Delivery Options
+
+### 2.1 Express & Scheduled Delivery (Furniture Only)
+
+For select SupportPilot furniture items, customers can choose:
+
+* **Express Delivery (2-day)**
+* **Scheduled Delivery** (preferred date & time)
+
+**Key Points:**
+
+* Delivery date and time can be selected during checkout
+* Additional charges apply based on location
+* Express delivery charge: **AED 250**
+
+In rare cases (weather, transport, stock issues), delivery may be rescheduled. Customers will be contacted in advance to confirm a new date.
+
+---
+
+## 3. Standard Delivery (Household & Other Products)
+
+### Same Day Delivery
+
+* Available for select locations in **Dubai, Sharjah, and Ajman**
+* Order must be placed **before 12:00 PM on business days**
+* Additional charge: **AED 18**
+* Home delivery only
+
+### Next Business Day Delivery
+
+* Orders placed **before 3:30 PM (Saturday–Thursday)**
+* Delivered next business day
+
+### 2–3 Business Day Delivery
+
+* Orders placed **after 3:30 PM** or **on Fridays**
+* Remote or extended service areas
+
+Delivery timelines for all products are displayed clearly at checkout.
+
+---
+
+## 4. Selecting Delivery Date & Time (Furniture)
+
+### Steps:
+
+1. Add furniture item to cart
+2. Proceed to checkout → Shipping page
+3. Pin delivery location (optional but recommended)
+4. Choose a highlighted available delivery date
+5. Select a preferred delivery time slot
+6. Confirm selection and place order
+
+Delivery date and time will be shown on the order confirmation screen.
+
+---
+
+## 5. Changing Delivery Address
+
+* Delivery address **cannot be changed online after order placement**
+* Address changes may be requested when the delivery partner calls before delivery
+* Address changes may result in delivery delays
+
+---
+
+## 6. Preferred Delivery Time
+
+* Preferred delivery date and time selection is available **only for furniture orders**
+* Household products are delivered within standard delivery windows
+
+### Household Product Delivery Window:
+
+* Between **8:00 AM and 7:00 PM**
+* If the customer is unavailable, delivery will be rescheduled
+
+---
+
+## 7. Cash on Delivery (COD) Rules
+
+### Assembly & Payment
+
+* Full COD payment must be made **before assembly**
+* If payment is not made upon arrival:
+
+  * Products will be taken back
+  * Assembly will not be performed
+
+---
+
+## 8. Multiple Address Delivery
+
+* One order = one delivery address
+* To deliver to multiple addresses:
+
+  * Place separate orders
+* Multiple addresses can be saved in **My Account**
+
+---
+
+## 9. Missed Delivery Attempts
+
+If the customer was unavailable:
+
+* They can request a callback from the delivery partner
+* Contact SupportPilot at **0555000001** to reschedule
+
+---
+
+## 10. ID Verification at Delivery
+
+* A valid ID must be shown at delivery
+* Accepted IDs:
+
+  * Passport
+  * Emirates ID
+
+---
+
+## 11. Receiving Orders on Behalf of Customer
+
+* Another person can receive the order at the delivery address
+* Receiver must present their **own valid ID** (Passport or Emirates ID)
+
+---
+
+## 12. Rescheduling Cash on Delivery Orders
+
+* COD orders are **automatically cancelled after 3 days** if not received
+* To reschedule:
+
+  * Call **0555000001** at least **2 days before** the scheduled delivery date
+  * New delivery date must be within **15 days** of original date
+
+---
+
+## 13. Shipment Tracking & Support
+
+Customers can track their order via:
+
+* **My Account → Order History**
+
+For delivery or tracking assistance:
+
+* Visit **Contact Us** page
+* Email: **[support@supportpilot.ai](mailto:support@supportpilot.ai)**
+* Phone: **0555000001**
+
+---
+
+## 14. AI Agent Escalation Guidelines
+
+Escalate to human agent when:
+
+* Delivery missed multiple times
+* COD order cancellation dispute
+* Address change causes SLA breach
+* Customer dissatisfaction persists
+
+---
+
+## 15. AI Agent Tone Guidelines
+
+* Acknowledge inconvenience first
+* Clearly explain delivery timelines
+* Never promise exact times unless scheduled
+* Offer rescheduling options politely
+# Warranty Policy (SupportPilot)
+
+## Overview
+
+* The warranty period starts from the **date of purchase**.
+* Warranty coverage applies **only to manufacturing defects**.
+* **Normal wear and tear**, accidental damage, or **misuse** are not covered under warranty.
+
+## What Is Covered
+
+* Manufacturing or material defects identified during the warranty period.
+* Eligible products may be **repaired or replaced** at SupportPilot’s discretion, in line with applicable terms and conditions.
+
+## What Is Not Covered
+
+* Damage caused by improper use, mishandling, or lack of care.
+* Wear and tear resulting from regular use.
+* Products without valid proof of purchase.
+
+## Warranty Claim Process
+
+1. Identify a potential manufacturing defect within the warranty period.
+2. Keep your **original receipt or invoice** as proof of purchase (mandatory).
+3. Contact SupportPilot Customer Support via the **Contact Us** page or email **[support@supportpilot.ai](mailto:support@supportpilot.ai)**.
+4. Our team will guide you through inspection, repair, or replacement steps based on the product and issue.
+
+## Proof of Purchase Requirement
+
+* Customers **must present the original receipt** when submitting a warranty claim.
+* Claims without valid proof of purchase cannot be processed.
+
+## Partner & Sourced Products
+
+* SupportPilot assists customers with warranty support for products purchased through our website or mobile app, **including partner-sourced products**.
+* Warranty handling may involve coordination with the original supplier or manufacturer.
+
+## Need Help?
+
+For warranty questions or claim assistance, contact:
+
+* **Email:** [support@supportpilot.ai](mailto:support@supportpilot.ai)
+* **Phone:** 0555000001
+
+Our support team will ensure your query is handled efficiently and fairly.
+
+# Returns Policy (SupportPilot)
+
+## Overview
+
+We understand that you may occasionally wish to return your purchases, and we’re here to help make the process smooth and transparent.
+
+Returns are accepted subject to the conditions outlined below.
+
+---
+
+## Items Not Eligible for Return
+
+We do **not** accept returns for:
+
+* Products damaged due to misuse or showing signs of wear, even if still under warranty.
+* Products that have been used, altered, assembled, or installed, unless they have a manufacturing defect.
+* Bedding and personal-use items removed from original packaging, including mattresses, bath products, kids’ products, pillows, sheets, comforters, duvets, duvet covers, memory foam items, towels, and bathrobes.
+* Products already assembled, unless a manufacturing defect is confirmed (subject to inspection).
+* Products requested for exchange due to size or colour preference. Exchanges are not offered; customers must return the item and place a new order.
+
+All eligible non-furniture products must be returned:
+
+* In original packaging
+* Within **30 days of delivery**
+* With the original invoice, accessories, promotional items, and warranty cards
+
+---
+
+## Return Eligibility (SupportPilot Products)
+
+Returns will be accepted if:
+
+* The purchase was made within the last **30 days**
+* The original invoice is provided
+* The product is unused and undamaged
+
+Refunds are issued if:
+
+* The product has a confirmed manufacturing defect
+* The order is cancelled at least **24 hours before the scheduled delivery time**
+
+Return collection may take **3–5 business days**.
+
+---
+
+## Online Return Limitations
+
+* Furniture and mattresses cannot be returned through online return requests.
+* A full list of non-returnable items is available in the detailed returns policy.
+
+---
+
+## Promotional & Bundle Orders
+
+For **Buy 1 Get 1 Free** or **bundle promotions**:
+
+* Partial returns require contacting Customer Support or returning items to a store.
+* Online return requests are allowed only if returning the **entire order**.
+
+If a voucher was applied:
+
+* The voucher will be cancelled upon return (partial or full).
+* If already used, the voucher value will be deducted from the refund.
+
+---
+
+## Refund Methods by Payment Type
+
+### Card / PayPal / Tabby Payments
+
+* 2–3 business days to receive returned items
+* 2 business days for quality check and refund initiation
+* Additional **4–15 business days** for bank or provider processing
+
+### Cash on Delivery (COD)
+
+* COD charges are refunded **only if the entire order is returned**
+
+Refund options:
+
+* **Store return:** Cash refund, Credit Voucher, or refund to **Loyal Pay wallet**
+* **Pickup return:** Bank transfer or Loyal Pay wallet refund (Credit Voucher for guest users)
+* **Online return:** Loyal Pay wallet refund or Credit Voucher (no cash/bank transfer)
+
+Credit Vouchers:
+
+* Valid for **12 months**
+* Single-use
+* Redeemable online or in-store
+
+---
+
+## Loyal Pay Wallet
+
+**Loyal Pay** is a secure digital wallet that allows instant refunds and can be used across all supported brands, online or in-store.
+
+Key rules:
+
+* Refunds for payments made using **Loyal points, gift cards, or Credit Vouchers** are credited to the Loyal Pay wallet
+* If Loyal Pay is not activated, a new Credit Voucher is issued
+* Loyal Pay refunds are available only to registered users with an activated wallet
+* Loyal Pay balance cannot be used for shipping or COD charges
+
+---
+
+## Mixed Payment Refunds
+
+For orders paid using a combination of Loyal points, Credit Vouchers, and cards:
+
+* Refunds are split proportionally
+* Loyal portion → Loyal Pay wallet or Credit Voucher
+* Card/PayPal/Tabby portion → Original payment method
+
+This applies to both partial and full returns.
+
+---
+
+## Delivery Charges & VAT
+
+* **Free shipping** remains applicable even if items are returned
+* **Same Day Delivery fee (AED 18)** is refunded only if:
+
+  * Wrong product delivered
+  * Product damaged
+  * Product does not match website description
+* VAT is fully refundable upon return (invoice required)
+
+---
+
+## Store Returns & Special Cases
+
+* Refunds cannot be split across methods
+* Cash refunds are available only for COD purchases returned in-store
+* Products bought using Credit Vouchers are not eligible for cash refunds
+* Orders can be refused at the time of delivery and returned directly to the delivery partner
+
+---
+
+## Charity Donations
+
+* Charity donations are **non-refundable**
+* This applies to both cancellations and returns
+* For cancelled COD orders, charity donations are not collected
+
+---
+
+## Need Help?
+
+For return assistance or refund queries, contact:
+
+* **Email:** [support@supportpilot.ai](mailto:support@supportpilot.ai)
+* **Phone:** 0555000001
+
+Our SupportPilot team is always happy to help.
+
+
+# My Account (SupportPilot)
+
+## Account Creation
+
+You can create your **SupportPilot** account in two simple ways:
+
+### Option 1: Sign Up with Email
+
+1. Click **Sign In** at the top of the page.
+2. Select **Sign Up** from the dropdown.
+3. Enter your name and email address.
+4. Create and confirm your password.
+5. Select your gender.
+6. Click **Create Account Now**.
+
+### Option 2: Sign Up with Facebook
+
+1. Click **Sign In** at the top of the page.
+2. Select **Sign In with Facebook**.
+3. Click **OK** on the Facebook permissions dialog.
+4. Your SupportPilot account will be created using your Facebook details.
+
+Once your account is created, you can shop across all supported brands using a **single account**.
+
+---
+
+## Email Address Changes
+
+* The email address used to create an existing account **cannot be changed**.
+* To use a new email address, you must create a **new account**.
+
+### Loyal Account Transfer
+
+If you wish to transfer your **Loyal points** to a new account:
+
+1. First unlink your Loyal account from your existing SupportPilot account.
+2. Contact Customer Support at **0555000001** for assistance.
+3. Create a new SupportPilot account with your new email address.
+4. Link your Loyal account from the **My Account** section.
+
+---
+
+## Password Management
+
+To change your password:
+
+1. Sign in to your SupportPilot account.
+2. Go to **My Account**.
+3. Open the **Profile** section.
+4. Click **Change Password**.
+5. Enter your current password and your new password.
+6. Confirm the new password and click **Save Changes**.
+
+---
+
+## Payment Details Management
+
+You can add, update, or remove saved payment methods at any time.
+
+### Manage Credit / Debit Cards
+
+1. Sign in to your SupportPilot account.
+2. Go to **My Account**.
+3. Click on **Payments**.
+4. Add or delete Credit or Debit Cards as required.
+5. Select your default payment method if needed.
+
+### Update Billing Address
+
+1. Sign in to your SupportPilot account.
+2. Go to **My Account**.
+3. Open the **Address Book** tab.
+4. Click **Add a New Address** or edit an existing one.
+5. Save your updated billing address.
+
+---
+
+## Account & Payment Security
+
+Your account and payment information are protected using **industry-standard security practices**.
+
+* All sensitive data is secured using **256-bit SSL encryption**.
+* Information exchanged between you and SupportPilot is transmitted over **secure SSL channels**.
+* Credit and Debit Card details are never fully displayed or stored.
+* Only the **last four digits** of your card number and the card expiry date are visible during checkout.
+
+These measures ensure your personal and payment information remains safe at all times.
+
+For account-related assistance, contact:
+
+* **Email:** [support@supportpilot.ai](mailto:support@supportpilot.ai)
+* **Phone:** 0555000001
+
+Our SupportPilot team is always here to help.
+
+Orders
+
+How do I order products online?
+Easy!
+
+Find the items you want to buy by searching for them or by browsing our departments.
+Add these items to your basket with the 'Add to Basket' button.
+Click your mini-basket from the top right of the screen and hit the 'Checkout Now' button.
+Enter your shipping information and click the 'Ship to this Address' button.
+Enter your payment information and click the 'Continue' button.
+Review your order and place it using the 'Place Your Order' button.
+That’s it! You’re all done.
+
+If you need any help along the way, give us a call on 800-HOMEBOX (800-4663269), Saturday to Thursday, 9:00 AM to 6:00 PM, so we can talk you through it.
+
+Can I place an order over the phone?
+At the moment, we only accept orders placed through the HomeBoxStores.com website or apps. 
+
+Can I place an order without opening an online account?
+Yes, you can. Simply skip the sign-in process and shop as a guest. You’ll only need to enter your address and payment information when you check out.
+
+Can I place an order for a product that's out of stock?
+We regularly update our product range with new items, but every once in a while you may miss out on something. Enter your email address in the Notify Me box next to the product, and you'll be the first to know when it's back in stock.
+
+What factors should I consider before placing an order for a large item?
+Before ordering any large item, please check the dimensions of the lift, main door and other entry points in your premises.
+
+Will I be charged for delivery?
+If you’re opting for Scheduled delivery or 2-day Express delivery for select furniture, your shipping charges will vary based on your location. Refer to our Shipping page to know more.
+
+For all other household products, delivery is free on orders of AED 500 and above. If your total order value is less than AED 500, you will be charged AED 18 for delivery.
+
+If you opt for Same Day Delivery, which is available to select locations in Dubai, Sharjah and Ajman, you will be charged an extra AED 18.
+
+There will be an additional service charge of AED 10 on all Cash on Delivery orders.
+
+Your delivery charges will be displayed during checkout.
+
+How do I cancel my order?
+It’s easy. Here’s what you need to do.
+
+If you’ve signed in to your account:
+
+Go to the Order Details page in your My Account section.
+Click on the order from which you want to cancel products.
+Select the specific products you wish to cancel.
+Click ‘Cancel selected items’.
+That’s it! You’re done.
+
+If you’re a guest user:
+
+Call us on 800-HOMEBOX (800-4663269) and we'll help you cancel your order.
+
+Do remember that you can only cancel orders that are in the Processing stage.
+
+However, if your order has already been dispatched, wait for it to arrive and refuse to accept the delivery.
+
+I was disconnected from the internet while my order was being processed. How do I complete my order?
+That sounds terrible. Fortunately, if a Thank You screen hasn't been displayed, it means your order hasn't been processed. Restart the process and try again.
+
+If you need any help along the way, give us a call on 800-HOMEBOX (800-4663269), Saturday to Thursday, 9:00 AM to 6:00 PM, so we can talk you through it.
+
+I have purchased one product that requires installation and another product which doesn’t. How will my delivery be scheduled?
+Products that don’t require installation:
+You will see the pre-selected tentative delivery date for the product.
+
+Landmark products that require installation:
+You may select your preferred delivery date/schedule for the product at the time of checkout. 
+
+‘Sourced from and shipped by’ products that require installation:
+Supplier partners will call and fix an appointment, and installation of the product will take place at the mutually agreed date and time.
+
+# Shipping (SupportPilot)
+
+## Delivery Timelines
+
+### Furniture Orders
+
+For select furniture items, you can choose a delivery option at checkout:
+
+* **2-Day Express Delivery** or **Scheduled Delivery**
+* Delivery date and time can be selected during checkout
+* Additional charges apply based on location (shown at checkout)
+
+### Household & Other Products
+
+Delivery timelines depend on when the order is placed:
+
+* **Same Day Delivery**: Orders placed before **12:00 PM on business days** can be delivered the same day to select locations in **Dubai, Sharjah, and Ajman** for an additional **AED 18**.
+* **Next Business Day Delivery**: Orders placed before **3:30 PM (Saturday–Thursday)**.
+* **2–3 Business Days**: Orders placed after **3:30 PM** or on **Fridays**.
+
+Delivery details for each product are displayed on the checkout page.
+
+---
+
+## Missed Deliveries
+
+### Scheduled Furniture Deliveries
+
+* If you are unavailable, Customer Support will contact you to reschedule.
+
+### Other Deliveries
+
+* The delivery partner will contact you to reschedule.
+* Up to **three delivery attempts** will be made.
+* If delivery fails after the third attempt, the order will be returned to SupportPilot.
+
+---
+
+## Delivery Area Restrictions
+
+* We currently **do not deliver to free zones**.
+
+---
+
+## Extended Delivery Areas
+
+Delivery may take longer in the following regions:
+
+### Special Areas (Once a Week)
+
+* Hatta, Hatta Road, Hatta Area
+* Lahabab, Madam
+* Delma Island
+* Al Ghuwaifat
+
+### Western Region 1 (Alternate Days)
+
+* Bida Zayed, Marfa, Tarif
+* Al Barakkah, Al Aryam Island
+* Bidda Al Motawah, Madinat Zayed, Liwa
+
+### Western Region 2 (Alternate Days)
+
+* Al Hamra Island, Yasat Ali Island
+* Abu Al Abyad Island, Ruwais
+* Sila, Shuwayhat Island, Gayathi, Sir Bani Yas Island
+
+---
+
+## Delivery Charges
+
+### Furniture
+
+* Charges apply for **Scheduled** and **2-Day Express** delivery
+* Fees vary by location and are shown at checkout
+
+### Household Products
+
+* **Free delivery** on orders of **AED 500 and above**
+* **AED 18 delivery fee** for orders below AED 500
+
+### Same Day Delivery
+
+* Available in select areas of **Dubai, Sharjah, and Ajman**
+* Additional charge: **AED 18**
+
+### Cash on Delivery (COD)
+
+* Additional **AED 10 service charge** applies
+
+All delivery charges are clearly displayed during checkout.
+
+---
+
+## Same Day Delivery Exceptions
+
+* If Same Day Delivery is missed due to operational issues, the **AED 18 fee will be refunded**.
+* If delivery fails because the customer was unavailable, the Same Day Delivery fee is **non-refundable**.
+
+---
+
+## Shipment Delays
+
+If your shipment is delayed or you need assistance, contact SupportPilot Customer Support:
+
+* **Email:** [support@supportpilot.ai](mailto:support@supportpilot.ai)
+* **Phone:** 0555000001
+
+We’re always here to help ensure your delivery arrives smoothly.
+
+Perfect 👍
+I’ve **cleaned, de-duplicated, and condensed the Payments policy** into a **clear, executive-style support document**, optimized for a **sellable AI customer support agent** in a furniture / household retail context.
+
+Below is the **final cleaned version** (what your AI should “know” and say). No repetition, no noise.
+
+---
+
+## Payments – Cleaned & AI-Ready Knowledge
+
+### Accepted Payment Methods
+
+Customers can pay using:
+
+* Credit & Debit Cards (UAE-issued or international Visa/Mastercard)
+* Cash on Delivery (COD)
+* My Credit (store credit)
+* Gift Cards
+* Shukran Points (minimum 200 points)
+* Tabby (Pay Later or Installments)
+
+---
+
+### Paying Without a Card
+
+Yes. Customers can select **Cash on Delivery** and pay in cash when the order is delivered.
+
+**COD limits & charges**
+
+* Maximum COD order value: **AED 1,500**
+* Additional COD service charge: **AED 10**
+* Orders above AED 1,500 must be paid by card or Tabby
+
+---
+
+### VAT & Pricing
+
+* All prices displayed at checkout are **inclusive of VAT**
+* Delivery and COD charges (if applicable) also include VAT
+* Charity donations are **VAT exempt**
+
+---
+
+### My Credit (Store Credit)
+
+* My Credit **cannot be transferred to a bank account or withdrawn as cash**
+* It can only be used to shop online across participating brands
+
+---
+
+## Installment Payments (Card-Based EMI)
+
+### What Is the Installment Program?
+
+Eligible customers can split large purchases into **monthly installments** using select credit cards from partner banks.
+
+* Eligibility depends on **card type, bank, and minimum order value**
+* Installment tenure options are shown during checkout if eligible
+* Approval or rejection is decided by the **issuing bank**
+
+---
+
+### How Installment Payments Work
+
+1. Customer selects **Pay by Card** at checkout
+2. Enters or selects saved card
+3. Eligible installment options and tenures appear
+4. Customer selects tenure and completes payment
+
+**Important**
+
+* Full amount is charged immediately
+* Bank converts it into installments within **3–7 days**
+* Credit limit is blocked based on installment amount
+* Interest and processing fees vary by bank
+
+---
+
+### Cancellation / Refund on Installments
+
+* Refunds are processed as per the **Return Policy**
+* Customer must contact their bank to confirm:
+
+  * Installment reversal
+  * Foreclosure terms
+  * Interest or fee adjustments
+
+---
+
+## Tabby Payments
+
+### What Is Tabby?
+
+Tabby allows customers to **buy now and pay later** or **pay in installments**, securely and conveniently.
+
+---
+
+### Tabby Options
+
+**Tabby – Pay Later**
+
+* Pay **14 days after delivery** or **30 days after purchase** (whichever is earlier)
+* No card required at checkout
+* Limits:
+
+  * Min: AED 50
+  * Max: AED 1,000
+
+**Tabby – Installments**
+
+* Pay **25% upfront**
+* Remaining 75% paid over **3 monthly installments**
+* Debit or credit card required
+* Limits:
+
+  * Min: AED 50
+  * Max: AED 3,000
+
+---
+
+### Using Tabby
+
+1. Add items to cart and proceed to checkout
+2. Select **Tabby** as payment method
+3. Verify mobile number via OTP
+4. Complete the order
+
+**Tabby account required**
+
+* Emirates ID
+* Mobile number
+* Email address
+
+---
+
+### Tabby Repayments & Notifications
+
+* Tabby sends payment reminders via SMS/email
+* Customers can view and pay dues via the Tabby app or website
+* Early repayment is allowed
+
+---
+
+### Tabby Issues & Restrictions
+
+Tabby may not appear or may fail if:
+
+* Basket value is outside allowed limits
+* There are overdue Tabby payments
+* Previous Tabby payments are pending
+* Payment is declined due to Tabby risk policies
+
+If a Tabby payment is due but the order hasn’t been delivered, customers must **contact Tabby directly**.
+
+---
+
+### Refunds for Tabby Orders
+
+* Any remaining installments will be **adjusted or deducted** from the refund amount
+* Refund handling is coordinated between Tabby and the merchant
+
+---
+
+## Charity Donations
+
+* Donations can be made **only during checkout**
+* At least one product must be purchased
+* Donation amount is optional and added to order total
+* Donations are transferred to the official charity partner after order placement
+In-Store Policies – SupportPilot
+Lowest Price Challenge (Price Match Guarantee)
+What We Guarantee
+
+SupportPilot guarantees Everyday Competitive Prices on furniture.
+If you find a lower everyday price on an identical product at a UAE-based retail competitor within 2 days of purchase, SupportPilot will:
+
+Match the competitor’s price
+
+Issue a gift voucher for the price difference
+
+Claims must be settled within 7 days of purchase.
+
+Eligibility Criteria
+
+Valid only on furniture
+
+Product must be identical (size, weight, colour, material, quantity)
+
+One price match per identical product, per customer
+
+Price must be valid and in stock at the time of request
+
+Retail price must be visible in a current print ad or public website
+
+Online prices are verified by a SupportPilot team member
+
+Delivery charges are considered when comparing prices
+
+Competitor must be a UAE-based retail operation
+
+SupportPilot reserves the right to verify competitor pricing and product availability.
+
+Price Match Exclusions
+
+Price matching does not apply to:
+
+Clearance, close-out, liquidation or discontinued items
+
+Damaged, used, refurbished or open-box products
+
+Installation or special orders
+
+Loyalty-only or membership-only prices
+
+Bundles without individual prices shown
+
+Financing offers, rebates or mail-in promotions
+
+Typographical or pricing errors
+
+Limited-time or limited-quantity promotions
+
+Free gifts or gift-card-based offers
+
+Proof of Price
+
+Printed ads: Original full advertisement only
+
+Online prices: Printed webpage verified by SupportPilot staff
+
+Photos or screenshots of printed ads are not accepted
+
+Limited Warranty (In-Store Purchases)
+What the Limited Warranty Covers
+
+Manufacturing or material defects only
+
+Valid from the date of purchase
+
+For normal domestic use only
+
+Applies to the original purchaser
+
+Not transferable
+
+Not valid if the product is moved from the original delivery location
+
+What Happens If a Defect Is Found
+
+SupportPilot will inspect the product.
+If covered, SupportPilot will repair or replace the product with the same or a comparable item, at its discretion.
+
+How to Make a Warranty Claim
+
+Visit the nearest SupportPilot store, or
+
+Call Customer Service: 800-SUPPORTPILOT
+
+Proof of purchase (receipt) is required.
+
+Warranty Periods (Examples)
+
+Mattresses
+
+3–6 years limited warranty (model dependent)
+
+Living Room Furniture
+Covers defects in:
+
+Frame
+
+Base linen/supporting fabrics
+
+Legs
+
+Fittings
+
+Armrests
+
+Filling
+
+Mechanisms
+
+Does not cover:
+
+Fixed leather or fabric covers
+
+Removable covers sold separately
+
+Cushions sold separately
+
+Some furniture items carry a 2-year warranty (product dependent).
+
+In-Store Installment Payments
+Easy Payment Plan
+
+Customers can convert in-store purchases into installments using supported bank credit cards.
+
+Minimum purchase: AED 1,000
+
+Tenure: 6 or 12 months
+
+Interest: 0%
+
+Subject to bank approval and terms
+
+Delivery & Installation (In-Store Purchases)
+Delivery Charges
+
+Free delivery and installation may apply based on:
+
+Total purchase value
+
+Product category
+
+Please confirm eligibility with store staff
+
+Delivery Scheduling
+
+Preferred delivery timing can be shared with staff
+
+Changes must be requested 24 hours before delivery
+
+Postponed deliveries are rescheduled to the next available slot
+
+International Delivery
+
+SupportPilot does not deliver internationally.
+Delivery to a customer-arranged cargo location is possible.
+
+Gift Vouchers
+
+Available in denominations:
+
+AED 50
+
+AED 100
+
+AED 200
+
+Redeemable at all SupportPilot stores
+
+Valid during sales and promotions
+
+Available for purchase in-store
+
+Loyalty Programme – Loyal
+
+SupportPilot is part of Loyal, our loyalty programme.
+
+Benefits
+
+Earn Loyal points on every purchase
+
+Earn points even during sales
+
+Redeem points fully or partially
+
+Receive exclusive in-store invitations
+
+At checkout, staff will inform customers of available Loyal points and redemption value.
+
+Customer Feedback
+
+We welcome your feedback:
+
+Submit via our online feedback form
+
+Fill a customer comment card available in-store
+
+Furniture Size & Fit Assistance
+
+All furniture includes exact measurements
+
+Trained SupportPilot staff assist with space planning before purchase
+
+SupportPilot – Loyal Loyalty Program
+
+Customer Support Knowledge Document
+
+1. About Loyal
+
+Loyal is SupportPilot’s loyalty program that rewards customers with points for their purchases. These points can be redeemed for instant savings on future orders.
+
+Benefits of Loyal
+
+Earn points on eligible purchases
+
+Redeem points for discounts
+
+Exclusive offers and promotions
+
+Birthday bonus points
+
+Early access to sales
+
+Lifetime membership with no fees
+
+2. Joining Loyal
+
+Joining Loyal is free and easy.
+
+How customers can join:
+
+Create an account on SupportPilot
+
+Go to My Account
+
+Select the Loyal section
+
+Follow the on-screen steps
+
+Once completed, the customer is immediately enrolled.
+
+3. Loyal Membership Details
+
+Customers receive a Loyal membership number after signing up
+
+The membership number is shown on the confirmation screen and sent by email
+
+The Loyal account is automatically linked to the SupportPilot account
+
+No physical card is required for online use
+
+4. Loyal Card (Physical & Virtual)
+
+A virtual Loyal card is available via the Loyal mobile app
+
+Physical cards are optional and not required for earning or redeeming points online
+
+Customers who need a physical card can contact Loyal support
+
+📞 055111111888
+📧 info@loyal.com
+
+5. Earning Loyal Points
+
+Customers earn Loyal points when:
+
+They make eligible purchases on SupportPilot
+
+Their Loyal and SupportPilot accounts are linked
+
+Important rules:
+
+Points are earned on the purchase value before VAT
+
+Points are not earned on shipping or COD charges
+
+Linking after purchase:
+
+Customers can still earn points if they link their Loyal account within 5 days of purchase
+
+Points will be credited automatically once linked
+
+6. Checking Loyal Balance
+
+Customers can check their Loyal points balance by:
+
+Logging into My Account → Loyal
+
+Viewing the Loyal slider during checkout
+
+Contacting Loyal support
+
+7. Redeeming Loyal Points
+
+Customers can redeem points during checkout using Pay with Loyal.
+
+Redemption rules:
+
+Minimum redemption: 20 points = AED 1
+
+No maximum redemption limit
+
+Points cannot be used for:
+
+Shipping fees
+
+Cash on Delivery charges
+
+8. Loyal Points Validity
+
+Loyal points are valid for 24 months from the date they are credited
+
+Expired points cannot be restored
+
+9. Returns & Loyal Points
+If an order is returned:
+
+Earned Loyal points are deducted
+
+If points were used for payment:
+
+Registered users receive the value in My Credit
+
+Guest users receive a Return Voucher
+
+⚠️ Return Vouchers cannot earn Loyal points when used
+
+10. Order Cancellation & Loyal Points
+
+Spent Loyal points are refunded
+
+Earned points from the cancelled order are reversed
+
+Refunds are issued to:
+
+My Credit (registered users)
+
+Return Voucher (guest users)
+
+11. Vouchers & Loyal Points
+
+Loyal points cannot be earned on:
+
+Promotional vouchers
+
+Return vouchers
+
+If a voucher is combined with card or COD payment, points are earned only on the paid amount.
+
+12. Country Eligibility
+
+Loyal points can only be earned and redeemed in the country of membership issuance
+
+Currently, only UAE Loyal members are eligible
+
+13. “Pay with Loyal” Option Not Visible
+
+This usually happens when:
+
+The customer has fewer than 200 Loyal points
+
+If the balance is sufficient and the option is still missing:
+
+The customer should contact Loyal support
+
+14. Account Lock Issues
+
+Accounts may be locked if:
+
+Verification codes are entered incorrectly multiple times
+
+Solution:
+
+Customer should contact SupportPilot support for assistance
+
+15. Updating Loyal Details
+Update card number or personal details:
+
+Online via the Loyal platform
+
+Or by contacting Loyal support
+
+📞 055111111888
+📧 info@loyal.com
+
+16. Inactive Cards
+
+Loyal cards remain active even if unused
+
+Points still expire after 24 months
+
+17. Cancelling Loyal Membership
+
+Customers can cancel their Loyal membership by:
+
+Calling 055111111888
+
+Emailing info@loyal.com
+
+18. Transferring Loyal Points
+
+Loyal points cannot be transferred between accounts
+
+19. VAT & Loyal Points
+
+Points are earned before VAT
+
+Points are redeemed on VAT-inclusive prices
+
+20. Loyal Customer Support
+
+For any Loyal-related queries, customers can contact:
+
+📞 055111111888
+📧 info@loyal.com
+
+SupportPilot – Buy Now Feature
+
+Customer Support Knowledge Document
+
+1. What is Buy Now?
+
+Buy Now is SupportPilot’s fast checkout feature designed to help customers complete purchases quickly.
+
+When a customer clicks Buy Now on a product page:
+
+The system uses their default shipping address
+
+The system uses their default payment method
+
+Customers can also set or update these details during checkout
+
+This allows customers to place an order directly from the product page without adding items to the basket.
+
+2. Why Use Buy Now?
+
+Customers should use Buy Now to:
+
+Complete purchases faster
+
+Skip the basket, shipping, and payment steps
+
+Quickly purchase a single product
+
+Buy Now is ideal when the customer knows exactly what they want and does not need to browse further.
+
+3. Security & Safety of Buy Now
+
+Buy Now follows industry-standard security practices.
+
+Security measures include:
+
+256-bit SSL encryption for data transmission and storage
+
+Only the last 4 digits of card numbers are stored
+
+Card expiry dates may be stored
+
+CVV numbers and 3D Secure passwords are never stored
+
+Customer payment data is protected using global best practices.
+
+4. Payment Methods Supported by Buy Now
+
+Customers can pay using the following methods:
+
+Visa Credit & Debit Cards
+
+MasterCard Credit & Debit Cards
+
+Cash on Delivery (for home-delivered products)
+
+PayPal
+
+Loyal points
+
+Voucher codes
+
+Gift cards
+
+5. Products Eligible for Buy Now
+
+Buy Now can be used on all products available on SupportPilot
+
+Availability may depend on delivery type and location
+
+6. Delivery Date & Time Selection (Furniture Orders)
+
+For select furniture items, customers can schedule their delivery when using Buy Now.
+
+How delivery scheduling works:
+
+After clicking Buy Now, a delivery dialog appears
+
+Customer pins their delivery location on the map
+
+Available delivery dates are shown on a calendar
+
+Express delivery dates may be highlighted
+
+Customer selects a convenient delivery time
+
+Once confirmed:
+
+Delivery date and time are displayed on-screen
+
+Delivery charges depend on the customer’s location
+
+7. Managing Buy Now Default Settings
+
+Customers can update their Buy Now preferences anytime through My Account.
+
+Address Settings
+
+Path: My Account → Address Book
+
+Customers can:
+
+Add new addresses
+
+Edit existing addresses
+
+Remove addresses
+
+Set a default address
+
+Payment Settings
+
+Path: My Account → Payment
+
+Customers can:
+
+Add new cards
+
+Edit saved cards
+
+Remove cards
+
+Set a default payment card
+
+Click & Collect Settings
+
+Path: My Account → Click & Collect
+
+Customers can:
+
+Select or change their preferred collection store
+
+Manage Click & Collect preferences per participating brand
+
+8. Saving Multiple Cards
+
+Customers can save multiple cards in their account
+
+Any saved card can be selected during Buy Now checkout
+
+One card can be set as the default
+
+9. Deleting Saved Cards
+
+Saved cards can be deleted at any time from My Account → Payment
+
+Once deleted, the card is permanently removed from SupportPilot’s system
+
+10. Buy Now on Mobile & Apps
+
+Buy Now works on:
+
+Desktop website
+
+Mobile website
+
+Mobile apps
+
+Customer details only need to be saved once
+
+The feature works seamlessly across all devices
+
+SupportPilot – Other Information
+
+Customer Support Knowledge Base
+
+1. Bank Card Offers
+HSBC Card Offer – Terms & Conditions
+
+HSBC cardholders receive 10% instant discount, up to AED 50
+
+Valid on purchases via SupportPilot website or app
+
+Cannot be combined with other offers, codes, or promotions
+
+Not valid on:
+
+Gift cards
+
+Delivery, fixing, or installation charges
+
+Exchanges and refunds follow SupportPilot Return Policy
+
+Loyal points awarded as per Loyal terms
+
+All SupportPilot Terms & Conditions apply
+
+ADIB Card Offer – Terms & Conditions
+
+ADIB cardholders receive 10% instant discount, up to AED 50
+
+Valid on SupportPilot website/app
+
+Cannot be combined with other offers or promotions
+
+Not valid on:
+
+Gift cards
+
+Delivery, fixing, or installation charges
+
+Returns and exchanges follow SupportPilot Return Policy
+
+Loyal points awarded per Loyal terms
+
+All SupportPilot T&Cs apply
+
+Emirates NBD Card Offer – Terms & Conditions
+
+ENBD cardholders receive 10% instant discount, up to AED 50
+
+Not valid on WOW products or mattresses
+
+Cannot be combined with other offers
+
+Not valid on gift cards, delivery, fixing, or installation charges
+
+Returns follow SupportPilot Return Policy
+
+Loyal points awarded per Loyal terms
+
+All SupportPilot T&Cs apply
+
+2. Easy Payment Plans (EPP)
+Bank / Partner	Minimum Amount	Tenure Options	Processing Fee
+Citibank	AED 1,000	3, 6, 9, 12 months	None
+Mashreq	AED 1,000	3, 6 months	AED 49
+Emirates NBD	AED 1,000	6, 12 months	AED 49
+FAB	AED 1,000	3, 6, 9, 12 months	N/A
+TABBY	AED 1,000	3 months	N/A
+
+EPP availability depends on selected bank/payment method
+
+One-time processing fee may apply
+
+Valid on all products sold via SupportPilot app and website
+
+3. Mattress Services
+Mattress Exchange / Removal – Terms & Conditions
+
+Available only with purchase of a new SupportPilot mattress
+
+Request service within 7 days of delivery
+
+Customer must coordinate pickup directly with third-party provider
+
+Mattress must be hygienic; soiled or infested items may be refused
+
+Mattress removal is not done at delivery time
+
+No bed dismantling or installation included
+
+SupportPilot is not liable for third-party service delays or damages
+
+Made-To-Order (Customized) Mattress
+
+Returns not allowed for incorrect dimensions
+
+Production time: 10 days
+
+Delivery updates sent via email/phone
+
+Customers must inspect mattress upon delivery
+
+30-Day Mattress Trial – Terms & Conditions
+
+Available only on selected mattresses
+
+Mattress must be in original packaging
+
+Exchange or refund issued as SupportPilot Gift Voucher
+
+AED 100 collection fee applies
+
+Delivery charges are non-refundable
+
+Damaged or soiled mattresses may be rejected
+
+Voucher valid for 30 days
+
+Returned mattresses are donated
+
+4. Mattress Care Guidelines
+
+Vacuum mattress every 3 months
+
+Rotate mattress every 6 months
+
+Use a protective topper
+
+Avoid bending, folding, or jumping on mattress
+
+Do not remove brand label (required for warranty)
+
+Avoid moisture, chemicals, heavy objects, or heat
+
+Verify bed size before purchase
+
+5. Loyal Programme Information
+Loyal Programme Overview
+
+Loyal is SupportPilot’s loyalty programme
+
+Earn and redeem points on eligible purchases
+
+Points earned before VAT; redeemed inclusive of VAT
+
+Points valid for 24 months
+
+6. Warranty Responsibility
+
+Warranty support (including partner-sourced products) is handled via SupportPilot Customer Support
+
+Contact via the Contact Us page for assistance
+
+7. Shipping & Delivery Notes
+
+Shipping charges vary by brand and product
+
+Separate brand purchases may incur separate shipping fees
+
+International delivery not available; cargo delivery supported
+
+8. SupportPilot Promise Plus
+
+SupportPilot Promise Plus includes:
+
+2-Year Limited Warranty on furniture (manufacturing defects)
+
+30-Day Return on unopened and unused products
+
+Loyal Rewards on eligible purchases
+
+(Terms & Conditions apply)
+
+9. Important Product Information
+
+Product colour may slightly vary due to screen settings
+
+Customers must check product dimensions and access points
+
+Up to 5 mm unevenness possible due to floor levels
+
+No civil work (e.g., wall drilling) included
+
+Dust can be removed by wiping with a dry cloth
+
+10. Pricing & Promotions
+
+Online and in-store prices are generally the same
+
+Exclusive online or in-store promotions may apply
+
+Promotions are displayed on the SupportPilot website
+
+Customers can subscribe to newsletters for updates
+
+11. Store & Company Information
+
+Store locator helps find nearest SupportPilot store
+
+Company information available on SupportPilot corporate website
+
+12. Buy 1 Get 1 Free – Terms & Conditions
+
+Add two eligible products to cart
+
+Lower-priced item is free automatically
+
+All items must be part of the promotion
+
+🎁 SupportPilot – Loyal Gift Card
+
+Clean Knowledge Document
+
+Loyal Gift Card – Terms & Conditions
+
+Validity: Loyal E-Gift Card is valid for 365 days from the date of issue.
+
+Redemption: Redeemable online and in-store at participating SupportPilot brands.
+
+Eligible Products: Can be used on full-price and discounted items.
+
+Partial Redemption: Allowed. The same card can be used across multiple purchases until balance is exhausted.
+
+Excess Amount: If purchase value exceeds the card balance, the remaining amount must be paid by the customer.
+
+Cash Exchange: Not redeemable for cash (full or partial).
+
+Loss or Damage:
+
+Lost cards are not replaceable or refundable
+
+Damaged or defaced cards will not be accepted
+
+Refunds:
+
+Gift cards themselves are non-returnable and non-refundable
+
+Products purchased using the card follow the store’s return and refund policy
+
+Governing Terms: Subject to Loyal Gift Card Terms & Conditions in force at the time of use
+
+Where Can I Redeem My Loyal Gift Card?
+
+Loyal E-Gift Cards can be redeemed online and in-store at participating brands including:
+
+SupportPilot
+
+Gigi
+
+Babyhop
+
+Splash
+
+Dudu
+
+👉 View the updated list of participating brands and locations at www.loyal.com/giftcard
+
+Gift Card FAQs
+How long is my Gift Card valid?
+
+365 days from the date of issue.
+
+Can I redeem part of the Gift Card value?
+
+Yes. Partial redemption is allowed across multiple transactions.
+
+Can I exchange my Gift Card for cash?
+
+No. Cash exchange is not permitted.
+
+What if I lose my Gift Card?
+
+Lost cards cannot be replaced or compensated.
+
+What if my Gift Card is damaged?
+
+Damaged or defaced cards will not be honored.
+
+Can I return a Gift Card?
+
+No. Issued Gift Cards cannot be returned or refunded.
+
+Refunds for Purchases Made with Gift Card
+
+Online Purchases:
+
+Registered users: Refunded to My Credit
+
+Guest users: Refunded as a Return Voucher
+
+In-Store Purchases:
+
+Refunded as per the store’s refund and exchange policy
+
+How to Check Gift Card Balance
+
+You can check balance, expiry, and participating stores by:
+
+Visiting www.loyal.com/giftcard
+
+Calling 📞 055111111888
+
+Visiting the nearest participating store
+
+Partner-Sourced Products
+
+Loyal E-Gift Cards can be used to purchase partner-sourced products.
+
+SupportPilot – Click & Collect
+
+Clean Knowledge Document
+
+Click & Collect – Overview
+
+Click & Collect is a free service that allows customers to shop and pay online, choose a participating SupportPilot store in the UAE, and collect the order at their convenience.
+
+Benefits of Click & Collect
+
+Enjoy an additional in-store discount on the day of pickup
+
+Simply show your Click & Collect order number in store to claim the offer
+
+How Click & Collect Works
+
+Select products and add them to your basket
+
+Proceed to checkout
+
+Choose a participating SupportPilot store for pickup
+
+Complete payment online
+
+Collect your order once notified
+
+Cost & Collection Time
+
+Service fee: Free
+
+You will receive an SMS and email when your order is ready
+
+Orders can usually be collected after 3:00 PM, subject to confirmation
+
+Store Selection
+
+You can only collect from participating SupportPilot stores
+
+Store availability is shown during checkout
+
+The selected store cannot be changed after placing the order
+
+Payment Methods
+
+Click & Collect is pre-paid only. Accepted methods:
+
+Credit / Debit Card
+
+PayPal
+
+Tabby
+
+Vouchers
+
+Loyal points
+
+❌ Cash on Delivery is not available
+
+Order Cancellation
+
+Orders can be cancelled by:
+
+Initiating cancellation from My Account
+
+Contacting SupportPilot Customer Support
+
+Collection Requirements
+
+To collect your order, bring:
+
+Order confirmation (email, SMS, or Apple Wallet)
+
+Emirates ID or passport
+
+Third-Party Collection
+
+Someone else may collect on your behalf with:
+
+Order confirmation
+
+Their Emirates ID or passport
+
+Holding Period
+
+Orders are held in store for 14 days
+
+Uncollected orders are returned and refunded
+
+Refund processing may take up to 20 days (including bank processing time)
+
+In-Store Pickup Location
+
+Each store has a dedicated Click & Collect counter
+
+Store staff can assist if needed
+
+Missing Confirmation Notification
+
+If you have not received confirmation by 3:00 PM, contact SupportPilot Customer Support during working hours.
+
+Returns for Click & Collect Orders
+Return Options
+
+Return to Store
+
+Online Return Request
+
+Courier Pickup via Customer Support
+
+Refunds are processed to the original payment method or store credit, depending on how the order was paid.
+
+⚠️ Furniture and mattresses cannot be returned via online request.
+
+Furniture & Click & Collect
+Availability
+
+Select furniture items are eligible
+
+Items are provided unassembled
+
+Assembly
+
+Assembly is not included
+
+Optional paid in-store assembly may be available
+
+Transport after pickup is the customer’s responsibility
+
+Delivery
+
+Click & Collect orders are not eligible for home delivery
+
+Damage & Returns
+
+Damage during self-assembly is not covered
+
+Assembled furniture is not eligible for return or refund
+
+Damage caused by store assembly team will be replaced by SupportPilot
+
+Uncollected Furniture Orders
+
+Furniture orders not collected within 7 days are automatically cancelled
+
+Items are returned to the warehouse and refunded
+
+Store Availability Issues
+
+Click & Collect may be temporarily unavailable at some stores
+
+Customers may choose an alternate store or home delivery

@@ -1,0 +1,210 @@
+Opening / Greeting Messages
+Standard Greeting
+
+Hello! 👋 Welcome to [Brand Name] Customer Support.
+My name is [Agent Name]. How may I assist you today?
+
+Warm Greeting
+
+Hi there! 😊 Thanks for contacting [Brand Name].
+I’m [Agent Name], happy to help you today.
+
+Busy Hours Greeting
+
+Hello! 👋 Thank you for reaching out to [Brand Name].
+We’re experiencing high chat volume, but I’m here to help you now.
+
+2️⃣ Account Creation & Login Issues
+Create Account
+
+You can create an account by clicking on “Sign Up” at the top of our website/app and entering your email or mobile number.
+Please let me know if you face any difficulty.
+
+Login Issue
+
+I’m sorry you’re having trouble logging in.
+Please try resetting your password using the “Forgot Password” option. If the issue continues, I can assist further.
+
+Account Locked
+
+For security reasons, your account may be temporarily locked after multiple attempts.
+Please wait a few minutes and try again, or let me know if you’d like me to help unlock it.
+
+3️⃣ Ordering & Order Status
+How to Place an Order
+
+You can place an order by selecting your preferred product, choosing size/color (if applicable), and clicking “Add to Cart”, then proceeding to checkout.
+
+Order Confirmation
+
+Once your order is placed successfully, you’ll receive an order confirmation via SMS/email.
+
+Order Status
+
+Let me check the status of your order.
+Could you please share your Order ID?
+
+Order Not Found
+
+I’m unable to locate this order at the moment.
+Could you please recheck the Order ID or confirm the registered email/mobile number?
+
+4️⃣ Payment & Payment Issues
+Accepted Payment Methods
+
+We accept Credit/Debit Cards, UPI, Net Banking, Wallets, and Cash on Delivery (where available).
+
+Payment Failed
+
+I’m sorry your payment didn’t go through.
+If the amount was deducted, it will be automatically refunded within 5–7 business days.
+
+Double Payment
+
+I understand your concern. Please be assured that any extra amount deducted will be refunded automatically to your original payment method.
+
+COD Not Available
+
+Cash on Delivery may not be available for certain pin codes or high-value items.
+You can choose a prepaid option to proceed.
+
+5️⃣ Cancellation Requests
+Cancel Order (Eligible)
+
+I can help cancel your order since it hasn’t been shipped yet.
+Please confirm if you’d like me to proceed.
+
+Cancellation Not Possible
+
+Unfortunately, the order has already been shipped and cannot be cancelled at this stage.
+You may request a return after delivery.
+
+6️⃣ Shipping & Delivery
+Shipping Timeline
+
+Orders are usually shipped within [X] business days and delivered within [X–Y] days, depending on your location.
+
+Delivery Scheduled
+
+Your order is scheduled for delivery on [Date].
+Our delivery partner will contact you before delivery.
+
+Delayed Delivery
+
+I apologize for the delay. Let me check with our delivery team and update you shortly.
+
+7️⃣ Delivery Issues
+Delivery Attempt Failed
+
+Our delivery partner attempted delivery but couldn’t complete it.
+Please confirm your availability and delivery address.
+
+Address Change
+
+Address changes are possible only before shipment.
+Please confirm the correct address, and I’ll check feasibility.
+
+8️⃣ Wrong / Missing / Damaged Product
+Wrong Item Delivered
+
+I’m really sorry about this mix-up.
+Please share clear images of the received item, and I’ll arrange a replacement or return.
+
+Damaged Product
+
+We apologize for the inconvenience caused.
+Kindly share photos/videos of the damaged product within 48 hours of delivery.
+
+Missing Item
+
+I understand your concern. Let me check the shipment details and get back to you with an update.
+
+9️⃣ Returns & Refund Policy
+Return Eligibility
+
+Products can be returned within [X] days of delivery, provided they are unused and in original packaging.
+
+Initiate Return
+
+You can initiate a return from My Orders > Return Item, or I can assist you here.
+
+Return Not Eligible
+
+This item is not eligible for return as per our policy.
+I’ll still check if any alternative support is possible.
+
+🔟 Refunds & Refund Issues
+Refund Process
+
+Once the returned item passes quality check, the refund will be processed within 5–7 business days.
+
+Refund Delay
+
+I apologize for the delay. Let me escalate this to our finance team and update you shortly.
+
+Refund Mode
+
+Refunds are processed to the original payment method used during purchase.
+
+1️⃣1️⃣ Website / App Issues
+Website Not Loading
+
+I’m sorry for the inconvenience.
+Please try clearing your cache or using a different browser/device.
+
+App Crash
+
+Please ensure the app is updated to the latest version.
+If the issue persists, share us with image showing the error so, I’ll report it to our technical team.
+
+1️⃣2️⃣ Unclear or Incomplete Enquiries
+Clarification Needed
+
+Could you please share a few more details so I can assist you better?
+
+No Response from Customer
+
+Just checking in 😊
+Are you still connected? I’ll be happy to help.
+
+1️⃣3️⃣ Angry / Upset Customer Handling
+Empathy Response
+
+I completely understand your frustration, and I’m really sorry for the inconvenience caused.
+
+De-escalation
+
+Please rest assured, I’m here to help and will do my best to resolve this for you.
+
+Escalation
+
+I’m escalating this to the concerned team for priority resolution.
+Thank you for your patience.
+
+1️⃣4️⃣ Chat Closing Responses
+Issue Resolved
+
+I’m glad I could help 😊
+Is there anything else I can assist you with today?
+
+Customer Silent (After 2 Minutes)
+
+Since I haven’t heard back from you, I’ll be closing this chat for now.
+Feel free to reach out anytime—we’re always here to help! 👋
+
+Polite Closing
+
+Thank you for contacting [Brand Name].
+Have a great day and happy shopping! 🛍️
+ Bonus Tip (Best Practice)
+
+Use agent name + brand name
+
+Avoid blaming customer
+
+Always acknowledge emotions
+
+Give timelines clearly
+
+Never promise what you can’t deliver
+

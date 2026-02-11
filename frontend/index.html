@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>AI Support Chat</title>
+  <style>
+    body { font-family: Arial; background:#f4f4f4; }
+    #chat { width:400px; margin:50px auto; background:white; padding:20px; border-radius:10px; }
+    #messages { height:300px; overflow:auto; border:1px solid #ddd; padding:10px; }
+    input, button { padding:10px; width:100%; margin-top:5px; }
+  </style>
+</head>
+<body>
+
+<div id="chat">
+  <h3>AI Support</h3>
+
+  <div id="messages"></div>
+
+  <input id="msg" placeholder="Type your question..." />
+  <button onclick="send()">Send</button>
+</div>
+
+<script>
+async function send() {
+
+  let q = document.getElementById("msg").value;
+
+  let res = await fetch("http://127.0.0.1:8000/chat", {
+    method:"POST",
+    headers:{
+      "Content-Type":"application/json"
+    },
+    body:JSON.stringify({
+      client_name:"homebox",
+      api_key:"hb_9f38sk29dj293kd9",
+      question:q,
+      tone:"formal"
+    })
+  });
+
+  let data = await res.json();
+
+  let box = document.getElementById("messages");
+
+  box.innerHTML += "<p><b>You:</b> "+q+"</p>";
+  box.innerHTML += "<p><b>Bot:</b> "+data.answer+"</p>";
+
+  document.getElementById("msg").value="";
+}
+</script>
+
+</body>
+</html>

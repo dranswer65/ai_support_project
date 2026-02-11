@@ -1,0 +1,17 @@
+# secrets
+.env
+*.env
+
+# logs
+logs/
+*.log
+
+# local data
+kpi.txt
+
+# test keys
+stripe_test.py
+
+# python
+__pycache__/
+*.pyc
