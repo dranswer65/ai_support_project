@@ -1,0 +1,17 @@
+✅ Correct Command (THIS WILL WORK)
+
+In Command Prompt, type exactly this:
+
+cd OneDrive\Desktop\ai_support_project
+
+
+Press Enter.
+
+✅ Verify You’re in the Right Place
+
+Now type:
+
+dir
+
+
+You should see folders like:

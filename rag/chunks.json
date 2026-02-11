@@ -1,0 +1,90 @@
+[
+  {
+    "id": "returns_eligibility_001",
+    "text": "Customers may request a return within 30 days from the date of delivery, provided the product is unused, in its original condition, and returned with all original packaging, accessories, and tags intact. Items must not show signs of wear, damage, or alteration. Proof of purchase is required for all return requests. Products purchased as part of a promotional bundle must be returned together unless otherwise stated. Returns initiated after the 30-day window may be rejected or require manual review. Digital products, services, and items marked as final sale are not eligible for return. The company reserves the right to inspect all returned items before approving eligibility. If a returned product does not meet eligibility requirements, it may be shipped back to the customer at their expense.",
+    "source": "faqs.md",
+    "section": "eligibility",
+    "topic": "returns",
+    "region": "UAE",
+    "version": "1.0",
+    "requires_human": false,
+    "risk_level": "low"
+  },
+  {
+    "id": "non_returnable_items_001",
+    "text": "Certain products are non-returnable due to hygiene, safety, or regulatory reasons. These include but are not limited to personal care items, undergarments, consumables, customized or personalized products, gift cards, and downloadable or digital content. Items that have been opened, used, or tampered with are not eligible for return. Products damaged due to misuse, improper handling, or customer negligence are also excluded. Clearance items and products marked as non-returnable at the time of purchase cannot be returned. Customers are advised to review product descriptions carefully before completing their purchase, as exceptions to non-returnable items are not guaranteed.",
+    "source": "faqs.md",
+    "section": "non_returnable",
+    "topic": "returns",
+    "region": "UAE",
+    "version": "1.0",
+    "requires_human": false,
+    "risk_level": "low"
+  },
+  {
+    "id": "defective_items_001",
+    "text": "If a product arrives defective, damaged, or incorrect, customers must report the issue within 48 hours of delivery. Supporting evidence such as photos or videos may be required to validate the claim. Once verified, the customer may be eligible for a replacement, repair, or refund depending on product availability and condition. Defects caused by manufacturing issues are covered, while damage caused by misuse or accidental handling is excluded. The company may arrange a pickup for defective items at no additional cost. All defect claims are subject to inspection before final resolution.",
+    "source": "faqs.md",
+    "section": "defects",
+    "topic": "returns",
+    "region": "UAE",
+    "version": "1.0",
+    "requires_human": true,
+    "risk_level": "high"
+  },
+  {
+    "id": "refund_methods_001",
+    "text": "Approved refunds are issued using the original payment method whenever possible. Credit and debit card payments are refunded back to the same card, while cash-on-delivery orders may be refunded via bank transfer or store credit. Gift card purchases are refunded as gift card balance only. Refunds cannot be redirected to a different payment method unless required by law or approved through manual review. Customers are responsible for providing accurate banking details when applicable. Refund method availability may vary depending on the payment provider and region.",
+    "source": "faqs.md",
+    "section": "refund_methods",
+    "topic": "refunds",
+    "region": "UAE",
+    "version": "1.0",
+    "requires_human": false,
+    "risk_level": "medium"
+  },
+  {
+    "id": "refund_calculation_001",
+    "text": "Refund amounts are calculated based on the product price paid at the time of purchase, excluding delivery fees unless the return is due to an error or defect. Promotional discounts applied at checkout are proportionally deducted from the refund amount. Partial refunds may apply if only part of an order is returned. Refund processing times typically range from 7 to 14 business days after approval, depending on the payment provider. Delays may occur during peak seasons or due to banking procedures beyond the company’s control.",
+    "source": "faqs.md",
+    "section": "refund_calculation",
+    "topic": "refunds",
+    "region": "UAE",
+    "version": "1.0",
+    "requires_human": false,
+    "risk_level": "medium"
+  },
+  {
+    "id": "delivery_options_001",
+    "text": "Standard delivery is available across most regions within the UAE and typically takes 2 to 5 business days. Same Day and Express delivery options may be available in select areas for eligible products and orders placed before the cutoff time. Delivery timelines may vary due to weather conditions, public holidays, or operational constraints. Customers will receive tracking information once the order has been dispatched. Delivery fees, availability, and timelines are displayed at checkout and may change based on location and order value.",
+    "source": "shipping.md",
+    "section": "delivery_options",
+    "topic": "shipping",
+    "region": "UAE",
+    "version": "1.0",
+    "requires_human": false,
+    "risk_level": "low"
+  },
+  {
+    "id": "delivery_issues_001",
+    "text": "If a delivery attempt is unsuccessful due to incorrect address details, unavailability, or refusal, the courier may attempt redelivery or return the order to the warehouse. Additional delivery charges may apply for rescheduling. Orders returned due to failed delivery may be refunded minus delivery costs. Customers are responsible for ensuring accurate contact and address information at checkout. Persistent delivery issues, disputes, or repeated failures require review by human support.",
+    "source": "shipping.md",
+    "section": "delivery_issues",
+    "topic": "shipping",
+    "region": "UAE",
+    "version": "1.0",
+    "requires_human": true,
+    "risk_level": "high"
+  },
+  {
+    "id": "escalation_rules_001",
+    "text": "Customer requests must be escalated to human support when they involve order-specific exceptions, disputes regarding eligibility, conflicting policies, missing or unclear information, or repeated dissatisfaction. Escalation is also required when customers explicitly request to speak with a human agent, when legal or compliance considerations apply, or when automated responses cannot confidently resolve the issue. Support agents should review the full order history, communication logs, and applicable policies before responding. Escalated cases must be handled according to internal service-level agreements.",
+    "source": "faqs.md",
+    "section": "escalation",
+    "topic": "support_rules",
+    "region": "UAE",
+    "version": "1.0",
+    "requires_human": true,
+    "risk_level": "high"
+  }
+]

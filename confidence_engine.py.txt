@@ -1,0 +1,31 @@
+# confidence_engine.py
+# Day 37D – Confidence & Escalation Logic
+
+def calculate_confidence(session: dict, emotion: str) -> float:
+    score = 1.0
+
+    # Emotion impact
+    if emotion == "angry":
+        score -= 0.25
+    elif emotion == "abusive":
+        score -= 0.6
+
+    # Retry impact
+    if session.get("tries", 0) >= 1:
+        score -= 0.2
+    if session.get("tries", 0) >= 3:
+        score -= 0.3
+
+    # Missing intent
+    if not session.get("intent"):
+        score -= 0.25
+
+    # Late-stage recovery boost
+    if session.get("stage") in {"RESOLVED", "INFO_REQUIRED"}:
+        score += 0.15
+
+    return max(0.0, round(score, 2))
+
+
+def should_escalate(confidence: float, threshold: float = 0.35) -> bool:
+    return confidence < threshold

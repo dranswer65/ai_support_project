@@ -1,0 +1,11 @@
+{
+  "supportpilot_demo": {
+    "active": false,
+    "plan": "basic",
+    "stripe_checkout_session_id": "cs_test_a1E0xwHFkMl4WLVTmsvw5tG2b5iROnol3p4IutJJDOEZSmUnoaO3rzAsdh",
+    "stripe_customer_id": "",
+    "stripe_subscription_id": "",
+    "reason": "pending_checkout",
+    "updated_utc": "2026-02-08T04:44:14.876389+00:00"
+  }
+}

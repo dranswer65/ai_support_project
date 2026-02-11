@@ -1,0 +1,3 @@
+version: "2"
+authtoken: 38xdodJDhjoKNFn1turlOnMMKPl_8Xbe33eU7n9yTPHQVseg
+update_channel: stable

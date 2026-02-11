@@ -1,0 +1,11 @@
+[
+  {
+    "ts_utc": "2026-02-08T04:44:14.879738+00:00",
+    "event": "checkout_created",
+    "client": "supportpilot_demo",
+    "meta": {
+      "plan": "basic",
+      "session_id": "cs_test_a1E0xwHFkMl4WLVTmsvw5tG2b5iROnol3p4IutJJDOEZSmUnoaO3rzAsdh"
+    }
+  }
+]

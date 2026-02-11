@@ -1,0 +1,26 @@
+python -m uvicorn api_server:app --port 8000
+python -m uvicorn whatsapp_bot:app --port 9000
+ngrok http 9000
+
+DASHBOARD: 
+cd C:\Users\Shireen\OneDrive\Desktop\ai_support_project
+python -m streamlit run admin_ui\dashboard_app.py
+
+
+supportpilot_secret_123
+
+To generate new key and update api_key.json: python generate_key.py
+
+
+
+📈 Next (Day 39+ Options)
+
+Choose next focus:
+
+### 1️⃣ Hosting + Domain + SSL
+
+### 2️⃣ Payment Gateway
+
+### 3️⃣ Admin Web Dashboard
+
+### 4️⃣ Marketing + Client Acquisition
