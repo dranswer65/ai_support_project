@@ -1,17 +1,10 @@
-# secrets
 .env
 *.env
-
-# logs
 logs/
-*.log
-
-# local data
-kpi.txt
-
-# test keys
-stripe_test.py
-
-# python
+audit/
 __pycache__/
-*.pyc
+*.log
+*.jsonl
+*.sqlite
+*.db
+.DS_Store
