@@ -16,7 +16,7 @@ from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException, Header, Request
 from fastapi.responses import PlainTextResponse, JSONResponse
 from pydantic import BaseModel
-from backup_manager import create_backup, list_backups, restore_backup
+
 
 # OpenAI
 from openai import OpenAI
@@ -31,6 +31,15 @@ except Exception:
     stripe = None
 
 load_dotenv()
+def data_root() -> Path:
+    # Railway volume mount path you choose (example: /app/data)
+    p = os.getenv("SP_DATA_DIR", "").strip()
+    if p:
+        return Path(p)
+    return Path(__file__).resolve().parent
+BASE_DIR = data_root()
+CLIENTS_DIR = BASE_DIR / "clients"
+
 
 # Billing manager (Day 46)
 from billing_manager import (
@@ -46,6 +55,7 @@ from billing_manager import (
 # App
 # ============================================================
 app = FastAPI(title="SupportPilot API")
+
 @app.middleware("http")
 async def crash_guard(request: Request, call_next):
     try:
@@ -77,9 +87,6 @@ async def crash_guard(request: Request, call_next):
         )
         # Return safe JSON (no stacktrace to user)
         return JSONResponse({"detail": "Internal Server Error"}, status_code=500)
-
-
-APP_START_TS = time.time()
 
 
 # ============================================================
@@ -134,10 +141,9 @@ HEALTH_FILE = ERRORS_DIR / "health.json"
 # ============================================================
 class ChatRequest(BaseModel):
     client_name: str
-    api_key: str
     question: str
     tone: str = "formal"
-    language: str = "en"  # en/ar
+    language: str = "en" # en/ar
 
 
 class ChatResponse(BaseModel):
@@ -171,6 +177,11 @@ class BackupRestoreRequest(BaseModel):
     backup_id: str
     confirm: str = ""   # dangerous confirmation
 
+class BillingManualRequest(BaseModel):
+    client_name: str
+    plan: str = "basic"
+    active: bool = True
+    reason: str = "manual_dev"
 
 
 # ============================================================
@@ -315,21 +326,22 @@ def record_health(ok: bool, note: str = ""):
 # API key verification (bcrypt hash)
 # ============================================================
 def verify_api_key(client_name: str, user_key: str) -> bool:
-    data = load_client_key_data(client_name)
+    data = load_client_key_data(client_name)  # must read clients/<client>/config/api_key.json
 
-    # Optional plain key support (not recommended, but allowed)
     plain = (data.get("api_key") or "").strip()
-    if plain and user_key == plain:
-        return True
+    if plain:
+        return user_key == plain
 
     hashed = (data.get("api_key_hash") or "").strip()
-    if not hashed:
-        return False
+    if hashed:
+        try:
+            return bcrypt.checkpw(user_key.encode("utf-8"), hashed.encode("utf-8"))
+        except Exception:
+            return False
 
-    try:
-        return bcrypt.checkpw(user_key.encode("utf-8"), hashed.encode("utf-8"))
-    except Exception:
-        return False
+    # If neither exists, server is not configured for this client
+    raise HTTPException(500, "Client API key not configured on server.")
+
 # ============================================================
 # Admin auth helpers (Option B + super token)
 # ============================================================
@@ -607,9 +619,13 @@ def chat(req: ChatRequest):
 
         if not bool(settings.get("active", True)):
             raise HTTPException(403, "Client disabled")
+        # Load stored client API key (secure)
+        key_data = load_client_key_data(req.client_name)
 
-        if not verify_api_key(req.client_name, req.api_key):
-            raise HTTPException(401, "Invalid API key")
+        stored_hash = (key_data.get("api_key_hash") or "").strip()
+        if not stored_hash:
+            raise HTTPException(500, "Client API key not configured on server.")
+
 
         # Day 46 gate (only allows paid/active clients)
         require_active_subscription(req.client_name)
@@ -922,6 +938,42 @@ def admin_export_billing(client_name: str, authorization: str | None = Header(de
 
     log_audit("admin_export_billing", actor="admin_token", meta={"client": client_name, "rows": len(rows)})
     return output.getvalue()
+# ============================================================
+# Day 46/47 helper — Manual billing control (DEV / Admin)
+# ============================================================
+
+@app.post("/admin/billing/manual")
+def admin_billing_manual(payload: BillingManualRequest, authorization: str | None = Header(default=None)):
+    """
+    DEV helper: manually activate/deactivate subscription.
+    Uses client admin token OR super admin token (via require_client_admin_token).
+    """
+    require_client_admin_token(payload.client_name, authorization)
+
+    plan = (payload.plan or "basic").strip().lower()
+    if plan not in {"basic", "pro"}:
+        raise HTTPException(400, "plan must be 'basic' or 'pro'")
+
+    set_subscription(
+        payload.client_name,
+        {
+            "active": bool(payload.active),
+            "plan": plan,
+            "reason": payload.reason,
+            "stripe_checkout_session_id": "",
+            "stripe_customer_id": "",
+            "stripe_subscription_id": "",
+        },
+    )
+
+    log_payment(
+        "manual_subscription_change",
+        payload.client_name,
+        {"active": bool(payload.active), "plan": plan, "reason": payload.reason},
+    )
+
+    return {"ok": True, "client": payload.client_name, "active": bool(payload.active), "plan": plan, "reason": payload.reason}
+
 
 @app.post("/admin/backup/create")
 def admin_backup_create(payload: BackupCreateRequest, authorization: str | None = Header(default=None)):
@@ -1021,6 +1073,15 @@ def admin_health(authorization: str | None = Header(default=None)):
         "note": "; ".join(notes),
         "uptime_seconds": int(time.time() - APP_START_TS),
     }
+@app.get("/health")
+def public_health():
+    return {
+        "status": "ok",
+        "service": "SupportPilot SaaS",
+        "mode": os.getenv("ENV","dev"),
+        "time": datetime.utcnow().isoformat()
+    }
+
 
 
 
