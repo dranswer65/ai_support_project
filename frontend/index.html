@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+<!DOCTYPE html> 
 <html>
 <head>
   <title>AI Support Chat</title>
@@ -23,18 +23,20 @@
 <script>
 async function send() {
 
-  let q = document.getElementById("msg").value;
+  let userMessage = document.getElementById("msg").value;
 
   let res = await fetch("http://127.0.0.1:8000/chat", {
     method:"POST",
     headers:{
       "Content-Type":"application/json"
     },
+
+    // Remove api_key from payload
     body:JSON.stringify({
-      client_name:"supportpilot_demo",
-      api_key:"CLIENT_API_KEY_PLACEHOLDER",
-      question:q,
-      tone:"formal"
+      client_name: "supportpilot_demo",
+      question: userMessage,
+      tone: "formal",
+      language: "en"
     })
   });
 
@@ -42,7 +44,7 @@ async function send() {
 
   let box = document.getElementById("messages");
 
-  box.innerHTML += "<p><b>You:</b> "+q+"</p>";
+  box.innerHTML += "<p><b>You:</b> "+userMessage+"</p>";
   box.innerHTML += "<p><b>Bot:</b> "+data.answer+"</p>";
 
   document.getElementById("msg").value="";
