@@ -1,6 +1,10 @@
 import bcrypt
 
-key = "hb_9f38sk29dj293kd9"
+import os
+
+key = os.getenv("CLIENT_API_KEY", "")
+if not key:
+    raise SystemExit("CLIENT_API_KEY is missing. Put it in .env / Railway Variables.")
 
 hashed = bcrypt.hashpw(key.encode(), bcrypt.gensalt())
 
