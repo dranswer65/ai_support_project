@@ -9,6 +9,8 @@ python -m streamlit run admin_ui\dashboard_app.py
 
 supportpilot_secret_123
 
+cd C:\projects\ai_support_project
+
 To generate new key and update api_key.json: python generate_key.py
 
 
@@ -24,3 +26,39 @@ Choose next focus:
 ### 3️⃣ Admin Web Dashboard
 
 ### 4️⃣ Marketing + Client Acquisition
+
+
+🏗️ PHASED ROADMAP (So You Don’t Get Lost)
+
+We’ll do this in 4 clear phases:
+
+✅ Phase 1 — Brain of the Agent (Prompt + Rules)
+
+→ Make AI behave like a trained support agent
+→ Stop unnecessary escalation
+
+✅ Phase 2 — Conversation Manager (State System)
+
+→ Track: greeting → info → checking → solving → closing
+
+✅ Phase 3 — Knowledge Engine (RAG Upgrade)
+
+→ Build strong internal knowledge
+
+✅ Phase 4 — CRM / Order Integration (Advanced)
+
+→ Real business system
+
+We start with Phase 1 today.
+
+PHASE 3 (Next): CRM + Order Tracking
+
+After this, we’ll add:
+
+✅ Fake CRM DB
+✅ Order lookup
+✅ Ticket creation
+✅ Complaint IDs
+✅ Real escalation flow
+
+That’s what makes this product sellable.

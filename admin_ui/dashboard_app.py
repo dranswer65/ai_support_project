@@ -32,7 +32,7 @@ AUDIT_FILE = ADMIN_DIR / "audit_log.json"
 # =========================================================
 # API CONFIG (Day 43 secure connection)
 # =========================================================
-API_BASE = os.getenv("SP_API_BASE", "http://127.0.0.1:8000").strip()
+API_BASE = os.getenv("SP_API_BASE", "https://web-production-de896d.up.railway.app").strip()
 SUPER_ADMIN_TOKEN = os.getenv("SP_ADMIN_TOKEN", "").strip()
 
 # =========================================================

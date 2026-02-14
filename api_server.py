@@ -16,7 +16,9 @@ from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException, Header, Request
 from fastapi.responses import PlainTextResponse, JSONResponse
 from pydantic import BaseModel
-
+from fastapi import Request
+from fastapi.responses import PlainTextResponse
+import requests
 
 # OpenAI
 from openai import OpenAI
@@ -119,6 +121,10 @@ SP_PUBLIC_BASE_URL = env_any("SP_PUBLIC_BASE_URL","SP_PUBLIC_URL","PUBLIC_BASE_U
 
 if stripe and STRIPE_SECRET_KEY:
     stripe.api_key = STRIPE_SECRET_KEY
+WA_VERIFY_TOKEN = os.getenv("WA_VERIFY_TOKEN", "").strip()
+WA_ACCESS_TOKEN = os.getenv("WA_ACCESS_TOKEN", "").strip()
+WA_PHONE_NUMBER_ID = os.getenv("WA_PHONE_NUMBER_ID", "").strip()
+
 
 # ============================================================
 # Paths
@@ -319,6 +325,28 @@ def record_health(ok: bool, note: str = ""):
         "uptime_seconds": int(time.time() - APP_START_TS),
     }
     HEALTH_FILE.write_text(json.dumps(data, indent=2), encoding="utf-8")
+
+def wa_send_text(to_number: str, text: str):
+    if not WA_ACCESS_TOKEN or not WA_PHONE_NUMBER_ID:
+        raise HTTPException(500, "WhatsApp env vars missing (WA_ACCESS_TOKEN / WA_PHONE_NUMBER_ID).")
+
+    url = f"https://graph.facebook.com/v20.0/{WA_PHONE_NUMBER_ID}/messages"
+    headers = {
+        "Authorization": f"Bearer {WA_ACCESS_TOKEN}",
+        "Content-Type": "application/json",
+    }
+    payload = {
+        "messaging_product": "whatsapp",
+        "to": to_number,
+        "type": "text",
+        "text": {"body": text},
+    }
+
+    r = requests.post(url, headers=headers, json=payload, timeout=20)
+    if r.status_code >= 400:
+        raise HTTPException(500, f"WhatsApp send failed: {r.status_code} {r.text}")
+    return r.json()
+
 
 
 
@@ -713,6 +741,80 @@ def chat(req: ChatRequest):
     except Exception as e:
         print("SERVER ERROR:", repr(e))
         raise HTTPException(500, "Internal Server Error")
+# ============================================================
+# WhatsApp Webhook
+# ============================================================
+
+@app.get("/whatsapp/webhook")
+def wa_webhook_verify(
+    hub_mode: str | None = None,
+    hub_challenge: str | None = None,
+    hub_verify_token: str | None = None,
+):
+    if not WA_VERIFY_TOKEN:
+        raise HTTPException(500, "WA_VERIFY_TOKEN not configured.")
+
+    if hub_mode == "subscribe" and hub_verify_token == WA_VERIFY_TOKEN:
+        return PlainTextResponse(hub_challenge or "")
+
+    raise HTTPException(403, "Webhook verification failed.")
+
+
+@app.post("/whatsapp/webhook")
+async def wa_webhook_incoming(request: Request):
+    body = await request.json()
+
+    try:
+        entry = body.get("entry", [])[0]
+        changes = entry.get("changes", [])[0]
+        value = changes.get("value", {})
+        messages = value.get("messages", [])
+        if not messages:
+            return {"ok": True}
+
+        msg = messages[0]
+        from_number = msg.get("from", "")
+        msg_type = msg.get("type", "")
+
+        if msg_type == "text":
+            text = (msg.get("text", {}) or {}).get("body", "")
+        else:
+            text = f"[Unsupported message type: {msg_type}]"
+
+    except Exception:
+        return {"ok": True}
+
+    try:
+        client_name = os.getenv("DEFAULT_CLIENT_NAME", "supportpilot_demo").strip()
+        client_api_key = os.getenv("CLIENT_API_KEY", "").strip()
+
+        if not client_api_key:
+            reply = "Server not configured: missing CLIENT_API_KEY."
+        else:
+            chat_url = os.getenv("SP_API_BASE", "").rstrip("/") + "/chat"
+
+            payload = {
+                "client_name": client_name,
+                "api_key": client_api_key,
+                "question": text,
+                "tone": "formal",
+                "language": "en",
+            }
+
+            r = requests.post(chat_url, json=payload, timeout=30)
+
+            if r.status_code >= 400:
+                reply = f"API error: {r.status_code}"
+            else:
+                reply = (r.json() or {}).get("answer", "Sorry, no answer.")
+
+    except Exception as e:
+        reply = f"Server error: {e}"
+
+    if from_number:
+        wa_send_text(from_number, reply)
+
+    return {"ok": True}
 
 
 # ============================================================

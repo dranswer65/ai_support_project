@@ -235,5 +235,21 @@
     "meta": {
       "role": "admin"
     }
+  },
+  {
+    "ts_utc": "2026-02-13T15:47:34.917981+00:00",
+    "action": "otp_sent",
+    "actor": "admin",
+    "meta": {
+      "to": "dranswer65@gmail.com"
+    }
+  },
+  {
+    "ts_utc": "2026-02-13T15:49:31.981300+00:00",
+    "action": "login_success_otp",
+    "actor": "admin",
+    "meta": {
+      "role": "admin"
+    }
   }
 ]

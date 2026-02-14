@@ -25,18 +25,14 @@ async function send() {
 
   let userMessage = document.getElementById("msg").value;
 
-  let res = await fetch("http://127.0.0.1:8000/chat", {
+  let res = await fetch("/chat", { 
     method:"POST",
-    headers:{
-      "Content-Type":"application/json"
-    },
-
-    // Remove api_key from payload
-    body:JSON.stringify({
-      client_name: "supportpilot_demo",
-      question: userMessage,
-      tone: "formal",
-      language: "en"
+    headers:{ "Content-Type":"application/json" },
+    body: JSON.stringify({
+      client_name:"supportpilot_demo",
+      question:userMessage,
+      tone:"formal",
+      language:"en"
     })
   });
 

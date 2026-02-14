@@ -1,0 +1,6 @@
+Bcrypt Hash generation.
+
+
+python -c "import bcrypt; print(bcrypt.hashpw(b'hb_9f38sk29dj293kd9', bcrypt.gensalt()).decode())"
+
+$2b$12$PvoA1nzDMEBiAXYHUpgN**********YygPZLllQzBBLZ7AgY7G

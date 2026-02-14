@@ -7,5 +7,25 @@
       "plan": "basic",
       "session_id": "cs_test_a1E0xwHFkMl4WLVTmsvw5tG2b5iROnol3p4IutJJDOEZSmUnoaO3rzAsdh"
     }
+  },
+  {
+    "ts_utc": "2026-02-13T14:13:58.095205+00:00",
+    "event": "manual_subscription_change",
+    "client": "supportpilot_demo",
+    "meta": {
+      "active": true,
+      "plan": "basic",
+      "reason": "manual_dev"
+    }
+  },
+  {
+    "ts_utc": "2026-02-13T14:20:03.250372+00:00",
+    "event": "manual_subscription_change",
+    "client": "supportpilot_demo",
+    "meta": {
+      "active": true,
+      "plan": "basic",
+      "reason": "manual_dev"
+    }
   }
 ]
