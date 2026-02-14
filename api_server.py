@@ -92,16 +92,16 @@ async def crash_guard(request: Request, call_next):
         # Return safe JSON (no stacktrace to user)
         return JSONResponse({"detail": "Internal Server Error"}, status_code=500)
 
-# ============================================================
+
 # WhatsApp Cloud API Webhook (Meta)
 # ============================================================
 WHATSAPP_VERIFY_TOKEN = os.getenv("WHATSAPP_VERIFY_TOKEN", "").strip()
 
 @app.get("/whatsapp/webhook", response_class=PlainTextResponse)
 def whatsapp_webhook_verify(
-    hub_mode: str | None = None,
-    hub_verify_token: str | None = None,
-    hub_challenge: str | None = None,
+    hub_mode: str | None = Query(default=None, alias="hub.mode"),
+    hub_verify_token: str | None = Query(default=None, alias="hub.verify_token"),
+    hub_challenge: str | None = Query(default=None, alias="hub.challenge"),
 ):
     """
     Meta webhook verification:
@@ -110,16 +110,14 @@ def whatsapp_webhook_verify(
     if not WHATSAPP_VERIFY_TOKEN:
         raise HTTPException(500, "WHATSAPP_VERIFY_TOKEN not configured.")
 
-    # Meta passes these as query params:
-    # hub.mode, hub.verify_token, hub.challenge
     if hub_mode == "subscribe" and hub_verify_token == WHATSAPP_VERIFY_TOKEN:
         return hub_challenge or ""
+
     raise HTTPException(403, "Verification failed")
 
 @app.get("/debug/token")
 def debug_token():
-    return {"WA_VERIFY_TOKEN": os.getenv("WA_VERIFY_TOKEN")}
-# ============================================================
+    return {"WHATSAPP_VERIFY_TOKEN": os.getenv("WHATSAPP_VERIFY_TOKEN")}
 
 # ============================================================
 # ENV helpers (supports SP_ and non-SP names)
