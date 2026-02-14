@@ -786,6 +786,47 @@ def whatsapp_webhook_verify(
 
     raise HTTPException(403, "Verification failed")
 
+# ============================================================
+# WhatsApp Webhook — RECEIVE messages (POST)
+# ============================================================
+@app.post("/whatsapp/webhook")
+async def whatsapp_webhook_receive(request: Request):
+    try:
+        body = await request.json()
+        print("WHATSAPP EVENT:", json.dumps(body, indent=2))
+
+        # Extract message safely
+        entry = body.get("entry", [])
+        if not entry:
+            return {"ok": True}
+
+        changes = entry[0].get("changes", [])
+        if not changes:
+            return {"ok": True}
+
+        value = changes[0].get("value", {})
+        messages = value.get("messages")
+
+        if not messages:
+            return {"ok": True}
+
+        message = messages[0]
+        from_number = message.get("from")
+        text = message.get("text", {}).get("body", "")
+
+        print(f"Incoming WhatsApp message from {from_number}: {text}")
+
+        # Simple reply test
+        if text:
+            wa_send_text(from_number, "Hello 👋 message received!")
+
+        return {"status": "received"}
+
+    except Exception as e:
+        print("Webhook error:", e)
+        return {"ok": False}
+
+
 
 # ============================================================
 # Stripe Checkout (create session)
