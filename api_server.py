@@ -826,6 +826,34 @@ async def whatsapp_webhook_receive(request: Request):
         print("Webhook error:", e)
         return {"ok": False}
 
+@app.post("/whatsapp/webhook")
+async def whatsapp_webhook(request: Request):
+    data = await request.json()
+    print("WHATSAPP EVENT:", data)
+
+    try:
+        entry = data.get("entry", [])
+        if entry:
+            changes = entry[0].get("changes", [])
+            if changes:
+                value = changes[0].get("value", {})
+                messages = value.get("messages")
+
+                if messages:
+                    msg = messages[0]
+                    from_number = msg["from"]
+                    text = msg["text"]["body"]
+
+                    print(f"Incoming WhatsApp message from {from_number}: {text}")
+
+                    # auto reply
+                    wa_send_text(from_number, "Hello 👋 message received")
+
+    except Exception as e:
+        print("Webhook processing error:", e)
+
+    return {"status": "ok"}
+
 
 
 # ============================================================
