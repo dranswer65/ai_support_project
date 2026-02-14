@@ -24,6 +24,8 @@ import requests
 from openai import OpenAI
 import time
 from monitoring import log_error, get_errors, clear_errors
+from fastapi import Query
+
 
 
 # Stripe optional (won’t crash if missing)
@@ -90,6 +92,34 @@ async def crash_guard(request: Request, call_next):
         # Return safe JSON (no stacktrace to user)
         return JSONResponse({"detail": "Internal Server Error"}, status_code=500)
 
+# ============================================================
+# WhatsApp Cloud API Webhook (Meta)
+# ============================================================
+WHATSAPP_VERIFY_TOKEN = os.getenv("WHATSAPP_VERIFY_TOKEN", "").strip()
+
+@app.get("/whatsapp/webhook", response_class=PlainTextResponse)
+def whatsapp_webhook_verify(
+    hub_mode: str | None = None,
+    hub_verify_token: str | None = None,
+    hub_challenge: str | None = None,
+):
+    """
+    Meta webhook verification:
+    Must return hub.challenge as plain text with 200 OK.
+    """
+    if not WHATSAPP_VERIFY_TOKEN:
+        raise HTTPException(500, "WHATSAPP_VERIFY_TOKEN not configured.")
+
+    # Meta passes these as query params:
+    # hub.mode, hub.verify_token, hub.challenge
+    if hub_mode == "subscribe" and hub_verify_token == WHATSAPP_VERIFY_TOKEN:
+        return hub_challenge or ""
+    raise HTTPException(403, "Verification failed")
+
+@app.get("/debug/token")
+def debug_token():
+    return {"WA_VERIFY_TOKEN": os.getenv("WA_VERIFY_TOKEN")}
+# ============================================================
 
 # ============================================================
 # ENV helpers (supports SP_ and non-SP names)
@@ -744,77 +774,19 @@ def chat(req: ChatRequest):
 # ============================================================
 # WhatsApp Webhook
 # ============================================================
-
-@app.get("/whatsapp/webhook")
-def wa_webhook_verify(
-    hub_mode: str | None = None,
-    hub_challenge: str | None = None,
-    hub_verify_token: str | None = None,
+@app.get("/whatsapp/webhook", response_class=PlainTextResponse)
+def whatsapp_webhook_verify(
+    hub_mode: str | None = Query(default=None, alias="hub.mode"),
+    hub_verify_token: str | None = Query(default=None, alias="hub.verify_token"),
+    hub_challenge: str | None = Query(default=None, alias="hub.challenge"),
 ):
-    if not WA_VERIFY_TOKEN:
-        raise HTTPException(500, "WA_VERIFY_TOKEN not configured.")
+    if not WHATSAPP_VERIFY_TOKEN:
+        raise HTTPException(500, "WHATSAPP_VERIFY_TOKEN not configured.")
 
-    if hub_mode == "subscribe" and hub_verify_token == WA_VERIFY_TOKEN:
-        return PlainTextResponse(hub_challenge or "")
+    if hub_mode == "subscribe" and hub_verify_token == WHATSAPP_VERIFY_TOKEN:
+        return hub_challenge or ""
 
-    raise HTTPException(403, "Webhook verification failed.")
-
-
-@app.post("/whatsapp/webhook")
-async def wa_webhook_incoming(request: Request):
-    body = await request.json()
-
-    try:
-        entry = body.get("entry", [])[0]
-        changes = entry.get("changes", [])[0]
-        value = changes.get("value", {})
-        messages = value.get("messages", [])
-        if not messages:
-            return {"ok": True}
-
-        msg = messages[0]
-        from_number = msg.get("from", "")
-        msg_type = msg.get("type", "")
-
-        if msg_type == "text":
-            text = (msg.get("text", {}) or {}).get("body", "")
-        else:
-            text = f"[Unsupported message type: {msg_type}]"
-
-    except Exception:
-        return {"ok": True}
-
-    try:
-        client_name = os.getenv("DEFAULT_CLIENT_NAME", "supportpilot_demo").strip()
-        client_api_key = os.getenv("CLIENT_API_KEY", "").strip()
-
-        if not client_api_key:
-            reply = "Server not configured: missing CLIENT_API_KEY."
-        else:
-            chat_url = os.getenv("SP_API_BASE", "").rstrip("/") + "/chat"
-
-            payload = {
-                "client_name": client_name,
-                "api_key": client_api_key,
-                "question": text,
-                "tone": "formal",
-                "language": "en",
-            }
-
-            r = requests.post(chat_url, json=payload, timeout=30)
-
-            if r.status_code >= 400:
-                reply = f"API error: {r.status_code}"
-            else:
-                reply = (r.json() or {}).get("answer", "Sorry, no answer.")
-
-    except Exception as e:
-        reply = f"Server error: {e}"
-
-    if from_number:
-        wa_send_text(from_number, reply)
-
-    return {"ok": True}
+    raise HTTPException(403, "Verification failed")
 
 
 # ============================================================
