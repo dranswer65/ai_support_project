@@ -769,6 +769,32 @@ def chat(req: ChatRequest):
     except Exception as e:
         print("SERVER ERROR:", repr(e))
         raise HTTPException(500, "Internal Server Error")
+
+def send_whatsapp_message(to_number: str, message: str):
+    try:
+        phone_id = os.getenv("WA_PHONE_NUMBER_ID")
+        token = os.getenv("WA_ACCESS_TOKEN")
+
+        url = f"https://graph.facebook.com/v18.0/{phone_id}/messages"
+
+        headers = {
+            "Authorization": f"Bearer {token}",
+            "Content-Type": "application/json"
+        }
+
+        payload = {
+            "messaging_product": "whatsapp",
+            "to": to_number,
+            "type": "text",
+            "text": {"body": message}
+        }
+
+        r = requests.post(url, headers=headers, json=payload)
+        print("WhatsApp send:", r.text)
+
+    except Exception as e:
+        print("WhatsApp send error:", e)
+
 # ============================================================
 # WhatsApp Webhook
 # ============================================================
@@ -791,9 +817,12 @@ def whatsapp_webhook_verify(
 # ============================================================
 @app.post("/whatsapp/webhook")
 async def whatsapp_webhook_receive(request: Request):
+
     try:
         body = await request.json()
         print("WHATSAPP EVENT:", json.dumps(body, indent=2))
+
+
 
         # Extract message safely
         entry = body.get("entry", [])
@@ -826,33 +855,59 @@ async def whatsapp_webhook_receive(request: Request):
         print("Webhook error:", e)
         return {"ok": False}
 
+# ============================================================
+# WhatsApp Webhook (REAL AI reply)
+# ============================================================
+
 @app.post("/whatsapp/webhook")
 async def whatsapp_webhook(request: Request):
+
     data = await request.json()
-    print("WHATSAPP EVENT:", data)
+    print("WHATSAPP EVENT:", json.dumps(data, indent=2))
 
     try:
-        entry = data.get("entry", [])
-        if entry:
-            changes = entry[0].get("changes", [])
-            if changes:
-                value = changes[0].get("value", {})
-                messages = value.get("messages")
+        entry = data.get("entry", [])[0]
+        changes = entry.get("changes", [])[0]
+        value = changes.get("value", {})
 
-                if messages:
-                    msg = messages[0]
-                    from_number = msg["from"]
-                    text = msg["text"]["body"]
+        if "messages" not in value:
+            return {"ok": True}
 
-                    print(f"Incoming WhatsApp message from {from_number}: {text}")
+        msg = value["messages"][0]
+        from_number = msg["from"]
+        text = msg.get("text", {}).get("body", "")
 
-                    # auto reply
-                    wa_send_text(from_number, "Hello 👋 message received")
+        print(f"Incoming WhatsApp message from {from_number}: {text}")
+
+        # ============================
+        # CALL YOUR AI CHAT ENGINE
+        # ============================
+        try:
+            chat_payload = {
+                "client_name": "supportpilot_demo",
+                "api_key": os.getenv("WHATSAPP_CLIENT_API_KEY",""),
+                "question": text,
+                "tone": "formal",
+                "language": "en"
+            }
+
+            # internal call to chat engine
+            response = chat(ChatRequest(**chat_payload))
+            reply = response.answer
+
+        except Exception as e:
+            print("AI ERROR:", e)
+            reply = "System is temporarily busy. Please try again shortly."
+
+        # ============================
+        # SEND REPLY TO WHATSAPP
+        # ============================
+        send_whatsapp_message(from_number, reply)
 
     except Exception as e:
-        print("Webhook processing error:", e)
+        print("Webhook error:", e)
 
-    return {"status": "ok"}
+    return {"ok": True}
 
 
 
@@ -1223,6 +1278,108 @@ def public_health():
         "time": datetime.utcnow().isoformat()
     }
 
+
+WA_PHONE_NUMBER_ID = os.getenv("WA_PHONE_NUMBER_ID", "").strip()
+WA_VERIFY_TOKEN = os.getenv("WA_VERIFY_TOKEN", "").strip()
+WA_ACCESS_TOKEN = os.getenv("WA_ACCESS_TOKEN", "").strip()
+
+WA_DEFAULT_CLIENT = os.getenv("WA_DEFAULT_CLIENT", "supportpilot_demo").strip()
+WA_DEFAULT_API_KEY = os.getenv("WA_DEFAULT_API_KEY", "").strip()
+
+SP_API_BASE = os.getenv("SP_API_BASE", "http://127.0.0.1:8000").strip()
+
+def wa_send_text(to_wa_id: str, text: str):
+    if not (WA_PHONE_NUMBER_ID and WA_ACCESS_TOKEN):
+        raise RuntimeError("WhatsApp env not configured (WA_PHONE_NUMBER_ID / WA_ACCESS_TOKEN).")
+
+    url = f"https://graph.facebook.com/v20.0/{WA_PHONE_NUMBER_ID}/messages"
+    headers = {
+        "Authorization": f"Bearer {WA_ACCESS_TOKEN}",
+        "Content-Type": "application/json",
+    }
+    payload = {
+        "messaging_product": "whatsapp",
+        "to": to_wa_id,
+        "type": "text",
+        "text": {"body": text[:4000]},
+    }
+
+    r = requests.post(url, headers=headers, json=payload, timeout=20)
+    if r.status_code >= 400:
+        raise RuntimeError(f"WhatsApp send failed: {r.status_code} {r.text}")
+
+def call_supportpilot_chat(message_text: str) -> str:
+    if not WA_DEFAULT_API_KEY:
+        return "Client API key is not configured on server."
+
+    url = f"{SP_API_BASE}/chat"
+    payload = {
+        "client_name": WA_DEFAULT_CLIENT,
+        "api_key": WA_DEFAULT_API_KEY,
+        "question": message_text,
+        "tone": "formal",
+        "language": "en",
+    }
+
+    r = requests.post(url, json=payload, timeout=60)
+    if r.status_code >= 400:
+        # Show short readable error to you (don’t expose internal stack traces)
+        try:
+            j = r.json()
+            detail = j.get("detail", r.text)
+        except Exception:
+            detail = r.text
+        return f"Sorry — system error: {detail}"
+
+    data = r.json()
+    return (data.get("answer") or "").strip() or "Sorry — I couldn't generate a response."
+
+@app.get("/whatsapp/webhook")
+def whatsapp_verify(hub_mode: str | None = None,
+                    hub_challenge: str | None = None,
+                    hub_verify_token: str | None = None):
+    # Meta sends: hub.mode, hub.challenge, hub.verify_token
+    if hub_mode == "subscribe" and hub_verify_token == WA_VERIFY_TOKEN:
+        return PlainTextResponse(hub_challenge or "")
+    raise HTTPException(403, "Verification failed")
+
+@app.post("/whatsapp/webhook")
+async def whatsapp_webhook(request: Request):
+    body = await request.json()
+    print("WHATSAPP EVENT:", body)
+
+    try:
+        entry = (body.get("entry") or [])[0]
+        changes = (entry.get("changes") or [])[0]
+        value = changes.get("value") or {}
+        messages = value.get("messages") or []
+        if not messages:
+            return {"ok": True}  # status updates etc
+
+        msg = messages[0]
+        from_wa = msg.get("from")  # wa_id
+        msg_type = msg.get("type")
+
+        if msg_type != "text":
+            wa_send_text(from_wa, "Sorry, I can only handle text messages right now.")
+            return {"ok": True}
+
+        text = (msg.get("text") or {}).get("body", "").strip()
+        if not text:
+            wa_send_text(from_wa, "Please send a text message.")
+            return {"ok": True}
+
+        # ✅ ROUTE TO AI
+        answer = call_supportpilot_chat(text)
+
+        # ✅ SEND BACK TO WHATSAPP
+        wa_send_text(from_wa, answer)
+
+        return {"ok": True}
+
+    except Exception as e:
+        print("WHATSAPP ERROR:", repr(e))
+        return {"ok": True}
 
 
 
