@@ -863,51 +863,46 @@ async def whatsapp_webhook_receive(request: Request):
 async def whatsapp_webhook(request: Request):
 
     data = await request.json()
-    print("WHATSAPP EVENT:", json.dumps(data, indent=2))
+    print("WHATSAPP EVENT:", data)
 
     try:
-        entry = data.get("entry", [])[0]
-        changes = entry.get("changes", [])[0]
-        value = changes.get("value", {})
+        entry = data.get("entry",[{}])[0]
+        changes = entry.get("changes",[{}])[0]
+        value = changes.get("value",{})
 
         if "messages" not in value:
-            return {"ok": True}
+            return {"ok":True}
 
         msg = value["messages"][0]
         from_number = msg["from"]
-        text = msg.get("text", {}).get("body", "")
+        text = msg.get("text",{}).get("body","")
 
-        print(f"Incoming WhatsApp message from {from_number}: {text}")
+        print("MESSAGE:", text)
 
-        # ============================
-        # CALL YOUR AI CHAT ENGINE
-        # ============================
+        # ===== AI reply =====
+        reply = "AI working..."
+
         try:
-            chat_payload = {
-                "client_name": "supportpilot_demo",
-                "api_key": os.getenv("WHATSAPP_CLIENT_API_KEY",""),
-                "question": text,
-                "tone": "formal",
-                "language": "en"
-            }
-
-            # internal call to chat engine
-            response = chat(ChatRequest(**chat_payload))
-            reply = response.answer
+            payload = ChatRequest(
+                client_name="supportpilot_demo",
+                api_key=os.getenv("WHATSAPP_CLIENT_API_KEY",""),
+                question=text,
+                tone="formal",
+                language="en"
+            )
+            res = chat(payload)
+            reply = res.answer
 
         except Exception as e:
             print("AI ERROR:", e)
-            reply = "System is temporarily busy. Please try again shortly."
+            reply = "AI temporarily unavailable."
 
-        # ============================
-        # SEND REPLY TO WHATSAPP
-        # ============================
         send_whatsapp_message(from_number, reply)
 
     except Exception as e:
-        print("Webhook error:", e)
+        print("WEBHOOK ERROR:", e)
 
-    return {"ok": True}
+    return {"ok":True}
 
 
 
