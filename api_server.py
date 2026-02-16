@@ -26,6 +26,31 @@ import time
 from monitoring import log_error, get_errors, clear_errors
 from fastapi import Query
 
+from whatsapp_bot import handle_whatsapp_event
+
+@app.get("/whatsapp/webhook", response_class=PlainTextResponse)
+def whatsapp_webhook_verify(
+    hub_mode: str | None = Query(default=None, alias="hub.mode"),
+    hub_verify_token: str | None = Query(default=None, alias="hub.verify_token"),
+    hub_challenge: str | None = Query(default=None, alias="hub.challenge"),
+):
+    expected = (os.getenv("WA_VERIFY_TOKEN") or "").strip()
+    if not expected:
+        raise HTTPException(500, "WA_VERIFY_TOKEN not configured.")
+
+    if hub_mode == "subscribe" and hub_verify_token == expected:
+        return hub_challenge or ""
+
+    raise HTTPException(403, "Verification failed")
+
+
+@app.post("/whatsapp/webhook")
+async def whatsapp_webhook(request: Request):
+    payload = await request.json()
+    print("WHATSAPP EVENT RECEIVED")
+    return handle_whatsapp_event(payload)
+
+
 # Stripe optional (won’t crash if missing)
 try:
     import stripe
@@ -1218,54 +1243,6 @@ def call_ai(message_text: str) -> str:
     except Exception as e:
         return f"Server error: {e}"
 
-
-# -------- verification ----------
-@app.get("/whatsapp/webhook")
-def whatsapp_verify(hub_mode: str | None = None,
-                    hub_challenge: str | None = None,
-                    hub_verify_token: str | None = None):
-
-    if hub_mode == "subscribe" and hub_verify_token == WA_VERIFY_TOKEN:
-        return PlainTextResponse(hub_challenge or "")
-
-    raise HTTPException(403, "Verification failed")
-
-
-# -------- incoming messages ----------
-@app.post("/whatsapp/webhook")
-async def whatsapp_webhook(request: Request):
-
-    body = await request.json()
-    print("WHATSAPP EVENT:", body)
-
-    try:
-        entry = body["entry"][0]
-        changes = entry["changes"][0]
-        value = changes["value"]
-
-        messages = value.get("messages")
-        if not messages:
-            return {"ok": True}
-
-        msg = messages[0]
-        from_wa = msg["from"]
-        text = msg["text"]["body"]
-
-        print("USER:", text)
-
-        # 🔥 CALL AI
-        answer = call_ai(text)
-
-        print("AI:", answer)
-
-        # 🔥 SEND BACK
-        wa_send_text(from_wa, answer)
-
-        return {"ok": True}
-
-    except Exception as e:
-        print("WA ERROR:", e)
-        return {"ok": True}
 
 
 # ============================================================
