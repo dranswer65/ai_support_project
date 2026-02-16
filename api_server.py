@@ -28,28 +28,6 @@ from fastapi import Query
 
 from whatsapp_bot import handle_whatsapp_event
 
-@app.get("/whatsapp/webhook", response_class=PlainTextResponse)
-def whatsapp_webhook_verify(
-    hub_mode: str | None = Query(default=None, alias="hub.mode"),
-    hub_verify_token: str | None = Query(default=None, alias="hub.verify_token"),
-    hub_challenge: str | None = Query(default=None, alias="hub.challenge"),
-):
-    expected = (os.getenv("WA_VERIFY_TOKEN") or "").strip()
-    if not expected:
-        raise HTTPException(500, "WA_VERIFY_TOKEN not configured.")
-
-    if hub_mode == "subscribe" and hub_verify_token == expected:
-        return hub_challenge or ""
-
-    raise HTTPException(403, "Verification failed")
-
-
-@app.post("/whatsapp/webhook")
-async def whatsapp_webhook(request: Request):
-    payload = await request.json()
-    print("WHATSAPP EVENT RECEIVED")
-    return handle_whatsapp_event(payload)
-
 
 # Stripe optional (won’t crash if missing)
 try:
@@ -89,6 +67,28 @@ def debug_version():
         "railway_commit": os.getenv("RAILWAY_GIT_COMMIT_SHA", ""),
         "service": "SupportPilot API",
     }
+
+@app.get("/whatsapp/webhook", response_class=PlainTextResponse)
+def whatsapp_webhook_verify(
+    hub_mode: str | None = Query(default=None, alias="hub.mode"),
+    hub_verify_token: str | None = Query(default=None, alias="hub.verify_token"),
+    hub_challenge: str | None = Query(default=None, alias="hub.challenge"),
+):
+    expected = (os.getenv("WA_VERIFY_TOKEN") or "").strip()
+    if not expected:
+        raise HTTPException(500, "WA_VERIFY_TOKEN not configured.")
+
+    if hub_mode == "subscribe" and hub_verify_token == expected:
+        return hub_challenge or ""
+
+    raise HTTPException(403, "Verification failed")
+
+
+@app.post("/whatsapp/webhook")
+async def whatsapp_webhook(request: Request):
+    payload = await request.json()
+    print("WHATSAPP EVENT RECEIVED")
+    return handle_whatsapp_event(payload)
 
 @app.middleware("http")
 async def crash_guard(request: Request, call_next):
