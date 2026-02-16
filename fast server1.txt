@@ -60,6 +60,10 @@ from billing_manager import (
 # App
 # ============================================================
 app = FastAPI(title="SupportPilot API")
+@app.get("/health")
+def health():
+    return {"ok": True}
+
 @app.get("/debug/version")
 def debug_version():
     return {
@@ -89,11 +93,12 @@ async def whatsapp_webhook(request: Request):
     print("WHATSAPP EVENT RECEIVED")
 
     import asyncio
-    # run the sync handler off the event loop thread
+    # run sync handler in a background thread so webhook returns immediately
     asyncio.create_task(asyncio.to_thread(handle_whatsapp_event, payload))
 
-    # respond fast to Meta
+    # Meta expects fast 200 OK
     return {"ok": True}
+
 
 
 @app.middleware("http")
@@ -1150,110 +1155,6 @@ def public_health():
         "mode": os.getenv("ENV","dev"),
         "time": datetime.utcnow().isoformat()
     }
-
-
-WA_PHONE_NUMBER_ID = os.getenv("WA_PHONE_NUMBER_ID", "").strip()
-WA_VERIFY_TOKEN = os.getenv("WA_VERIFY_TOKEN", "").strip()
-WA_ACCESS_TOKEN = os.getenv("WA_ACCESS_TOKEN", "").strip()
-
-WA_DEFAULT_CLIENT = os.getenv("WA_DEFAULT_CLIENT", "supportpilot_demo").strip()
-WA_DEFAULT_API_KEY = os.getenv("WA_DEFAULT_API_KEY", "").strip()
-
-SP_API_BASE = os.getenv("SP_API_BASE", "http://127.0.0.1:8000").strip()
-
-def wa_send_text(to_wa_id: str, text: str):
-    if not (WA_PHONE_NUMBER_ID and WA_ACCESS_TOKEN):
-        raise RuntimeError("WhatsApp env not configured (WA_PHONE_NUMBER_ID / WA_ACCESS_TOKEN).")
-
-    url = f"https://graph.facebook.com/v20.0/{WA_PHONE_NUMBER_ID}/messages"
-    headers = {
-        "Authorization": f"Bearer {WA_ACCESS_TOKEN}",
-        "Content-Type": "application/json",
-    }
-    payload = {
-        "messaging_product": "whatsapp",
-        "to": to_wa_id,
-        "type": "text",
-        "text": {"body": text[:4000]},
-    }
-
-    r = requests.post(url, headers=headers, json=payload, timeout=20)
-    if r.status_code >= 400:
-        raise RuntimeError(f"WhatsApp send failed: {r.status_code} {r.text}")
-# ============================================================
-# WHATSAPP CLOUD — REAL AI REPLY (FINAL CLEAN VERSION)
-# ============================================================
-
-WA_PHONE_NUMBER_ID = os.getenv("WA_PHONE_NUMBER_ID","").strip()
-WA_ACCESS_TOKEN = os.getenv("WA_ACCESS_TOKEN","").strip()
-WA_VERIFY_TOKEN = os.getenv("WA_VERIFY_TOKEN","").strip()
-
-WA_DEFAULT_CLIENT = os.getenv("WA_DEFAULT_CLIENT","supportpilot_demo").strip()
-WA_DEFAULT_API_KEY = os.getenv("WA_DEFAULT_API_KEY","").strip()
-
-SP_API_BASE = os.getenv("SP_API_BASE","http://127.0.0.1:8000").strip()
-
-
-# -------- send message ----------
-def wa_send_text(to_wa_id: str, text: str):
-    if not (WA_PHONE_NUMBER_ID and WA_ACCESS_TOKEN):
-        print("WA ENV missing")
-        return
-
-    url = f"https://graph.facebook.com/v20.0/{WA_PHONE_NUMBER_ID}/messages"
-
-    headers = {
-        "Authorization": f"Bearer {WA_ACCESS_TOKEN}",
-        "Content-Type": "application/json"
-    }
-
-    payload = {
-        "messaging_product": "whatsapp",
-        "to": to_wa_id,
-        "type": "text",
-        "text": {"body": text[:4000]}
-    }
-
-    r = requests.post(url, headers=headers, json=payload, timeout=20)
-    print("WA SEND:", r.text)
-
-
-# -------- call AI ----------
-def call_supportpilot_chat(message_text: str) -> str:
-    try:
-        api_base = os.getenv("SP_API_BASE", "").strip()
-        if not api_base:
-            return "System error: SP_API_BASE not configured"
-
-        url = f"{api_base}/chat"
-
-        payload = {
-            "client_name": os.getenv("WA_DEFAULT_CLIENT","supportpilot_demo"),
-            "api_key": os.getenv("WA_DEFAULT_API_KEY",""),
-            "question": message_text,
-            "tone": "formal",
-            "language": "en",
-        }
-
-        print("CALLING AI:", url)
-
-        r = requests.post(url, json=payload, timeout=25)
-
-        print("AI STATUS:", r.status_code)
-
-        if r.status_code != 200:
-            try:
-                return f"Error: {r.json()}"
-            except:
-                return "AI server error"
-
-        data = r.json()
-        return data.get("answer","No response")
-
-    except Exception as e:
-        print("AI CALL ERROR:", repr(e))
-        return "System temporarily unavailable"
-
 
 
 # ============================================================

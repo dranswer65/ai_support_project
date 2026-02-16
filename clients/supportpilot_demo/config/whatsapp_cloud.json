@@ -1,0 +1,7 @@
+{
+  "phone_number_id": "1036240522898006",
+  "verify_token_env": "WA_VERIFY_TOKEN",
+  "access_token_env": "WA_ACCESS_TOKEN",
+  "api_key_env": "WA_CLIENT_API_KEY",
+  "default_language": "en"
+}
