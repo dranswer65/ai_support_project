@@ -26,8 +26,6 @@ import time
 from monitoring import log_error, get_errors, clear_errors
 from fastapi import Query
 
-
-
 # Stripe optional (won’t crash if missing)
 try:
     import stripe
@@ -59,6 +57,13 @@ from billing_manager import (
 # App
 # ============================================================
 app = FastAPI(title="SupportPilot API")
+@app.get("/debug/version")
+def debug_version():
+    return {
+        "version": "SP_WA_FIX_2026_02_16_V1",
+        "railway_commit": os.getenv("RAILWAY_GIT_COMMIT_SHA", ""),
+        "service": "SupportPilot API",
+    }
 
 @app.middleware("http")
 async def crash_guard(request: Request, call_next):
@@ -92,32 +97,6 @@ async def crash_guard(request: Request, call_next):
         # Return safe JSON (no stacktrace to user)
         return JSONResponse({"detail": "Internal Server Error"}, status_code=500)
 
-
-# WhatsApp Cloud API Webhook (Meta)
-# ============================================================
-WHATSAPP_VERIFY_TOKEN = os.getenv("WHATSAPP_VERIFY_TOKEN", "").strip()
-
-@app.get("/whatsapp/webhook", response_class=PlainTextResponse)
-def whatsapp_webhook_verify(
-    hub_mode: str | None = Query(default=None, alias="hub.mode"),
-    hub_verify_token: str | None = Query(default=None, alias="hub.verify_token"),
-    hub_challenge: str | None = Query(default=None, alias="hub.challenge"),
-):
-    """
-    Meta webhook verification:
-    Must return hub.challenge as plain text with 200 OK.
-    """
-    if not WHATSAPP_VERIFY_TOKEN:
-        raise HTTPException(500, "WHATSAPP_VERIFY_TOKEN not configured.")
-
-    if hub_mode == "subscribe" and hub_verify_token == WHATSAPP_VERIFY_TOKEN:
-        return hub_challenge or ""
-
-    raise HTTPException(403, "Verification failed")
-
-@app.get("/debug/token")
-def debug_token():
-    return {"WHATSAPP_VERIFY_TOKEN": os.getenv("WHATSAPP_VERIFY_TOKEN")}
 
 # ============================================================
 # ENV helpers (supports SP_ and non-SP names)
@@ -353,27 +332,6 @@ def record_health(ok: bool, note: str = ""):
         "uptime_seconds": int(time.time() - APP_START_TS),
     }
     HEALTH_FILE.write_text(json.dumps(data, indent=2), encoding="utf-8")
-
-def wa_send_text(to_number: str, text: str):
-    if not WA_ACCESS_TOKEN or not WA_PHONE_NUMBER_ID:
-        raise HTTPException(500, "WhatsApp env vars missing (WA_ACCESS_TOKEN / WA_PHONE_NUMBER_ID).")
-
-    url = f"https://graph.facebook.com/v20.0/{WA_PHONE_NUMBER_ID}/messages"
-    headers = {
-        "Authorization": f"Bearer {WA_ACCESS_TOKEN}",
-        "Content-Type": "application/json",
-    }
-    payload = {
-        "messaging_product": "whatsapp",
-        "to": to_number,
-        "type": "text",
-        "text": {"body": text},
-    }
-
-    r = requests.post(url, headers=headers, json=payload, timeout=20)
-    if r.status_code >= 400:
-        raise HTTPException(500, f"WhatsApp send failed: {r.status_code} {r.text}")
-    return r.json()
 
 
 
@@ -770,139 +728,16 @@ def chat(req: ChatRequest):
         print("SERVER ERROR:", repr(e))
         raise HTTPException(500, "Internal Server Error")
 
-def send_whatsapp_message(to_number: str, message: str):
-    try:
-        phone_id = os.getenv("WA_PHONE_NUMBER_ID")
-        token = os.getenv("WA_ACCESS_TOKEN")
-
-        url = f"https://graph.facebook.com/v18.0/{phone_id}/messages"
-
-        headers = {
-            "Authorization": f"Bearer {token}",
-            "Content-Type": "application/json"
-        }
-
-        payload = {
-            "messaging_product": "whatsapp",
-            "to": to_number,
-            "type": "text",
-            "text": {"body": message}
-        }
-
-        r = requests.post(url, headers=headers, json=payload)
-        print("WhatsApp send:", r.text)
-
-    except Exception as e:
-        print("WhatsApp send error:", e)
-
-# ============================================================
-# WhatsApp Webhook
-# ============================================================
-@app.get("/whatsapp/webhook", response_class=PlainTextResponse)
-def whatsapp_webhook_verify(
-    hub_mode: str | None = Query(default=None, alias="hub.mode"),
-    hub_verify_token: str | None = Query(default=None, alias="hub.verify_token"),
-    hub_challenge: str | None = Query(default=None, alias="hub.challenge"),
-):
-    if not WHATSAPP_VERIFY_TOKEN:
-        raise HTTPException(500, "WHATSAPP_VERIFY_TOKEN not configured.")
-
-    if hub_mode == "subscribe" and hub_verify_token == WHATSAPP_VERIFY_TOKEN:
-        return hub_challenge or ""
-
-    raise HTTPException(403, "Verification failed")
-
-# ============================================================
-# WhatsApp Webhook — RECEIVE messages (POST)
-# ============================================================
-@app.post("/whatsapp/webhook")
-async def whatsapp_webhook_receive(request: Request):
-
-    try:
-        body = await request.json()
-        print("WHATSAPP EVENT:", json.dumps(body, indent=2))
-
-
-
-        # Extract message safely
-        entry = body.get("entry", [])
-        if not entry:
-            return {"ok": True}
-
-        changes = entry[0].get("changes", [])
-        if not changes:
-            return {"ok": True}
-
-        value = changes[0].get("value", {})
-        messages = value.get("messages")
-
-        if not messages:
-            return {"ok": True}
-
-        message = messages[0]
-        from_number = message.get("from")
-        text = message.get("text", {}).get("body", "")
-
-        print(f"Incoming WhatsApp message from {from_number}: {text}")
-
-        # Simple reply test
-        if text:
-            wa_send_text(from_number, "Hello 👋 message received!")
-
-        return {"status": "received"}
-
-    except Exception as e:
-        print("Webhook error:", e)
-        return {"ok": False}
-
-# ============================================================
-# WhatsApp Webhook (REAL AI reply)
-# ============================================================
-
-@app.post("/whatsapp/webhook")
-async def whatsapp_webhook(request: Request):
-
-    data = await request.json()
-    print("WHATSAPP EVENT:", data)
-
-    try:
-        entry = data.get("entry",[{}])[0]
-        changes = entry.get("changes",[{}])[0]
-        value = changes.get("value",{})
-
-        if "messages" not in value:
-            return {"ok":True}
-
-        msg = value["messages"][0]
-        from_number = msg["from"]
-        text = msg.get("text",{}).get("body","")
-
-        print("MESSAGE:", text)
-
-        # ===== AI reply =====
-        reply = "AI working..."
-
-        try:
-            payload = ChatRequest(
-                client_name="supportpilot_demo",
-                api_key=os.getenv("WHATSAPP_CLIENT_API_KEY",""),
-                question=text,
-                tone="formal",
-                language="en"
-            )
-            res = chat(payload)
-            reply = res.answer
-
-        except Exception as e:
-            print("AI ERROR:", e)
-            reply = "AI temporarily unavailable."
-
-        send_whatsapp_message(from_number, reply)
-
-    except Exception as e:
-        print("WEBHOOK ERROR:", e)
-
-    return {"ok":True}
+@app.get("/debug/wa")
+def debug_wa():
+    return {
+        "running": "WA_WEBHOOK_V2",
+        "WA_PHONE_NUMBER_ID": bool(os.getenv("WA_PHONE_NUMBER_ID","").strip()),
+        "WA_ACCESS_TOKEN": bool(os.getenv("WA_ACCESS_TOKEN","").strip()),
+        "WA_VERIFY_TOKEN": bool(os.getenv("WA_VERIFY_TOKEN","").strip()),
+        "WA_DEFAULT_CLIENT": os.getenv("WA_DEFAULT_CLIENT",""),
+        "SP_API_BASE": os.getenv("SP_API_BASE",""),
+    }
 
 
 
@@ -1129,6 +964,18 @@ def admin_export_billing(client_name: str, authorization: str | None = Header(de
 
     log_audit("admin_export_billing", actor="admin_token", meta={"client": client_name, "rows": len(rows)})
     return output.getvalue()
+
+@app.get("/debug/wa")
+def debug_wa():
+    return {
+        "running": "WA_WEBHOOK_V2",
+        "WA_PHONE_NUMBER_ID": bool(os.getenv("WA_PHONE_NUMBER_ID","").strip()),
+        "WA_ACCESS_TOKEN": bool(os.getenv("WA_ACCESS_TOKEN","").strip()),
+        "WA_VERIFY_TOKEN": bool(os.getenv("WA_VERIFY_TOKEN","").strip()),
+        "WA_DEFAULT_CLIENT": os.getenv("WA_DEFAULT_CLIENT",""),
+        "SP_API_BASE": os.getenv("SP_API_BASE",""),
+    }
+
 # ============================================================
 # Day 46/47 helper — Manual billing control (DEV / Admin)
 # ============================================================
@@ -1302,80 +1149,123 @@ def wa_send_text(to_wa_id: str, text: str):
     r = requests.post(url, headers=headers, json=payload, timeout=20)
     if r.status_code >= 400:
         raise RuntimeError(f"WhatsApp send failed: {r.status_code} {r.text}")
+# ============================================================
+# WHATSAPP CLOUD — REAL AI REPLY (FINAL CLEAN VERSION)
+# ============================================================
 
-def call_supportpilot_chat(message_text: str) -> str:
+WA_PHONE_NUMBER_ID = os.getenv("WA_PHONE_NUMBER_ID","").strip()
+WA_ACCESS_TOKEN = os.getenv("WA_ACCESS_TOKEN","").strip()
+WA_VERIFY_TOKEN = os.getenv("WA_VERIFY_TOKEN","").strip()
+
+WA_DEFAULT_CLIENT = os.getenv("WA_DEFAULT_CLIENT","supportpilot_demo").strip()
+WA_DEFAULT_API_KEY = os.getenv("WA_DEFAULT_API_KEY","").strip()
+
+SP_API_BASE = os.getenv("SP_API_BASE","http://127.0.0.1:8000").strip()
+
+
+# -------- send message ----------
+def wa_send_text(to_wa_id: str, text: str):
+    if not (WA_PHONE_NUMBER_ID and WA_ACCESS_TOKEN):
+        print("WA ENV missing")
+        return
+
+    url = f"https://graph.facebook.com/v20.0/{WA_PHONE_NUMBER_ID}/messages"
+
+    headers = {
+        "Authorization": f"Bearer {WA_ACCESS_TOKEN}",
+        "Content-Type": "application/json"
+    }
+
+    payload = {
+        "messaging_product": "whatsapp",
+        "to": to_wa_id,
+        "type": "text",
+        "text": {"body": text[:4000]}
+    }
+
+    r = requests.post(url, headers=headers, json=payload, timeout=20)
+    print("WA SEND:", r.text)
+
+
+# -------- call AI ----------
+def call_ai(message_text: str) -> str:
     if not WA_DEFAULT_API_KEY:
-        return "Client API key is not configured on server."
+        return "Server missing client API key."
 
     url = f"{SP_API_BASE}/chat"
+
     payload = {
         "client_name": WA_DEFAULT_CLIENT,
         "api_key": WA_DEFAULT_API_KEY,
         "question": message_text,
         "tone": "formal",
-        "language": "en",
+        "language": "en"
     }
 
-    r = requests.post(url, json=payload, timeout=60)
-    if r.status_code >= 400:
-        # Show short readable error to you (don’t expose internal stack traces)
-        try:
-            j = r.json()
-            detail = j.get("detail", r.text)
-        except Exception:
-            detail = r.text
-        return f"Sorry — system error: {detail}"
+    try:
+        r = requests.post(url, json=payload, timeout=60)
 
-    data = r.json()
-    return (data.get("answer") or "").strip() or "Sorry — I couldn't generate a response."
+        if r.status_code != 200:
+            try:
+                err = r.json().get("detail", r.text)
+            except:
+                err = r.text
+            return f"System error: {err}"
 
+        data = r.json()
+        return data.get("answer","No reply")
+
+    except Exception as e:
+        return f"Server error: {e}"
+
+
+# -------- verification ----------
 @app.get("/whatsapp/webhook")
 def whatsapp_verify(hub_mode: str | None = None,
                     hub_challenge: str | None = None,
                     hub_verify_token: str | None = None):
-    # Meta sends: hub.mode, hub.challenge, hub.verify_token
+
     if hub_mode == "subscribe" and hub_verify_token == WA_VERIFY_TOKEN:
         return PlainTextResponse(hub_challenge or "")
+
     raise HTTPException(403, "Verification failed")
 
+
+# -------- incoming messages ----------
 @app.post("/whatsapp/webhook")
 async def whatsapp_webhook(request: Request):
+
     body = await request.json()
     print("WHATSAPP EVENT:", body)
 
     try:
-        entry = (body.get("entry") or [])[0]
-        changes = (entry.get("changes") or [])[0]
-        value = changes.get("value") or {}
-        messages = value.get("messages") or []
+        entry = body["entry"][0]
+        changes = entry["changes"][0]
+        value = changes["value"]
+
+        messages = value.get("messages")
         if not messages:
-            return {"ok": True}  # status updates etc
+            return {"ok": True}
 
         msg = messages[0]
-        from_wa = msg.get("from")  # wa_id
-        msg_type = msg.get("type")
+        from_wa = msg["from"]
+        text = msg["text"]["body"]
 
-        if msg_type != "text":
-            wa_send_text(from_wa, "Sorry, I can only handle text messages right now.")
-            return {"ok": True}
+        print("USER:", text)
 
-        text = (msg.get("text") or {}).get("body", "").strip()
-        if not text:
-            wa_send_text(from_wa, "Please send a text message.")
-            return {"ok": True}
+        # 🔥 CALL AI
+        answer = call_ai(text)
 
-        # ✅ ROUTE TO AI
-        answer = call_supportpilot_chat(text)
+        print("AI:", answer)
 
-        # ✅ SEND BACK TO WHATSAPP
+        # 🔥 SEND BACK
         wa_send_text(from_wa, answer)
 
         return {"ok": True}
 
     except Exception as e:
-        print("WHATSAPP ERROR:", repr(e))
+        print("WA ERROR:", e)
         return {"ok": True}
-
 
 
 # ============================================================
