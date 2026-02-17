@@ -6,3 +6,6 @@ openai
 stripe
 requests
 streamlit
+sqlalchemy
+psycopg2-binary
+
