@@ -16,12 +16,17 @@ def get_db_url() -> str:
 
     return url
 
+
 ENGINE = create_engine(
     get_db_url(),
     pool_pre_ping=True,
     future=True,
 )
 
+
+# -----------------------------------------------------------
+# SupportPilot core tables
+# -----------------------------------------------------------
 def create_tables():
     sql = """
     CREATE TABLE IF NOT EXISTS conversations (
@@ -53,6 +58,37 @@ def create_tables():
     CREATE INDEX IF NOT EXISTS idx_msg_conv_id ON conversation_messages(conversation_id, created_utc DESC);
     """
     with ENGINE.begin() as conn:
-        # SQLAlchemy can't execute multiple statements in one text() on some setups
+        for stmt in [s.strip() for s in sql.split(";") if s.strip()]:
+            conn.execute(text(stmt))
+
+
+# -----------------------------------------------------------
+# WhatsApp SaaS tables (NEW)
+# -----------------------------------------------------------
+def create_wa_tables():
+    sql = """
+    CREATE TABLE IF NOT EXISTS wa_conversations (
+      wa_id TEXT PRIMARY KEY,
+      state TEXT NOT NULL DEFAULT 'NEW',
+      order_id TEXT DEFAULT '',
+      order_attempts INT NOT NULL DEFAULT 0,
+      last_intent TEXT DEFAULT '',
+      last_user_msg TEXT DEFAULT '',
+      updated_utc TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+
+    CREATE TABLE IF NOT EXISTS wa_messages (
+      id BIGSERIAL PRIMARY KEY,
+      wa_id TEXT NOT NULL,
+      direction TEXT NOT NULL,
+      body TEXT NOT NULL,
+      ts_utc TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_wa_messages_wa_id_ts
+    ON wa_messages (wa_id, ts_utc DESC);
+    """
+
+    with ENGINE.begin() as conn:
         for stmt in [s.strip() for s in sql.split(";") if s.strip()]:
             conn.execute(text(stmt))

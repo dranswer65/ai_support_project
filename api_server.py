@@ -27,7 +27,7 @@ from monitoring import log_error, get_errors, clear_errors
 from fastapi import Query
 
 from whatsapp_bot import handle_whatsapp_event
-from db import create_tables
+from db import create_tables, create_wa_tables
 from db import ENGINE
 from sqlalchemy import text
 
@@ -72,6 +72,8 @@ def debug_db():
 @app.on_event("startup")
 def _startup():
     create_tables()
+    create_wa_tables()
+
 
 @app.get("/debug/version")
 def debug_version():
