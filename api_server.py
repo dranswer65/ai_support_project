@@ -27,6 +27,9 @@ from monitoring import log_error, get_errors, clear_errors
 from fastapi import Query
 
 from whatsapp_bot import handle_whatsapp_event
+from db import create_tables
+from db import ENGINE
+from sqlalchemy import text
 
 
 # Stripe optional (won’t crash if missing)
@@ -60,6 +63,16 @@ from billing_manager import (
 # App
 # ============================================================
 app = FastAPI(title="SupportPilot API")
+@app.get("/debug/db")
+def debug_db():
+    with ENGINE.begin() as conn:
+        v = conn.execute(text("SELECT 1")).scalar()
+    return {"db_ok": bool(v == 1)}
+
+@app.on_event("startup")
+def _startup():
+    create_tables()
+
 @app.get("/debug/version")
 def debug_version():
     return {

@@ -9,9 +9,17 @@ python -m streamlit run admin_ui\dashboard_app.py
 
 supportpilot_secret_123
 
-cd C:\projects\ai_support_project
+cd C:\projects\ai_support_project01
+python -m uvicorn api_server1:app --reload
+
+
 
 To generate new key and update api_key.json: python generate_key.py
+
+git add .
+git commit -m "Add WhatsApp POST webhook"
+git push
+
 
 
 
