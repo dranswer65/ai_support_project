@@ -69,6 +69,19 @@ def debug_db():
         v = conn.execute(text("SELECT 1")).scalar()
     return {"db_ok": bool(v == 1)}
 
+@app.get("/debug/tables")
+def debug_tables():
+    with ENGINE.begin() as conn:
+        result = conn.execute(text("""
+            SELECT table_name
+            FROM information_schema.tables
+            WHERE table_schema='public'
+            ORDER BY table_name;
+        """)).fetchall()
+
+    return {"tables": [r[0] for r in result]}
+
+
 @app.on_event("startup")
 def _startup():
     create_tables()
