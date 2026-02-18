@@ -15,105 +15,84 @@ class FreshdeskAdapterError(Exception):
 
 def freshdesk_adapter(payload: dict, routing: dict) -> dict:
     """
-    Hardened adapter that converts internal payload into
-    a Freshdesk-safe ticket object.
+    Hardened adapter that converts internal payload into a Freshdesk-safe ticket object.
 
-    Guarantees:
-    - Never crash AI flow
-    - Never send malformed payloads
-    - Agent language & RTL enforcement (Day 47B / 48B)
+    Return contract (aligned with Zendesk):
+    - On success: {status, vendor, ticket_id, ticket}
+    - On failure: {status, vendor, error_type, details, action, created_at}
     """
-
     try:
-        # -----------------------------
-        # 1. Schema validation
-        # -----------------------------
+        # 1) Schema validation
         required_keys = {"user", "conversation", "decision_trace"}
-        missing = required_keys - payload.keys()
-
+        missing = required_keys - set(payload.keys())
         if missing:
-            raise FreshdeskAdapterError(
-                f"Missing required payload fields: {missing}"
-            )
+            raise FreshdeskAdapterError(f"Missing required payload fields: {missing}")
 
-        # -----------------------------
-        # 2. Idempotency
-        # -----------------------------
-        idempotency_key = str(uuid.uuid4())
+        # 2) ticket id (idempotency)
+        ticket_id = str(uuid.uuid4())
+        created_at = datetime.datetime.utcnow().isoformat() + "Z"
 
-        # -----------------------------
-        # 3. Agent constraints
-        # -----------------------------
-        agent_constraints = payload.get("agent_constraints", {})
-
+        # 3) Agent constraints
+        agent_constraints = payload.get("agent_constraints", {}) or {}
         reply_language = agent_constraints.get("reply_language", "en")
-        language_lock = agent_constraints.get("language_lock", False)
-        rtl_required = agent_constraints.get("rtl_required", False)
+        language_lock = bool(agent_constraints.get("language_lock", False))
+        rtl_required = bool(agent_constraints.get("rtl_required", False))
 
-        # -----------------------------
-        # 4. Build Freshdesk ticket
-        # -----------------------------
+        # 4) Build Freshdesk ticket (safe shape)
         ticket = {
-            "unique_external_id": idempotency_key,
-            "created_at": datetime.datetime.utcnow().isoformat() + "Z",
-
+            "unique_external_id": ticket_id,
+            "created_at": created_at,
             "requester_id": payload["user"]["user_id"],
-
             "subject": (
                 f"AI Escalation — {routing.get('team')} "
                 f"({routing.get('priority')}) "
-                f"[LANG={reply_language.upper()}]"
+                f"[LANG={str(reply_language).upper()}]"
             ),
-
             "description": _build_ticket_body(payload, routing),
-
             "group": routing.get("team"),
             "priority": routing.get("priority"),
             "tags": payload.get("kpi_flags", []),
-
-            # -----------------------------
-            # 5. Custom Fields (Day 48B)
-            # -----------------------------
             "custom_fields": {
+                # routing
+                "tier": routing.get("tier"),
+                "region": routing.get("region"),
+                # decision
+                "decision_rule": (payload.get("decision_trace", {}) or {}).get("rule"),
+                # language enforcement
                 "reply_language": reply_language,
                 "language_lock": language_lock,
                 "rtl_required": rtl_required,
             },
         }
 
-        # -----------------------------
-        # 6. Simulated send (safe)
-        # -----------------------------
+        # 5) Simulated send (safe)
         return {
             "status": "created",
             "vendor": "freshdesk",
+            "ticket_id": ticket_id,
             "ticket": ticket,
         }
 
     except FreshdeskAdapterError as e:
         return _safe_failure("schema_error", str(e))
-
     except Exception as e:
         return _safe_failure("unknown_error", str(e))
 
-# -----------------------------------
-# Helpers
-# -----------------------------------
 
 def _build_ticket_body(payload: dict, routing: dict) -> str:
     """
     Human-readable escalation summary for Freshdesk agents.
-    Used for QA, audits, and compliance.
+    Must never throw.
     """
+    try:
+        convo = payload.get("conversation", {}) or {}
+        trace = payload.get("decision_trace", {}) or {}
+        agent_constraints = payload.get("agent_constraints", {}) or {}
 
-    convo = payload["conversation"]
-    trace = payload["decision_trace"]
-    agent_constraints = payload.get("agent_constraints", {})
-
-    return f"""
+        return f"""
 AI Escalation Summary
 --------------------
-User ID: {payload['user']['user_id']}
+User ID: {payload.get('user', {}).get('user_id')}
 Current State: {convo.get('current_state')}
 Last Message: {convo.get('last_user_message')}
 Last Intent: {convo.get('last_intent')}
@@ -131,16 +110,15 @@ Agent Constraints:
 - Reply Language: {agent_constraints.get('reply_language', 'en')}
 - Language Lock: {agent_constraints.get('language_lock', False)}
 - RTL Required: {agent_constraints.get('rtl_required', False)}
-"""
+""".strip()
+    except Exception:
+        return "AI Escalation Summary (failed to render details safely)."
 
 
 def _safe_failure(error_type: str, details: str) -> dict:
     """
-    NEVER throw.
-    NEVER crash.
-    ALWAYS return a safe object.
+    NEVER throw. ALWAYS return a safe object.
     """
-
     return {
         "status": "failed",
         "vendor": "freshdesk",

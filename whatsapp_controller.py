@@ -1,25 +1,37 @@
-# --------------------------------------------------
 # WhatsApp Controller
 # Day 47A — Conversation Versioning & Safe Restart
 # Day 49  — Compliance & Audit Logging Layer
 # --------------------------------------------------
 
-from datetime import datetime, timedelta
+from datetime import datetime
+import re
 
 from language.language_detector import detect_language
 from language.arabic_tone_engine import select_arabic_tone
+from escalation_router import route_escalation
 
 # --------------------------------------------------
-# 🔐 Day 49 — Compliance Audit Layer
+# 🔐 Compliance Audit Layer
 # --------------------------------------------------
 from compliance.audit_logger import log_event
-from compliance.audit_events import (
-    conversation_restart_event,
-    conversation_closed_event,
-    escalation_event,
-    sla_breach_event,
-    incident_mode_event
-)
+# --------------------------------------------------
+# 🔐 Day 49 — Compliance Audit Events (safe import)
+# --------------------------------------------------
+try:
+    from compliance.audit_events import (
+        conversation_restart_event,
+        conversation_closed_event,
+        escalation_event,
+        sla_breach_event,
+        incident_mode_event,
+    )
+except Exception:
+    # Fallbacks so WhatsApp never crashes if an event is missing
+    def conversation_restart_event(**kwargs): return {"event": "conversation_restart", **kwargs}
+    def conversation_closed_event(**kwargs):  return {"event": "conversation_closed", **kwargs}
+    def escalation_event(**kwargs):          return {"event": "escalation", **kwargs}
+    def sla_breach_event(**kwargs):          return {"event": "sla_breach", **kwargs}
+    def incident_mode_event(**kwargs):       return {"event": "incident_mode", **kwargs}
 
 from profiles.user_profile_store import (
     get_preferred_language,
@@ -29,23 +41,15 @@ from profiles.user_profile_store import (
 from vendor_orchestrator import dispatch_ticket
 from incident.incident_state import is_incident_mode
 
-
 # --------------------------------------------------
 # In-memory session store
-# (Production: Redis / DB with TTL)
+# (Production later: move to Redis/Postgres)
 # --------------------------------------------------
-
 sessions = {}
-
 
 # --------------------------------------------------
 # Session Management
-# ✔ Safe restart
-# ✔ Conversation versioning
-# ✔ Restart analytics
-# ✔ Day 49 — Restart audit logging
 # --------------------------------------------------
-
 def get_or_create_session(user_id):
     now = datetime.utcnow()
 
@@ -56,19 +60,20 @@ def get_or_create_session(user_id):
             "last_intent": None,
             "last_user_message": None,
 
-            # -----------------------------
-            # Day 47A — Versioning
-            # -----------------------------
+            # Versioning
             "conversation_version": 1,
             "restart_count": 0,
             "restart_reason": None,
             "last_closed_at": None,
 
-            # -----------------------------
-            # Language handling
-            # -----------------------------
+            # Language
             "language": None,
             "text_direction": "ltr",
+
+            # Memory
+            "order_id": None,
+            "asked_order_id_count": 0,
+            "no_count": 0,
 
             "created_at": now.isoformat()
         }
@@ -76,11 +81,8 @@ def get_or_create_session(user_id):
 
     session = sessions[user_id]
 
-    # --------------------------------------------------
-    # ✅ SAFE RESTART DETECTION
-    # --------------------------------------------------
+    # Safe restart after CLOSED
     if session["state"] == "CLOSED":
-
         session["conversation_version"] += 1
         session["restart_count"] += 1
         session["restart_reason"] = "user_return"
@@ -88,10 +90,10 @@ def get_or_create_session(user_id):
         session["state"] = "ACTIVE"
         session["tries"] = 0
         session["last_intent"] = None
+        session["order_id"] = None
+        session["asked_order_id_count"] = 0
+        session["no_count"] = 0
 
-        # --------------------------------------------------
-        # 🔐 Day 49 — Restart Audit Logging
-        # --------------------------------------------------
         log_event(
             conversation_restart_event(
                 user_id=user_id,
@@ -103,64 +105,44 @@ def get_or_create_session(user_id):
 
     return session
 
-
 # --------------------------------------------------
-# KPI Signal Utilities
+# KPI utilities
 # --------------------------------------------------
-
 def collect_restart_kpis(session, kpi_signals):
-    """
-    Analytics-only KPIs (do NOT affect logic directly)
-    """
     if session.get("restart_count", 0) > 0:
         kpi_signals.append("restart_after_close")
 
         if session["restart_count"] >= 3:
             kpi_signals.append("frequent_restarts")
 
-
 # --------------------------------------------------
-# Priority Engine (Day 43B + Day 47A + Day 49)
+# Priority Engine
 # --------------------------------------------------
-
 def get_customer_priority(user_id, session, kpi_signals):
-    """
-    Returns (priority_level, reason)
-    """
 
-    # 🔥 VIP always highest
     if user_id.startswith("vip_"):
         return "P0", "VIP customer"
 
-    # 🔥 SLA breach escalation
     if "sla_breach_detected" in kpi_signals:
-
-        # 🔐 Day 49 — Log SLA breach
         log_event(
             sla_breach_event(
                 user_id=user_id,
                 conversation_version=session.get("conversation_version")
             )
         )
-
         return "P0", "SLA breach detected"
 
-    # 🔁 Restart-based boost
     if session.get("restart_count", 0) >= 3:
         return "P1", "Frequent restarts detected"
 
-    # 🚨 Escalation state
     if session.get("state") == "ESCALATION":
         return "P1", "Auto escalation"
 
     return "P2", "Standard customer"
-# --------------------------------------------------
-# Handoff Payload Builder
-# ✔ Language
-# ✔ RTL support
-# ✔ Versioning
-# --------------------------------------------------
 
+# --------------------------------------------------
+# Handoff payload builder
+# --------------------------------------------------
 def build_handoff_payload(
     user_id,
     current_state,
@@ -184,9 +166,7 @@ def build_handoff_payload(
             "conversation_version": sessions[user_id]["conversation_version"]
         },
         "agent_constraints": agent_constraints,
-        "user": {
-            "user_id": user_id
-        },
+        "user": {"user_id": user_id},
         "conversation": {
             "current_state": current_state,
             "last_user_message": last_user_message,
@@ -208,287 +188,349 @@ def build_handoff_payload(
         }
     }
 
-
 # --------------------------------------------------
-# Language Resolution
-# --------------------------------------------------
-
-def resolve_language(user_id, session, message):
-
-    preferred = get_preferred_language(user_id)
-    if preferred:
-        session["language"] = preferred
-        session["text_direction"] = "rtl" if preferred == "ar" else "ltr"
-        return preferred
-
-    if session.get("language"):
-        return session["language"]
-
-    if detect_arabic_intent(message):
-        session["language"] = "ar"
-        session["text_direction"] = "rtl"
-        set_language_preference(user_id, "ar")
-        return "ar"
-
-    detected = detect_language(message)
-    session["language"] = detected
-    session["text_direction"] = "rtl" if detected == "ar" else "ltr"
-    set_language_preference(user_id, detected)
-    return detected
-
-
-# --------------------------------------------------
-# Arabic Tone Resolver
+# Basic NLP / Pattern Helpers (lightweight)
 # --------------------------------------------------
 
-def resolve_arabic_tone(lang, session):
-    if lang != "ar":
-        return None
+_ORDER_ID_RE = re.compile(r"\b([A-Z]{2,5}\d{4,12}|\d{6,12})\b", re.IGNORECASE)
 
-    return select_arabic_tone(
-        user_region=session.get("region", "KSA"),
-        business_context="support"
-    )
+def _norm(text: str) -> str:
+    return (text or "").strip().lower()
 
+def _extract_order_id(text: str):
+    m = _ORDER_ID_RE.search(text or "")
+    return m.group(1).strip() if m else None
+
+def _is_greeting(text: str) -> bool:
+    t = _norm(text)
+    return t in {"hi", "hello", "hey", "السلام عليكم", "مرحبا", "أهلاً", "اهلا"}
+
+def _is_thanks(text: str) -> bool:
+    t = _norm(text)
+    return t in {"thanks", "thank you", "thx", "شكرا", "شكرًا", "جزاك الله خير"}
+
+def _is_goodbye(text: str) -> bool:
+    t = _norm(text)
+    return t in {"bye", "goodbye", "see you", "مع السلامة", "سلام", "الى اللقاء", "إلى اللقاء"}
+
+def _is_no(text: str) -> bool:
+    t = _norm(text)
+    return t in {"no", "nope", "nah", "لا", "لا شكرا", "لا شكرًا", "ليس الآن", "مو", "مش"}
+
+def _detect_intent(text: str):
+    """
+    Minimal intent detection for the order flow.
+    (Your Day 57 intent engine can replace this later.)
+    """
+    t = _norm(text)
+    if _is_greeting(t):
+        return "greeting"
+    if _is_thanks(t):
+        return "thanks"
+    if _is_goodbye(t):
+        return "goodbye"
+
+    # delivery/order delay (English)
+    if any(k in t for k in ["delivery", "late", "delayed", "where is my order", "order delayed", "my order delayed"]):
+        return "delivery_delay"
+
+    # delivery/order delay (Arabic)
+    if any(k in t for k in ["طلب", "طلبي", "متأخر", "تأخير", "وين الطلب", "توصيل", "الشحنة", "تأخر التوصيل"]):
+        return "delivery_delay"
+
+    return "other"
 
 # --------------------------------------------------
-# Incident Mode Guard (Day 49 audit)
+# Core Conversation Router
 # --------------------------------------------------
 
-def handle_incident_mode(user_id, session, lang):
-
-    log_event(
-        incident_mode_event(
-            user_id=user_id,
-            conversation_version=session.get("conversation_version")
-        )
-    )
-
-    return (
-        "نواجه حالياً ضغطاً عالياً على النظام. تم تسجيل طلبك وسيتم التعامل معه قريباً."
-        if lang == "ar"
-        else
-        "We are currently experiencing high system load. "
-        "Your request has been recorded and will be handled shortly."
-    )
-
-
-# --------------------------------------------------
-# Conversation Closed Audit (Day 49)
-# --------------------------------------------------
-
-def audit_conversation_closed(user_id, session):
-
-    log_event(
-        conversation_closed_event(
-            user_id=user_id,
-            conversation_version=session.get("conversation_version"),
-            restart_count=session.get("restart_count", 0)
-        )
-    )
-
-
-# --------------------------------------------------
-# Escalation Audit (Day 49)
-# --------------------------------------------------
-
-def audit_escalation_created(user_id, session, priority):
-
-    log_event(
-        escalation_created_event(
-            user_id=user_id,
-            conversation_version=session.get("conversation_version"),
-            priority_level=priority[0]
-        )
-    )
-# --------------------------------------------------
-# Main WhatsApp Message Handler
-# Day 47A + Day 48B + Day 49
-# --------------------------------------------------
-
-def handle_message(user_id, message):
+def handle_message(user_id: str, message_text: str, kpi_signals=None):
+    """
+    Main entry point:
+    returns: (reply_text, meta_dict)
+    """
+    if kpi_signals is None:
+        kpi_signals = []
 
     session = get_or_create_session(user_id)
-    session["last_user_message"] = message
-
-    text = message.strip()
-    text_lower = text.lower()
-
-    # --------------------------------------------------
-    # KPI Signals
-    # --------------------------------------------------
-
-    kpi_signals = []
     collect_restart_kpis(session, kpi_signals)
 
-    # --------------------------------------------------
-    # Language Resolution
-    # --------------------------------------------------
-
-    lang = resolve_language(user_id, session, text)
-    arabic_tone = resolve_arabic_tone(lang, session)
-
-    # --------------------------------------------------
-    # Incident Mode Guard (Audited)
-    # --------------------------------------------------
-
+    # --- Incident mode KPI ---
     if is_incident_mode():
-
+        kpi_signals.append("incident_mode")
         log_event(
-            event_type="incident_mode_triggered",
-            user_id=user_id,
-            metadata={
-                "conversation_version": session["conversation_version"],
-                "language": lang
-            }
+            incident_mode_event(
+                user_id=user_id,
+                conversation_version=session.get("conversation_version")
+            )
         )
 
-        return RESPONSES["incident"][lang]
+    # --- language ---
+    detected = detect_language(message_text)
+    preferred = get_preferred_language(user_id)
+
+    language = preferred or session.get("language") or detected or "en"
+    language = (language or "en").strip().lower()
+    if language not in ("en", "ar"):
+        language = "en"
+
+    if session.get("language") != language:
+        session["language"] = language
+        set_language_preference(user_id, language)
+
+    session["text_direction"] = "rtl" if language == "ar" else "ltr"
+    arabic_tone = select_arabic_tone(message_text) if language == "ar" else None
+
+    # store last user message
+    session["last_user_message"] = message_text
+
+    # intent
+    intent = _detect_intent(message_text)
+    session["last_intent"] = intent
+
+    # priority
+    priority = get_customer_priority(user_id, session, kpi_signals)
 
     # --------------------------------------------------
-    # Greetings
+    # Loop protection on repeated "No"
     # --------------------------------------------------
+    if _is_no(message_text):
+        session["no_count"] = int(session.get("no_count", 0)) + 1
+        if session["no_count"] >= 2:
+            session["state"] = "CLOSED"
+            session["last_closed_at"] = datetime.utcnow().isoformat()
 
-    if text_lower in ["hi", "hello", "hey", "مرحبا", "السلام عليكم"]:
-        session["last_intent"] = "greeting"
-        return RESPONSES["greeting"][lang]
+            log_event(
+                conversation_closed_event(
+                    user_id=user_id,
+                    version=session.get("conversation_version"),
+                    reason="user_declined_help"
+                )
+            )
 
-    # --------------------------------------------------
-    # Delivery Issue Intent
-    # --------------------------------------------------
-
-    if "delivery" in text_lower or "توصيل" in text_lower:
-        session["last_intent"] = "delivery_issue"
-        return RESPONSES["ask_order"][lang]
-
-    # --------------------------------------------------
-    # Order ID Provided
-    # --------------------------------------------------
-
-    if text_lower.startswith("order") or "طلب" in text_lower:
-        session["last_intent"] = "order_id_provided"
-        return RESPONSES["order_received"][lang]
-
-    # --------------------------------------------------
-    # Acknowledgment
-    # --------------------------------------------------
-
-    if text_lower in ["ok", "okay", "yes", "نعم", "تمام"]:
-        return RESPONSES["acknowledged"][lang]
+            if language == "ar":
+                return "شكرًا لك. إذا احتجت أي مساعدة لاحقًا أنا موجود. 🌟", {"state": session["state"]}
+            return "Thank you. If you need any help later, I’m here. 🌟", {"state": session["state"]}
+    else:
+        session["no_count"] = 0
 
     # --------------------------------------------------
-    # User Ends Conversation
+    # Greeting / Thanks / Goodbye
     # --------------------------------------------------
+    if intent == "greeting":
+        if language == "ar":
+            return "مرحبًا! شكرًا لتواصلك مع SupportPilot. كيف يمكنني مساعدتك اليوم؟", {"state": session["state"]}
+        return "Hello! Thank you for contacting SupportPilot. How may I assist you today?", {"state": session["state"]}
 
-    if text_lower in ["no", "nothing", "thanks", "thank you", "لا", "شكرا"]:
+    if intent == "thanks":
+        if language == "ar":
+            return "على الرحب والسعة. هل هناك أي شيء آخر يمكنني مساعدتك به اليوم؟", {"state": session["state"]}
+        return "You’re most welcome. Is there anything else I can help you with today?", {"state": session["state"]}
 
+    if intent == "goodbye":
         session["state"] = "CLOSED"
         session["last_closed_at"] = datetime.utcnow().isoformat()
 
-        kpi_signals.append("conversation_closed")
+        log_event(
+            conversation_closed_event(
+                user_id=user_id,
+                version=session.get("conversation_version"),
+                reason="user_goodbye"
+            )
+        )
 
-        priority = get_customer_priority(user_id, session, kpi_signals)
+        if language == "ar":
+            return "مع السلامة! إذا احتجت أي شيء، أنا موجود. ✅", {"state": session["state"]}
+        return "Goodbye! If you need anything else, I’m here. ✅", {"state": session["state"]}
 
-        agent_constraints = {
-            "reply_language": lang,
-            "language_lock": True,
-            "arabic_tone": arabic_tone if lang == "ar" else None,
-            "rtl_required": session["text_direction"] == "rtl"
-        }
+    # --------------------------------------------------
+    # Order / Delivery delay flow
+    # --------------------------------------------------
+    maybe_order_id = _extract_order_id(message_text)
+    if maybe_order_id:
+        session["order_id"] = maybe_order_id
 
-        payload = build_handoff_payload(
+    if intent == "delivery_delay" or session.get("state") == "WAITING_ORDER_ID":
+        if not session.get("order_id"):
+            session["state"] = "WAITING_ORDER_ID"
+            session["asked_order_id_count"] = int(session.get("asked_order_id_count", 0)) + 1
+
+            # Ask order ID at most twice, then escalate
+            if session["asked_order_id_count"] <= 2:
+                if language == "ar":
+                    return "أقدر ذلك. هل يمكنك تزويدي برقم الطلب (Order ID) حتى أتحقق من حالة الطلب؟", {"state": session["state"]}
+                return "I can help you with that. Could you please provide your Order ID so I can check the status?", {"state": session["state"]}
+
+            # Escalate after 2 fails
+            session["state"] = "ESCALATION"
+            reply, meta = _escalate_to_human(
+                user_id=user_id,
+                session=session,
+                language=language,
+                text_direction=session.get("text_direction", "ltr"),
+                arabic_tone=arabic_tone,
+                kpi_signals=kpi_signals,
+                priority=priority,
+                decision_rule="order_id_missing_after_2_asks",
+                decision_reason="Order ID not provided after 2 requests",
+            )
+            return reply, meta
+
+        # We have order id now
+        session["state"] = "ACTIVE"
+        oid = session.get("order_id")
+
+        reply, meta = _escalate_to_human(
             user_id=user_id,
-            current_state="CLOSED",
-            last_user_message="redacted_for_privacy",
-            last_intent=session.get("last_intent"),
-            decision_rule="USER_DONE",
-            decision_reason="User confirmed no further assistance needed",
+            session=session,
+            language=language,
+            text_direction=session.get("text_direction", "ltr"),
+            arabic_tone=arabic_tone,
             kpi_signals=kpi_signals,
             priority=priority,
-            language=lang,
-            text_direction=session["text_direction"],
-            arabic_tone=arabic_tone,
-            agent_constraints=agent_constraints
+            decision_rule="order_delay_with_order_id",
+            decision_reason=f"Delivery delay reported, order_id captured: {oid}",
+            extra_context={"order_id": oid},
         )
-
-        # Audit conversation closed (no raw text logged)
-        log_event(
-            event_type="conversation_closed",
-            user_id=user_id,
-            metadata={
-                "conversation_version": session["conversation_version"],
-                "priority": priority[0],
-                "language": lang
-            }
-        )
-
-        return RESPONSES["closed"][lang]
+        return reply, meta
 
     # --------------------------------------------------
-    # Retry → Escalation Logic
+    # Fallback: do NOT loop endlessly
     # --------------------------------------------------
-
-    session["tries"] += 1
-
+    session["tries"] = int(session.get("tries", 0)) + 1
     if session["tries"] >= 3:
-
         session["state"] = "ESCALATION"
-        kpi_signals.extend(["auto_escalation", "sla_breach_detected"])
-
-        priority = get_customer_priority(user_id, session, kpi_signals)
-
-        agent_constraints = {
-            "reply_language": lang,
-            "language_lock": True,
-            "arabic_tone": arabic_tone if lang == "ar" else None,
-            "rtl_required": session["text_direction"] == "rtl"
-        }
-
-        payload = build_handoff_payload(
+        reply, meta = _escalate_to_human(
             user_id=user_id,
-            current_state="ESCALATION",
-            last_user_message="redacted_for_privacy",
-            last_intent=session.get("last_intent"),
-            decision_rule="MAX_RETRIES",
-            decision_reason="User stuck after multiple attempts",
+            session=session,
+            language=language,
+            text_direction=session.get("text_direction", "ltr"),
+            arabic_tone=arabic_tone,
             kpi_signals=kpi_signals,
             priority=priority,
-            language=lang,
-            text_direction=session["text_direction"],
-            arabic_tone=arabic_tone,
-            agent_constraints=agent_constraints
+            decision_rule="unclear_after_3_tries",
+            decision_reason="User message unclear after 3 attempts",
         )
+        return reply, meta
 
-        routing = {
-            "team": "tier_2",
-            "region": "GCC",
-            "priority": priority[0],
-            "language": lang,
-            "business_hours_only": True
-        }
+    if language == "ar":
+        return "شكرًا لرسالتك. لتقديم المساعدة بشكل أفضل، هل يمكنك توضيح التفاصيل أكثر؟", {"state": session["state"]}
+    return "Thank you. To assist you properly, could you please provide a little more information about your request?", {"state": session["state"]}
 
-        dispatch_result = dispatch_ticket(payload, routing)
+# --------------------------------------------------
+# Escalation / Ticket Dispatch
+# --------------------------------------------------
 
-        # -----------------------------
-        # Compliance Audit (NO RAW TEXT)
-        # -----------------------------
+def _extract_ticket_id(result: dict | None):
+    """
+    Tries to extract a usable ticket id from different adapter formats.
+    """
+    if not isinstance(result, dict):
+        return None
 
-        log_event(
-            event_type="ticket_escalated",
+    # If vendor_orchestrator returns top-level ticket_id
+    if result.get("ticket_id"):
+        return result.get("ticket_id")
+
+    # If it returns { "result": { "ticket": {...}} } or { "result": {...} }
+    inner = result.get("result")
+    if isinstance(inner, dict):
+        if inner.get("ticket_id"):
+            return inner.get("ticket_id")
+        if inner.get("id"):
+            return inner.get("id")
+
+        # adapters you shared return: {"status":"created","vendor":"...","ticket":{...}}
+        ticket_obj = inner.get("ticket")
+        if isinstance(ticket_obj, dict):
+            return ticket_obj.get("id") or ticket_obj.get("ticket_id") or ticket_obj.get("unique_external_id")
+
+    return None
+
+
+def _escalate_to_human(
+    user_id,
+    session,
+    language,
+    text_direction,
+    arabic_tone,
+    kpi_signals,
+    priority,
+    decision_rule,
+    decision_reason,
+    extra_context=None,
+):
+    if extra_context is None:
+        extra_context = {}
+
+    # 🔐 Day 49 — escalation audit
+    log_event(
+        escalation_event(
             user_id=user_id,
-            metadata={
-                "conversation_version": session["conversation_version"],
-                "priority": priority[0],
-                "language": lang,
-                "vendor_status": dispatch_result.get("status")
-            }
+            conversation_version=session.get("conversation_version"),
+            reason=decision_reason,
+            rule=decision_rule,
+            priority=priority[0],
         )
+    )
 
-        return RESPONSES["handoff"][lang]
+    agent_constraints = {
+        "no_sensitive_data": True,
+        "max_questions": 2,
 
-    # --------------------------------------------------
-    # Safe Fallback
-    # --------------------------------------------------
+        # keep both keys (some adapters use reply_language)
+        "language": language,
+        "reply_language": language,
 
-    return RESPONSES["fallback"][lang]
+        "language_lock": False,
+        "rtl_required": (text_direction == "rtl"),
+        "text_direction": text_direction,
+    }
 
+    payload = build_handoff_payload(
+        user_id=user_id,
+        current_state=session.get("state"),
+        last_user_message=session.get("last_user_message"),
+        last_intent=session.get("last_intent"),
+        decision_rule=decision_rule,
+        decision_reason=decision_reason,
+        kpi_signals=kpi_signals,
+        priority=priority,
+        language=language,
+        text_direction=text_direction,
+        arabic_tone=arabic_tone,
+        agent_constraints=agent_constraints
+    )
+
+    # attach extra info like order_id
+    if extra_context:
+        payload.setdefault("conversation", {})
+        payload["conversation"]["context"] = extra_context
+
+    ticket_id = None
+
+    try:
+        # ✅ Routing metadata
+        routing = route_escalation(payload)
+
+        # ✅ Send to vendor orchestrator
+        result = dispatch_ticket(payload, routing)
+
+        # ✅ Extract ticket id (works across your adapter shapes)
+        ticket_id = _extract_ticket_id(result)
+
+    except Exception as e:
+        print("ESCALATION ERROR:", repr(e))
+        ticket_id = None
+
+    # After escalation, keep state as ESCALATION (prevents loops)
+    session["state"] = "ESCALATION"
+
+    if language == "ar":
+        if ticket_id:
+            return f"تم رفع طلبك للدعم البشري ✅ رقم التذكرة: {ticket_id}", {"state": session["state"], "ticket_id": ticket_id}
+        return "تم رفع طلبك للدعم البشري ✅ وسيتم التواصل معك قريبًا.", {"state": session["state"], "ticket_id": None}
+
+    if ticket_id:
+        return f"I’ve escalated this to a human agent ✅ Ticket ID: {ticket_id}", {"state": session["state"], "ticket_id": ticket_id}
+    return "I’ve escalated this to a human agent ✅ They will contact you shortly.", {"state": session["state"], "ticket_id": None}

@@ -29,8 +29,9 @@ def route_escalation(payload: dict) -> dict:
     # Team routing
     # -------------------------------
 
-    if intent in {"delivery_issue", "order_id"}:
+    if intent in {"delivery_issue", "delivery_delay", "order_id"}:
         routing["team"] = "delivery_support"
+
 
     if intent in {"billing_issue", "refund"}:
         routing["team"] = "billing_support"
