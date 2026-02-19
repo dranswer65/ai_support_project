@@ -1,7 +1,8 @@
-﻿# WhatsApp Controller
-# Day 47A â€” Conversation Versioning & Safe Restart
-# Day 49  â€” Compliance & Audit Logging Layer
-# + Day 50  â€” Amazon-level workflow: HOLD, AI-first resolution, no-response timers
+# whatsapp_controller.py — Part 1/4
+# WhatsApp Controller
+# Day 47A — Conversation Versioning & Safe Restart
+# Day 49  — Compliance & Audit Logging Layer
+# + Day 50  — Amazon-level workflow: HOLD, AI-first resolution, no-response timers
 # --------------------------------------------------
 
 from __future__ import annotations
@@ -17,12 +18,12 @@ from escalation_router import route_escalation
 from handoff_builder import build_handoff_payload
 
 # --------------------------------------------------
-# ðŸ” Compliance Audit Layer
+# 🔐 Compliance Audit Layer
 # --------------------------------------------------
 from compliance.audit_logger import log_event
 
 # --------------------------------------------------
-# ðŸ” Day 49 â€” Compliance Audit Events (safe import)
+# 🔐 Day 49 — Compliance Audit Events (safe import)
 # --------------------------------------------------
 try:
     from compliance.audit_events import (
@@ -78,7 +79,7 @@ def get_or_create_session(user_id: str) -> dict:
 
     if user_id not in sessions:
         sessions[user_id] = {
-            "state": "ACTIVE",  # ACTIVE / WAITING_ORDER_ID / ESCALATION / CLOSED
+            "state": "ACTIVE",  # ACTIVE / WAITING_ORDER_ID / ESCALATION / CLOSED / AWAITING_CONFIRMATION
 
             "tries": 0,
             "last_intent": None,
@@ -99,7 +100,7 @@ def get_or_create_session(user_id: str) -> dict:
             "asked_order_id_count": 0,
             "no_count": 0,
 
-            # Day 50 â€” better UX
+            # Day 50 — better UX
             "issue_summary": "",          # stable summary of the issue
             "ai_attempts": 0,             # how many AI attempts in current issue
             "last_bot_message": "",       # last bot output
@@ -189,28 +190,27 @@ def _extract_order_id(text: str):
 
 def _is_greeting(text: str) -> bool:
     t = _norm(text)
-    return t in {"hi", "hello", "hey", "Ø§Ù„Ø³Ù„Ø§Ù… Ø¹Ù„ÙŠÙƒÙ…", "Ù…Ø±Ø­Ø¨Ø§", "Ø£Ù‡Ù„Ø§Ù‹", "Ø§Ù‡Ù„Ø§"}
+    return t in {"hi", "hello", "hey", "السلام عليكم", "مرحبا", "أهلاً", "اهلا"}
 
 def _is_thanks(text: str) -> bool:
     t = _norm(text)
-    return t in {"thanks", "thank you", "thx", "Ø´ÙƒØ±Ø§", "Ø´ÙƒØ±Ù‹Ø§", "Ø¬Ø²Ø§Ùƒ Ø§Ù„Ù„Ù‡ Ø®ÙŠØ±"}
+    return t in {"thanks", "thank you", "thx", "شكرا", "شكرًا", "جزاك الله خير"}
 
 def _is_goodbye(text: str) -> bool:
     t = _norm(text)
-    return t in {"bye", "goodbye", "see you", "Ù…Ø¹ Ø§Ù„Ø³Ù„Ø§Ù…Ø©", "Ø³Ù„Ø§Ù…", "Ø§Ù„Ù‰ Ø§Ù„Ù„Ù‚Ø§Ø¡", "Ø¥Ù„Ù‰ Ø§Ù„Ù„Ù‚Ø§Ø¡"}
+    return t in {"bye", "goodbye", "see you", "مع السلامة", "سلام", "الى اللقاء", "إلى اللقاء"}
 
 def _is_no(text: str) -> bool:
     t = _norm(text)
-    return t in {"no", "nope", "nah", "Ù„Ø§", "Ù„Ø§ Ø´ÙƒØ±Ø§", "Ù„Ø§ Ø´ÙƒØ±Ù‹Ø§", "Ù„ÙŠØ³ Ø§Ù„Ø¢Ù†", "Ù…Ùˆ", "Ù…Ø´"}
+    return t in {"no", "nope", "nah", "لا", "لا شكرا", "لا شكرًا", "ليس الآن", "مو", "مش"}
 
 def _is_ack(text: str) -> bool:
     t = _norm(text)
-    return t in {"ok", "okay", "okey", "k", "sure", "alright", "done", "ØªÙ…Ø§Ù…", "ØªÙ…", "Ø§ÙˆÙƒÙŠ", "Ø­Ø³Ù†Ù‹Ø§", "Ø­Ø³Ù†Ø§"}
+    return t in {"ok", "okay", "okey", "k", "sure", "alright", "done", "تمام", "تم", "اوكي", "حسنًا", "حسنا"}
 
 def _is_yes(text: str) -> bool:
     t = _norm(text)
-    return t in {"yes", "yeah", "yep", "ya", "Ù†Ø¹Ù…", "Ø§ÙŠ", "Ø£Ø¬Ù„", "ØªÙ…Ø§Ù…"}
-
+    return t in {"yes", "yeah", "yep", "ya", "نعم", "اي", "أجل", "تمام"}
 
 def _looks_like_order_issue(text: str) -> bool:
     t = _norm(text)
@@ -220,7 +220,7 @@ def _looks_like_order_issue(text: str) -> bool:
     if any(k in t for k in ["order", "delivery", "shipment", "tracking", "late", "delayed", "where is my order"]):
         return True
     # Arabic
-    if any(k in t for k in ["Ø·Ù„Ø¨", "Ø·Ù„Ø¨ÙŠ", "ØªÙˆØµÙŠÙ„", "Ø§Ù„Ø´Ø­Ù†Ø©", "ØªØªØ¨Ø¹", "Ù…ØªØ£Ø®Ø±", "ØªØ£Ø®ÙŠØ±", "ÙˆÙŠÙ† Ø§Ù„Ø·Ù„Ø¨", "ØªØ£Ø®Ø± Ø§Ù„ØªÙˆØµÙŠÙ„"]):
+    if any(k in t for k in ["طلب", "طلبي", "توصيل", "الشحنة", "تتبع", "متأخر", "تأخير", "وين الطلب", "تأخر التوصيل"]):
         return True
     return False
 
@@ -246,7 +246,7 @@ def _detect_intent(text: str):
         return "delivery_delay"
 
     # delivery/order delay (Arabic)
-    if any(k in t for k in ["Ø·Ù„Ø¨", "Ø·Ù„Ø¨ÙŠ", "Ù…ØªØ£Ø®Ø±", "ØªØ£Ø®ÙŠØ±", "ÙˆÙŠÙ† Ø§Ù„Ø·Ù„Ø¨", "ØªÙˆØµÙŠÙ„", "Ø§Ù„Ø´Ø­Ù†Ø©", "ØªØ£Ø®Ø± Ø§Ù„ØªÙˆØµÙŠÙ„"]):
+    if any(k in t for k in ["طلب", "طلبي", "متأخر", "تأخير", "وين الطلب", "توصيل", "الشحنة", "تأخر التوصيل"]):
         return "delivery_delay"
 
     # order id detection
@@ -256,7 +256,7 @@ def _detect_intent(text: str):
     return "other"
 
 # --------------------------------------------------
-# AI call (internal /chat) â€” uses server-side WA client
+# AI call (internal /chat) — uses server-side WA client
 # --------------------------------------------------
 def _call_supportpilot_chat(user_message: str, language: str) -> str:
     """
@@ -284,11 +284,10 @@ def _call_supportpilot_chat(user_message: str, language: str) -> str:
             except Exception:
                 return "AI server error"
         data = r.json()
-        return (data.get("answer") or "").strip() or "Sorry â€” I couldn't generate a response."
+        return (data.get("answer") or "").strip() or "Sorry — I couldn't generate a response."
     except Exception as e:
         print("AI CALL ERROR:", repr(e))
         return "System temporarily unavailable"
-
 
 def _safe_set_issue_summary(session: dict, intent: str, message_text: str) -> None:
     """
@@ -332,20 +331,21 @@ def _no_response_check(session: dict, language: str):
                 )
             )
             if language == "ar":
-                return "Ø´ÙƒØ±Ù‹Ø§ Ù„ØªÙˆØ§ØµÙ„Ùƒ Ù…Ø¹Ù†Ø§. ÙŠØ¨Ø¯Ùˆ Ø£Ù†Ùƒ ØºÙŠØ± Ù…ØªØµÙ„ Ø§Ù„Ø¢Ù†. ÙŠÙ…ÙƒÙ†Ùƒ Ù…Ø±Ø§Ø³Ù„ØªÙ†Ø§ ÙÙŠ Ø£ÙŠ ÙˆÙ‚Øª ÙˆØ³Ù†ÙƒÙˆÙ† Ø³Ø¹Ø¯Ø§Ø¡ Ø¨Ù…Ø³Ø§Ø¹Ø¯ØªÙƒ. ðŸŒŸ"
-            return "Thanks for reaching out. It looks like youâ€™re not available right now. Feel free to message us anytime â€” weâ€™ll be happy to help. ðŸŒŸ"
+                return "شكرًا لتواصلك معنا. يبدو أنك غير متصل الآن. يمكنك مراسلتنا في أي وقت وسنكون سعداء بمساعدتك. "
+            return "Thanks for reaching out. It looks like you’re not available right now. Feel free to message us anytime — we’ll be happy to help. "
 
         if delta >= NO_REPLY_PING_SECONDS and not session.get("no_reply_ping_sent", False):
             session["no_reply_ping_sent"] = True
             if language == "ar":
-                return "Ù‡Ù„ Ù…Ø§ Ø²Ù„Øª Ù…ØªØµÙ„Ø§Ù‹ØŸ Ø£Ù†Ø§ Ù‡Ù†Ø§ Ù„Ù…Ø³Ø§Ø¹Ø¯ØªÙƒ. âœ…"
-            return "Are you still connected? Iâ€™m here to help. âœ…"
+                return "هل ما زلت متصلاً؟ أنا هنا لمساعدتك. "
+            return "Are you still connected? I’m here to help. "
 
     except Exception:
         return None
 
     return None
 
+# whatsapp_controller.py — Part 2/4
 
 # --------------------------------------------------
 # Core Conversation Router
@@ -397,7 +397,7 @@ def handle_message(user_id: str, message_text: str, kpi_signals=None):
     # intent
     intent = _detect_intent(message_text)
     session["last_intent"] = intent
-
+    
     # priority
     priority = get_customer_priority(user_id, session, kpi_signals)
 
@@ -414,9 +414,9 @@ def handle_message(user_id: str, message_text: str, kpi_signals=None):
         session["ai_attempts"] = 0
 
         if language == "ar":
-            out = "âœ… ØªÙ… Ø¥Ø¹Ø§Ø¯Ø© Ø¶Ø¨Ø· Ø§Ù„Ù…Ø­Ø§Ø¯Ø«Ø©. ÙƒÙŠÙ ÙŠÙ…ÙƒÙ†Ù†ÙŠ Ù…Ø³Ø§Ø¹Ø¯ØªÙƒ Ø§Ù„ÙŠÙˆÙ…ØŸ"
+            out = " تم إعادة ضبط المحادثة. كيف يمكنني مساعدتك اليوم؟"
         else:
-            out = "âœ… Reset done. How may I help you today?"
+            out = " Reset done. How may I help you today?"
         session["last_bot_message"] = out
         session["last_bot_ts"] = _utcnow().isoformat()
         return out, {"state": session["state"]}
@@ -457,9 +457,9 @@ def handle_message(user_id: str, message_text: str, kpi_signals=None):
             )
 
             if language == "ar":
-                out = "Ø´ÙƒØ±Ù‹Ø§ Ù„Ùƒ. Ø¥Ø°Ø§ Ø§Ø­ØªØ¬Øª Ø£ÙŠ Ù…Ø³Ø§Ø¹Ø¯Ø© Ù„Ø§Ø­Ù‚Ù‹Ø§ Ø£Ù†Ø§ Ù…ÙˆØ¬ÙˆØ¯. ðŸŒŸ"
+                out = "شكرًا لك. إذا احتجت أي مساعدة لاحقًا أنا موجود. "
             else:
-                out = "Thank you. If you need any help later, Iâ€™m here. ðŸŒŸ"
+                out = "Thank you. If you need any help later, I’m here. "
 
             session["last_bot_message"] = out
             session["last_bot_ts"] = _utcnow().isoformat()
@@ -472,7 +472,7 @@ def handle_message(user_id: str, message_text: str, kpi_signals=None):
     # --------------------------------------------------
     if intent == "greeting":
         if language == "ar":
-            out = "Ù…Ø±Ø­Ø¨Ù‹Ø§! Ø´ÙƒØ±Ù‹Ø§ Ù„ØªÙˆØ§ØµÙ„Ùƒ Ù…Ø¹ SupportPilot. ÙƒÙŠÙ ÙŠÙ…ÙƒÙ†Ù†ÙŠ Ù…Ø³Ø§Ø¹Ø¯ØªÙƒ Ø§Ù„ÙŠÙˆÙ…ØŸ"
+            out = "مرحبًا! شكرًا لتواصلك مع SupportPilot. كيف يمكنني مساعدتك اليوم؟"
         else:
             out = "Hello! Thank you for contacting SupportPilot. How may I assist you today?"
 
@@ -482,9 +482,9 @@ def handle_message(user_id: str, message_text: str, kpi_signals=None):
 
     if intent == "thanks":
         if language == "ar":
-            out = "Ø¹Ù„Ù‰ Ø§Ù„Ø±Ø­Ø¨ ÙˆØ§Ù„Ø³Ø¹Ø©. Ù‡Ù„ Ù‡Ù†Ø§Ùƒ Ø£ÙŠ Ø´ÙŠØ¡ Ø¢Ø®Ø± ÙŠÙ…ÙƒÙ†Ù†ÙŠ Ù…Ø³Ø§Ø¹Ø¯ØªÙƒ Ø¨Ù‡ Ø§Ù„ÙŠÙˆÙ…ØŸ"
+            out = "على الرحب والسعة. هل هناك أي شيء آخر يمكنني مساعدتك به اليوم؟"
         else:
-            out = "Youâ€™re most welcome. Is there anything else I can help you with today?"
+            out = "You’re most welcome. Is there anything else I can help you with today?"
 
         session["last_bot_message"] = out
         session["last_bot_ts"] = _utcnow().isoformat()
@@ -503,9 +503,9 @@ def handle_message(user_id: str, message_text: str, kpi_signals=None):
         )
 
         if language == "ar":
-            out = "Ù…Ø¹ Ø§Ù„Ø³Ù„Ø§Ù…Ø©! Ø¥Ø°Ø§ Ø§Ø­ØªØ¬Øª Ø£ÙŠ Ø´ÙŠØ¡ØŒ Ø£Ù†Ø§ Ù…ÙˆØ¬ÙˆØ¯. âœ…"
+            out = "مع السلامة! إذا احتجت أي شيء، أنا موجود. "
         else:
-            out = "Goodbye! If you need anything else, Iâ€™m here. âœ…"
+            out = "Goodbye! If you need anything else, I’m here. "
 
         session["last_bot_message"] = out
         session["last_bot_ts"] = _utcnow().isoformat()
@@ -517,9 +517,9 @@ def handle_message(user_id: str, message_text: str, kpi_signals=None):
     if session.get("state") == "AWAITING_CONFIRMATION":
         if _is_thanks(message_text) or _is_ack(message_text) or _is_yes(message_text):
             if language == "ar":
-                out = "Ø¹Ù„Ù‰ Ø§Ù„Ø±Ø­Ø¨ ÙˆØ§Ù„Ø³Ø¹Ø© âœ… Ù‡Ù„ Ù‡Ù†Ø§Ùƒ Ø£ÙŠ Ø´ÙŠØ¡ Ø¢Ø®Ø± ÙŠÙ…ÙƒÙ†Ù†ÙŠ Ù…Ø³Ø§Ø¹Ø¯ØªÙƒ Ø¨Ù‡ Ø§Ù„ÙŠÙˆÙ…ØŸ"
+                out = "شكراُ على انتظارك, مازلنا نتحقق من التفاصيل؟"
             else:
-                out = "Youâ€™re welcome âœ… Is there anything else I can help you with today?"
+                out = "Thank you for waiting. I’m still reviewing the details."
             session["last_bot_message"] = out
             session["last_bot_ts"] = _utcnow().isoformat()
             return out, {"state": session["state"]}
@@ -528,9 +528,9 @@ def handle_message(user_id: str, message_text: str, kpi_signals=None):
             session["state"] = "CLOSED"
             session["last_closed_at"] = _utcnow().isoformat()
             if language == "ar":
-                out = "Ø´ÙƒØ±Ù‹Ø§ Ù„ØªÙˆØ§ØµÙ„Ùƒ Ù…Ø¹Ù†Ø§. ÙŠÙˆÙ…Ùƒ Ø³Ø¹ÙŠØ¯ ðŸŒŸ"
+                out = "شكرًا لتواصلك معنا. يومك سعيد "
             else:
-                out = "Thank you for contacting us. Have a great day ðŸŒŸ"
+                out = "Thank you for contacting us. Have a great day "
             session["last_bot_message"] = out
             session["last_bot_ts"] = _utcnow().isoformat()
             return out, {"state": session["state"]}
@@ -550,6 +550,8 @@ def handle_message(user_id: str, message_text: str, kpi_signals=None):
     # Update issue summary safely
     _safe_set_issue_summary(session, intent, message_text)
 
+# whatsapp_controller.py — Part 3/4
+
     # --------------------------------------------------
     # Order / Delivery delay flow (AI-first, HOLD language)
     # --------------------------------------------------
@@ -562,9 +564,9 @@ def handle_message(user_id: str, message_text: str, kpi_signals=None):
 
             if session["asked_order_id_count"] <= 2:
                 if language == "ar":
-                    out = "Ø´ÙƒØ±Ù‹Ø§ Ù„ØªÙˆØ¶ÙŠØ­ Ø§Ù„Ù…Ø´ÙƒÙ„Ø©. Ù‡Ù„ ÙŠÙ…ÙƒÙ†Ùƒ ØªØ²ÙˆÙŠØ¯ÙŠ Ø¨Ø±Ù‚Ù… Ø§Ù„Ø·Ù„Ø¨ (Order ID) Ø­ØªÙ‰ Ø£ØªØ­Ù‚Ù‚ Ù…Ù† Ø­Ø§Ù„Ø© Ø§Ù„Ø·Ù„Ø¨ØŸ\nØ¥Ø°Ø§ Ù„Ù… ÙŠÙƒÙ† Ù…ØªÙˆÙØ±Ù‹Ø§ØŒ ÙŠÙ…ÙƒÙ†Ùƒ Ù…Ø´Ø§Ø±ÙƒØ© Ø±Ù‚Ù… Ø§Ù„Ø¬ÙˆØ§Ù„ Ø£Ùˆ Ø§Ù„Ø¨Ø±ÙŠØ¯ Ø§Ù„Ù…Ø³Ø¬Ù„."
+                    out = "شكرًا لتوضيح المشكلة. هل يمكنك تزويدي برقم الطلب (Order ID) حتى أتحقق من حالة الطلب؟\nإذا لم يكن متوفرًا، يمكنك مشاركة رقم الجوال أو البريد المسجل."
                 else:
-                    out = "Thanks for sharing that. Could you please provide your Order ID so I can check the order status?\nIf you donâ€™t have it, you may share your registered phone number or email."
+                    out = "Thanks for sharing that. Could you please provide your Order ID so I can check the order status?\nIf you don’t have it, you may share your registered phone number or email."
 
                 session["last_bot_message"] = out
                 session["last_bot_ts"] = _utcnow().isoformat()
@@ -593,9 +595,9 @@ def handle_message(user_id: str, message_text: str, kpi_signals=None):
         session["state"] = "ACTIVE"
 
         if language == "ar":
-            hold = f"Ø´ÙƒØ±Ù‹Ø§ Ù„Ù…Ø´Ø§Ø±ÙƒØ© Ø±Ù‚Ù… Ø§Ù„Ø·Ù„Ø¨ ({session['order_id']}). ÙŠØ±Ø¬Ù‰ Ø§Ù„Ø§Ù†ØªØ¸Ø§Ø± Ù„Ø­Ø¸Ø© â€” Ø£Ù†Ø§ Ø£Ø±Ø§Ø¬Ø¹ Ø§Ù„ØªÙØ§ØµÙŠÙ„ Ø§Ù„Ø¢Ù†."
+            hold = f"شكرًا لمشاركة رقم الطلب ({session['order_id']}). يرجى الانتظار لحظة — أنا أراجع التفاصيل الآن."
         else:
-            hold = f"Thanks for sharing the Order ID ({session['order_id']}). Please allow me a moment â€” Iâ€™m checking the details now."
+            hold = f"Thanks for sharing the Order ID ({session['order_id']}). Please allow me a moment — I’m checking the details now."
 
         # Build message for internal AI (RAG)
         issue = (session.get("issue_summary") or "").strip()
@@ -620,11 +622,11 @@ def handle_message(user_id: str, message_text: str, kpi_signals=None):
             if language == "ar":
                 out = (
                     f"{hold}\n\n"
-                    "Ø­ØªÙ‰ Ø£Ø³Ø§Ø¹Ø¯Ùƒ Ø¨Ø´ÙƒÙ„ Ø£Ø¯Ù‚ØŒ Ù‡Ù„ Ø§Ù„Ù…Ø´ÙƒÙ„Ø© Ù‡ÙŠ:\n"
-                    "1) ØªØ£Ø®Ø± ÙÙŠ Ø§Ù„ØªÙˆØµÙŠÙ„\n"
-                    "2) ØªØ­Ø¯ÙŠØ« Ø­Ø§Ù„Ø© Ø§Ù„Ø´Ø­Ù†Ø©\n"
-                    "3) Ù…Ø´ÙƒÙ„Ø© ÙÙŠ Ø§Ù„Ù…Ù†ØªØ¬\n"
-                    "Ø§Ø®ØªØ± Ø±Ù‚Ù…Ù‹Ø§ (1/2/3) Ø£Ùˆ Ø§ÙƒØªØ¨ Ø§Ù„ØªÙØ§ØµÙŠÙ„."
+                    "حتى أساعدك بشكل أدق، هل المشكلة هي:\n"
+                    "1) تأخر في التوصيل\n"
+                    "2) تحديث حالة الشحنة\n"
+                    "3) مشكلة في المنتج\n"
+                    "اختر رقمًا (1/2/3) أو اكتب التفاصيل."
                 )
             else:
                 out = (
@@ -672,6 +674,40 @@ def handle_message(user_id: str, message_text: str, kpi_signals=None):
         session["last_bot_ts"] = _utcnow().isoformat()
         return out, {"state": session["state"]}
 
+    # --------------------------------------------------
+    # Generic fallback (AI-first) with anti-loop
+    # --------------------------------------------------
+    session["tries"] = int(session.get("tries", 0)) + 1
+
+    if session["tries"] >= 3:
+        session["state"] = "ESCALATION"
+        reply, meta = _escalate_to_human(
+            user_id=user_id,
+            session=session,
+            language=language,
+            text_direction=session.get("text_direction", "ltr"),
+            arabic_tone=arabic_tone,
+            kpi_signals=kpi_signals,
+            priority=priority,
+            decision_rule="unclear_after_3_tries",
+            decision_reason="User message unclear after 3 attempts",
+            extra_context={"last_message": message_text, "issue_summary": session.get("issue_summary", "")},
+        )
+        session["last_bot_message"] = reply
+        session["last_bot_ts"] = _utcnow().isoformat()
+        return reply, meta
+
+    # One polite clarification
+    if language == "ar":
+        out = "شكرًا لرسالتك. لتقديم المساعدة بشكل أفضل، هل يمكنك توضيح التفاصيل أكثر؟ هل الموضوع متعلق بطلب/توصيل/استرجاع/منتج؟"
+    else:
+        out = "Thank you for your message. To assist you properly, could you please share a bit more detail — is this about an order, delivery, refund/return, or a product issue?"
+
+    session["last_bot_message"] = out
+    session["last_bot_ts"] = _utcnow().isoformat()
+    return out, {"state": session["state"]}
+
+# whatsapp_controller.py — Part 4/4
 
 # --------------------------------------------------
 # Escalation / Ticket Dispatch
@@ -722,7 +758,7 @@ def _escalate_to_human(
     if extra_context is None:
         extra_context = {}
 
-    # ðŸ” Day 49 â€” escalation audit
+    # 🔐 Day 49 — escalation audit
     log_event(
         escalation_event(
             user_id=user_id,
@@ -792,26 +828,21 @@ def _escalate_to_human(
     if language == "ar":
         if ticket_id:
             return (
-                f"Ø´ÙƒØ±Ù‹Ø§ Ù„Ùƒ. Ø³Ø£Ù‚ÙˆÙ… Ø¨Ø±ÙØ¹ Ø§Ù„Ø·Ù„Ø¨ Ù„Ù„Ø¯Ø¹Ù… Ø§Ù„Ø¨Ø´Ø±ÙŠ Ù„Ù„Ù…Ø±Ø§Ø¬Ø¹Ø© âœ… Ø±Ù‚Ù… Ø§Ù„ØªØ°ÙƒØ±Ø©: {ticket_id}",
+                f"شكرًا لك. سأقوم برفع الطلب للدعم البشري للمراجعة  رقم التذكرة: {ticket_id}",
                 {"state": session["state"], "ticket_id": ticket_id},
             )
         return (
-            "Ø´ÙƒØ±Ù‹Ø§ Ù„Ùƒ. Ø³Ø£Ù‚ÙˆÙ… Ø¨Ø±ÙØ¹ Ø§Ù„Ø·Ù„Ø¨ Ù„Ù„Ø¯Ø¹Ù… Ø§Ù„Ø¨Ø´Ø±ÙŠ Ù„Ù„Ù…Ø±Ø§Ø¬Ø¹Ø© âœ… ÙˆØ³ÙŠØªÙ… Ø§Ù„ØªÙˆØ§ØµÙ„ Ù…Ø¹Ùƒ Ù‚Ø±ÙŠØ¨Ù‹Ø§.",
+            "شكرًا لك. سأقوم برفع الطلب للدعم البشري للمراجعة  وسيتم التواصل معك قريبًا.",
             {"state": session["state"], "ticket_id": None},
         )
 
     if ticket_id:
         return (
-            f"Thanks â€” Iâ€™m escalating this to our support team for further review âœ… Ticket ID: {ticket_id}",
+            f"Thanks — I’m escalating this to our support team for further review  Ticket ID: {ticket_id}",
             {"state": session["state"], "ticket_id": ticket_id},
         )
 
     return (
-        "Thanks â€” Iâ€™m escalating this to our support team for further review âœ… They will contact you shortly.",
+        "Thanks — I’m escalating this to our support team for further review  They will contact you shortly.",
         {"state": session["state"], "ticket_id": None},
     )
-
-
-
-
-    

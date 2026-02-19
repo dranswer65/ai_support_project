@@ -31,6 +31,42 @@ from monitoring import log_error, get_errors, clear_errors
 from db import ENGINE
 from sqlalchemy import text
 from sqlalchemy import text
+from sqlalchemy import text
+
+def wa_is_duplicate(message_id: str) -> bool:
+    """
+    Returns True if this WhatsApp message_id was already processed.
+    Uses Postgres so it works across Railway instances.
+    """
+    if not message_id:
+        return False
+
+    with ENGINE.begin() as conn:
+        conn.execute(
+            text(
+                """
+                CREATE TABLE IF NOT EXISTS wa_processed_messages (
+                  message_id TEXT PRIMARY KEY,
+                  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+                );
+                """
+            )
+        )
+
+        # Insert first time, ignore duplicates
+        result = conn.execute(
+            text(
+                """
+                INSERT INTO wa_processed_messages (message_id)
+                VALUES (:mid)
+                ON CONFLICT (message_id) DO NOTHING
+                RETURNING message_id;
+                """
+            ),
+            {"mid": message_id},
+        ).fetchone()
+
+        return result is None
 
 def ensure_wa_dedupe_table():
     with ENGINE.begin() as conn:
@@ -63,6 +99,7 @@ def wa_is_duplicate_message(msg_id: str) -> bool:
 # ============================================================
 # WhatsApp idempotency (prevents duplicate replies)
 # ============================================================
+
 
 _SEEN_WA_MSG: dict[str, float] = {}
 _SEEN_TTL_SECONDS = 600  # keep 10 minutes
@@ -232,6 +269,23 @@ def debug_version():
         "service": "SupportPilot API",
     }
 
+@app.head("/health")
+@app.get("/health")
+def public_health():
+    return {
+        "status": "ok",
+        "service": "SupportPilot SaaS",
+        "mode": os.getenv("ENV", "dev"),
+        "time": datetime.utcnow().isoformat()
+    }
+
+# ✅ tolerate double slash health checks
+@app.head("//health")
+@app.get("//health")
+def public_health_double_slash():
+    return {"status": "ok"}
+
+
 
 # ============================================================
 # WhatsApp verification (GET)
@@ -269,6 +323,12 @@ async def whatsapp_webhook(request: Request):
             return {"ok": True}  # statuses etc.
 
         msg = messages[0]
+        msg_id = (msg.get("id") or "").strip()
+
+        if wa_is_duplicate(msg_id):
+            print("WA DUPLICATE IGNORED:", msg_id)
+            return {"ok": True, "duplicate": True}
+
         msg_id = msg.get("id")  # ✅ WhatsApp unique message id
         if msg_id and wa_is_duplicate_message(msg_id):
         # Already processed -> do NOT reply again

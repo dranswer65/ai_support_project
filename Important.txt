@@ -70,3 +70,34 @@ After this, we’ll add:
 ✅ Real escalation flow
 
 That’s what makes this product sellable.
+
+Amazon use separate: 
+
+State machine
+
+Policy engine
+
+RAG engine
+
+Escalation engine
+
+Dialogue policy
+
+Session tracker
+
+Intent model
+
+Correct Architecture For Sellable GCC SaaS
+1️⃣ Deterministic State Layer
+
+Strict finite state machine:
+
+GREETING
+IDENTIFY_ISSUE
+VERIFY_ID
+CHECKING
+RESOLVING
+CONFIRMING
+CLOSING
+ESCALATION
+no Mixing
