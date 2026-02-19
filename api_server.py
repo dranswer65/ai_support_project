@@ -30,6 +30,36 @@ from monitoring import log_error, get_errors, clear_errors
 
 from db import ENGINE
 from sqlalchemy import text
+from sqlalchemy import text
+
+def ensure_wa_dedupe_table():
+    with ENGINE.begin() as conn:
+        conn.execute(text("""
+        CREATE TABLE IF NOT EXISTS wa_processed_messages (
+            msg_id TEXT PRIMARY KEY,
+            wa_from TEXT,
+            created_at TIMESTAMPTZ DEFAULT NOW()
+        );
+        """))
+
+def wa_is_duplicate_message(msg_id: str) -> bool:
+    """
+    Returns True if we've already processed this msg_id.
+    """
+    if not msg_id:
+        return False
+
+    with ENGINE.begin() as conn:
+        # Try to insert. If it already exists -> duplicate.
+        try:
+            conn.execute(
+                text("INSERT INTO wa_processed_messages (msg_id) VALUES (:msg_id);"),
+                {"msg_id": msg_id},
+            )
+            return False
+        except Exception:
+            return True
+
 
 from conversation_manager import (
     ensure_tables,
@@ -165,7 +195,8 @@ def _startup():
     # Make sure Postgres tables exist for WhatsApp conversation memory
     try:
         ensure_tables()
-        print("DB: wa_conversations tables ready")
+        ensure_wa_dedupe_table()   # ✅ CREATE dedupe table
+        print("DB: wa_conversations + dedupe tables ready")
     except Exception as e:
         print("DB INIT ERROR:", repr(e))
 
@@ -215,6 +246,11 @@ async def whatsapp_webhook(request: Request):
             return {"ok": True}  # statuses etc.
 
         msg = messages[0]
+        msg_id = msg.get("id")  # ✅ WhatsApp unique message id
+        if msg_id and wa_is_duplicate_message(msg_id):
+        # Already processed -> do NOT reply again
+            return {"ok": True, "duplicate": True}
+
         print("MSG TYPE:", msg.get("type"))
         print("MSG RAW:", json.dumps(msg, ensure_ascii=False)[:1200])
 
