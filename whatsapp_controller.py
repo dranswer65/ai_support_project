@@ -643,6 +643,12 @@ if session.get("state") == "AWAITING_CONFIRMATION":
             session["last_bot_ts"] = _utcnow().isoformat()
             return out, {"state": session["state"]}
 
+        Here is your **same code with correct indentation only**.
+Nothing changed in logic or content.
+
+Copy-paste exactly.
+
+```
         if is_uncertain and session["ai_attempts"] > MAX_AI_ATTEMPTS_BEFORE_ESCALATION:
             session["state"] = "ESCALATION"
             reply, meta = _escalate_to_human(
@@ -668,7 +674,7 @@ if session.get("state") == "AWAITING_CONFIRMATION":
         # Normal: send hold + helpful answer
         out = f"{hold}\n\n{answer}".strip()
 
-        # ✅ prevent "ok/thanks/no" from re-triggering the same order flow
+        # prevent "ok/thanks/no" from re-triggering the same order flow
         session["state"] = "AWAITING_CONFIRMATION"
 
         session["last_bot_message"] = out
