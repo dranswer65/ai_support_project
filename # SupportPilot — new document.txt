@@ -1,14 +1,13 @@
 # SupportPilot — Returns & Refunds Knowledge Base
 
-**Brand:** SupportPilot
-**Admin:** supportpilot_demo
-**Support Email:** [support@supportpilot.ai](mailto:support@supportpilot.ai)
-**Support Phone:** 0555000001
-**Region:** UAE
+Brand: SupportPilot
+Admin: supportpilot_demo
+Support Email: [support@supportpilot.ai](mailto:support@supportpilot.ai)
+Support Phone: 0555000001
+Region: UAE, KSA
 
----
 
-## 1. Returns Overview
+1. Returns Overview
 
 Customers can return eligible products using **three methods**:
 
@@ -18,61 +17,58 @@ Customers can return eligible products using **three methods**:
 
 All returns must meet the eligibility criteria defined in the Returns Policy.
 
----
 
-## 2. Online Return Request (Household Products Only)
+ 2. Online Return Request (Household Products Only)
 
-### Steps:
+Steps:
 
-1. Log in to **My Account** → **Order History**.
+1. Log in to My Account → Order History.
 2. Select the order and choose the items to return.
-3. Click **Return Selected Items**.
+3. Click Return Selected Items.
 4. Complete the return slip from the delivery package or order confirmation email.
-5. Pack items securely in their **original packaging**.
+5. Pack items securely in their original packaging.
 6. Courier partner will contact the customer to schedule pickup.
 7. Customer hands over the package and receives an acknowledgement receipt.
 
-### Refund Timeline:
+Refund Timeline:
 
-* 2–3 business days: Item received
-* 2 business days: Quality check
-* 4–15 business days: Refund credited (bank/card/PayPal/Tabby)
+ 2–3 business days: Item received
+ 2 business days: Quality check
+ 4–15 business days: Refund credited (bank/card/PayPal/Tabby)
 
-### Cash Payments:
+Cash Payments:
 
-* Registered users: Refund to **My Credit**
-* Guest users: **Return Voucher** issued
+ Registered users: Refund to **My Credit**
+ Guest users: Return Voucher** issued
 
----
 
-## 3. Return to Store (UAE Stores)
+3. Return to Store (UAE Stores)
 
-### Steps:
+ Steps:
 
 1. Pack products (excluding Scheduled Delivery items) in original packaging.
 2. Bring items and invoice to any SupportPilot partner store in the UAE.
 3. Authorized staff accepts the return.
 4. Refund is processed after quality check.
 
-### Refund Options:
+Refund Options:
 
-* **Cash payment:** Cash refund / Credit Note / My Credit
-* **Card payment:** Refund to card or Credit Note
-* **PayPal / Tabby:** Refund to PayPal/Tabby or Credit Note
+Cash payment: Cash refund / Credit Note / My Credit
+Card payment: Refund to card or Credit Note
+PayPal / Tabby: Refund to PayPal/Tabby or Credit Note
 
-### Important Notes:
+Important Notes:
 
-* Scheduled Delivery items cannot be returned in-store.
-* Product codes and labels must be intact.
+Scheduled Delivery items cannot be returned in-store.
+Product codes and labels must be intact.
 
 ---
+ 4. Call to Schedule a Pickup
 
-## 4. Call to Schedule a Pickup
-
-### Steps:
+Steps:
 
 1. Pack items in original packaging.
-2. Call **0555000001** to request a return pickup.
+2. Call 0555000001 to request a return pickup.
 3. Courier partner schedules pickup.
 4. Item is collected and acknowledgement provided.
 

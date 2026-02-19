@@ -299,7 +299,7 @@ def _call_supportpilot_chat(message_text: str) -> str:
             "client_name": WA_DEFAULT_CLIENT,
             "question": message_text,
             "tone": "formal",
-            "language": "en",
+            "language": "language",
         }
 
         r = requests.post(url, json=payload, timeout=25)

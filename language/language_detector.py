@@ -1,16 +1,30 @@
 # -----------------------------------
-# Day 44A — Language Detection
+# Day 44A — Language Detection (Enterprise Safe)
 # -----------------------------------
+
+import re
+
+_ARABIC_RE = re.compile(r"[\u0600-\u06FF]")
 
 def detect_language(text: str) -> str:
     """
-    Returns detected language code.
-    Currently supports: 'en', 'ar'
+    Detect language from user message.
+
+    Returns:
+        'ar' → Arabic detected
+        'en' → default fallback
+
+    Enterprise behavior:
+    - Detect Arabic even if mixed with English
+    - Fast (no heavy NLP)
+    - Safe for real-time WhatsApp usage
     """
 
-    # Arabic Unicode block
-    for char in text:
-        if "\u0600" <= char <= "\u06FF":
-            return "ar"
+    if not text:
+        return "en"
+
+    # If ANY Arabic character exists → treat as Arabic
+    if _ARABIC_RE.search(text):
+        return "ar"
 
     return "en"

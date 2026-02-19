@@ -1,0 +1,234 @@
+
+SupportPilot — Customer Handling Master Framework
+
+This covers:
+
+ Conversation lifecycle (opening → closing)
+ State machine
+ Intent detection
+Order verification flow
+ Anger & bad-behavior handling
+ No-response logic
+ Escalation rules
+ Polite but firm responses
+
+
+## 1️⃣ Conversation Lifecycle (High Level)
+
+Every conversation must move through **clear stages**:
+
+1. **Open**
+2. **Understand**
+3. **Verify**
+4. **Resolve / Guide**
+5. **Escalate (if needed)**
+6. **Close**
+7. **Timeout / No Response**
+
+---
+
+## 2️⃣ Conversation State Machine (Core)
+
+Use these **explicit states** in your system:
+
+```text
+START
+→ GREETING
+→ INTENT_DETECTION
+→ INFO_REQUIRED
+→ VERIFICATION_PENDING
+→ VERIFIED
+→ ACTION_IN_PROGRESS
+→ WAITING_CUSTOMER
+→ ESCALATION
+→ RESOLVED
+→ CLOSED
+→ NO_RESPONSE_CLOSED
+```
+
+### State transition rules
+
+ Never resolve before verification
+ Never escalate without clear reason
+Never close without confirmation or timeout
+
+
+ Opening & Greeting (Always Polite)
+ Rules
+
+Warm
+Neutral
+Professional
+No assumptions
+Example
+
+ Hi 👋 Thanks for contacting SupportPilot.
+I’m here to help. Could you please tell me what you need assistance with today?
+
+Intent Detection (Critical)
+
+Detect what the user wants before replying.
+
+Common intents
+
+| Intent         | Examples                         |
+| -------------- | -------------------------------- |
+| Refund         | “I need my refund”, “Money back” |
+| Order status   | “Where is my order?”             |
+| Delivery delay | “Order not delivered”            |
+| Complaint      | “Worst service”                  |
+| Urgent demand  | “I want it today”                |
+| Abuse          | “You people are useless”         |
+| Silent         | No reply                         |
+
+Intent detection signals
+
+Keywords (`refund`, `cancel`, `angry words`)
+Repetition
+All caps
+Short commands (“REFUND NOW”)
+
+Order Verification Flow (Mandatory)
+Never act without verification
+
+Ask minimum required info
+
+Order ID (primary)
+Phone/email (backup)
+
+Polite verification request
+ I’ll be happy to help with your refund.
+To check this for you, could you please share your **order ID**?
+
+If user refuses
+
+Stay calm
+Repeat necessity
+Don’t argue
+
+I understand this is urgent.
+For security reasons, I need the **order ID** to proceed. Once I have it, I’ll immediately check the status for you.
+
+Handling Urgency & Demands (Your Example)
+Scenario:
+
+User: I need my refund today.
+
+First response (calm + procedural)
+
+> I understand you’d like your refund processed as soon as possible.
+Let me check this for you — could you please share your order ID?
+
+User repeats demand aggressively:
+
+I SAID I NEED MY REFUND TODAY
+
+System detects:
+
+High urgency
+Repetition
+Emotional escalation
+Correct response (polite + firm + empathetic)
+I understand how frustrating this must feel, and I truly want to help you.
+ However, I can’t access or process a refund without verifying your order.
+Please share your **order ID**, and I’ll take this forward immediately.
+
+---
+
+ Anger & Emotion Handling
+
+Anger detection signals
+
+Caps lock
+Threats
+Now”, “Immediately”
+Insults
+
+Response rules
+Never match tone
+Never argue
+Acknowledge emotion
+Redirect to solution
+
+Example
+
+I hear your concern and I’m sorry for the inconvenience caused.
+Let’s get this resolved — once I have your order details, I’ll check all possible options for you.
+
+Bad Behavior / Abuse Handling
+
+If language becomes abusive
+
+Use 3-step approach:
+
+Step 1: Calm warning
+
+> I’m here to help, but I won’t be able to continue if abusive language is used. Let’s work together to resolve this.
+
+Step 2: Firm boundary
+
+I want to assist you, but I need us to keep the conversation respectful.
+
+Step 3: Escalation or termination
+
+I’m escalating this to a senior support specialist who will review your case.
+
+---
+
+Escalation Rules (When & How)
+
+Escalate when:
+
+User is angry & uncooperative
+Refund policy exception needed
+Repeated demands without info
+Threats or legal language
+
+Escalation response
+
+I understand this needs urgent attention.
+ I’m escalating your request to our senior support team for further review. They’ll assist you as soon as possible.
+
+ Action State (After Verification)
+
+Once order ID is received:
+
+Example
+
+Thank you for sharing the order ID.
+I’m checking the refund status now — please allow me a moment.
+
+Then:
+
+ Approved → explain timeline
+ Pending → explain reason
+ Rejected → explain policy
+
+---
+
+Closing Logic
+Successful resolution
+
+Your refund has been processed successfully.
+Is there anything else I can help you with today?
+
+User confirms no more help
+Thank you for contacting SupportPilot. Have a great day! 😊
+
+
+No Response / Timeout Logic
+
+Suggested timers
+
+* First reminder: 1 minutes
+* Second reminder: 1 hours
+* Auto-close: 1 hours
+
+Reminder message
+Just checking in — I’m still here if you’d like help with this.
+
+Final close
+Since we haven’t heard back, I’ll close this conversation for now. You can reach out anytime if you need further assistance.
+
+
+
