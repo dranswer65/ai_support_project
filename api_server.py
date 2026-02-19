@@ -60,6 +60,29 @@ def wa_is_duplicate_message(msg_id: str) -> bool:
         except Exception:
             return True
 
+# ============================================================
+# WhatsApp idempotency (prevents duplicate replies)
+# ============================================================
+
+_SEEN_WA_MSG: dict[str, float] = {}
+_SEEN_TTL_SECONDS = 600  # keep 10 minutes
+
+def _wa_is_duplicate(msg_id: str) -> bool:
+    now = time.time()
+
+    # cleanup old ids
+    old = [k for k, ts in _SEEN_WA_MSG.items() if (now - ts) > _SEEN_TTL_SECONDS]
+    for k in old:
+        _SEEN_WA_MSG.pop(k, None)
+
+    if not msg_id:
+        return False
+
+    if msg_id in _SEEN_WA_MSG:
+        return True
+
+    _SEEN_WA_MSG[msg_id] = now
+    return False
 
 from conversation_manager import (
     ensure_tables,

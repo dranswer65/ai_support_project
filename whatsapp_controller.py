@@ -204,6 +204,15 @@ def _is_no(text: str) -> bool:
     t = _norm(text)
     return t in {"no", "nope", "nah", "لا", "لا شكرا", "لا شكرًا", "ليس الآن", "مو", "مش"}
 
+def _is_ack(text: str) -> bool:
+    t = _norm(text)
+    return t in {"ok", "okay", "okey", "k", "sure", "alright", "done", "تمام", "تم", "اوكي", "حسنًا", "حسنا"}
+
+def _is_yes(text: str) -> bool:
+    t = _norm(text)
+    return t in {"yes", "yeah", "yep", "ya", "نعم", "اي", "أجل", "تمام"}
+
+
 def _looks_like_order_issue(text: str) -> bool:
     t = _norm(text)
     if not t:
@@ -504,6 +513,36 @@ def handle_message(user_id: str, message_text: str, kpi_signals=None):
         session["last_bot_ts"] = _utcnow().isoformat()
         return out, {"state": session["state"]}
 
+# --------------------------------------------------
+# Post-resolution confirmation state (prevents looping)
+# --------------------------------------------------
+if session.get("state") == "AWAITING_CONFIRMATION":
+    if _is_thanks(message_text) or _is_ack(message_text) or _is_yes(message_text):
+        if language == "ar":
+            out = "على الرحب والسعة ✅ هل هناك أي شيء آخر يمكنني مساعدتك به اليوم؟"
+        else:
+            out = "You’re welcome ✅ Is there anything else I can help you with today?"
+        session["last_bot_message"] = out
+        session["last_bot_ts"] = _utcnow().isoformat()
+        return out, {"state": session["state"]}
+
+    if _is_no(message_text):
+        session["state"] = "CLOSED"
+        session["last_closed_at"] = _utcnow().isoformat()
+        if language == "ar":
+            out = "شكرًا لتواصلك معنا. يومك سعيد 🌟"
+        else:
+            out = "Thank you for contacting us. Have a great day 🌟"
+        session["last_bot_message"] = out
+        session["last_bot_ts"] = _utcnow().isoformat()
+        return out, {"state": session["state"]}
+
+    # If user wrote a new issue, continue normally:
+    session["state"] = "ACTIVE"
+    session["tries"] = 0
+    session["ai_attempts"] = 0
+
+
     # --------------------------------------------------
     # Capture Order ID anytime
     # --------------------------------------------------
@@ -629,9 +668,13 @@ def handle_message(user_id: str, message_text: str, kpi_signals=None):
         # Normal: send hold + helpful answer
         out = f"{hold}\n\n{answer}".strip()
 
+        # ✅ prevent "ok/thanks/no" from re-triggering the same order flow
+        session["state"] = "AWAITING_CONFIRMATION"
+
         session["last_bot_message"] = out
         session["last_bot_ts"] = _utcnow().isoformat()
         return out, {"state": session["state"]}
+
 
     # --------------------------------------------------
     # Generic fallback (AI-first) with anti-loop
