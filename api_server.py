@@ -32,6 +32,11 @@ from db import ENGINE
 from sqlalchemy import text
 from sqlalchemy import text
 from sqlalchemy import text
+from db import (
+    ensure_tables,
+    ensure_wa_dedupe_table,
+    create_conversation_sessions_table,  # <-- ADD THIS
+)
 
 def wa_is_duplicate(message_id: str) -> bool:
     """
@@ -252,14 +257,15 @@ def debug_tables():
 
 @app.on_event("startup")
 def _startup():
-    # Make sure Postgres tables exist for WhatsApp conversation memory
     try:
         ensure_tables()
-        ensure_wa_dedupe_table()   # ✅ CREATE dedupe table
-        print("DB: wa_conversations + dedupe tables ready")
+        ensure_wa_dedupe_table()
+        create_conversation_sessions_table()   # <-- ADD THIS
+
+        print("DB: core + wa_dedupe + conversation_sessions ready")
+
     except Exception as e:
         print("DB INIT ERROR:", repr(e))
-
 
 @app.get("/debug/version")
 def debug_version():
