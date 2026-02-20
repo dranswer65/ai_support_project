@@ -32,11 +32,7 @@ from db import ENGINE
 from sqlalchemy import text
 from sqlalchemy import text
 from sqlalchemy import text
-from db import (
-    ensure_tables,
-    ensure_wa_dedupe_table,
-    create_conversation_sessions_table,  # <-- ADD THIS
-)
+from db import create_tables, create_wa_tables, create_wa_inbound_dedupe_table, create_conversation_sessions_table
 
 def wa_is_duplicate(message_id: str) -> bool:
     """
@@ -258,12 +254,11 @@ def debug_tables():
 @app.on_event("startup")
 def _startup():
     try:
-        ensure_tables()
-        ensure_wa_dedupe_table()
-        create_conversation_sessions_table()   # <-- ADD THIS
-
-        print("DB: core + wa_dedupe + conversation_sessions ready")
-
+        create_tables()
+        create_wa_tables()
+        create_wa_inbound_dedupe_table()
+        create_conversation_sessions_table()
+        print("DB: core + wa_tables + wa_dedupe + conversation_sessions ready")
     except Exception as e:
         print("DB INIT ERROR:", repr(e))
 
