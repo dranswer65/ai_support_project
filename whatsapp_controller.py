@@ -1,4 +1,3 @@
-# whatsapp_controller.py — Part 1/4
 # WhatsApp Controller
 # Day 47A — Conversation Versioning & Safe Restart
 # Day 49  — Compliance & Audit Logging Layer
@@ -10,21 +9,15 @@ from __future__ import annotations
 import os
 import re
 import requests
-from datetime import datetime, timedelta
+from datetime import datetime
 
 from language.language_detector import detect_language
 from language.arabic_tone_engine import select_arabic_tone
 from escalation_router import route_escalation
 from handoff_builder import build_handoff_payload
 
-# --------------------------------------------------
-# 🔐 Compliance Audit Layer
-# --------------------------------------------------
 from compliance.audit_logger import log_event
 
-# --------------------------------------------------
-# 🔐 Day 49 — Compliance Audit Events (safe import)
-# --------------------------------------------------
 try:
     from compliance.audit_events import (
         conversation_restart_event,
@@ -34,7 +27,6 @@ try:
         incident_mode_event,
     )
 except Exception:
-    # Fallbacks so WhatsApp never crashes if an event is missing
     def conversation_restart_event(**kwargs): return {"event": "conversation_restart", **kwargs}
     def conversation_closed_event(**kwargs):  return {"event": "conversation_closed", **kwargs}
     def escalation_event(**kwargs):          return {"event": "escalation", **kwargs}
@@ -49,30 +41,20 @@ from profiles.user_profile_store import (
 from vendor_orchestrator import dispatch_ticket
 from incident.incident_state import is_incident_mode
 
-# --------------------------------------------------
-# Config (safe defaults)
-# --------------------------------------------------
 SP_API_BASE = (os.getenv("SP_API_BASE", "http://127.0.0.1:8000") or "").strip()
 WA_DEFAULT_CLIENT = (os.getenv("WA_DEFAULT_CLIENT", "supportpilot_demo") or "").strip()
 
-# No-response handling (seconds)
-NO_REPLY_PING_SECONDS = int(os.getenv("WA_NO_REPLY_PING_SECONDS", "180"))    # 3 min
-NO_REPLY_CLOSE_SECONDS = int(os.getenv("WA_NO_REPLY_CLOSE_SECONDS", "420"))  # 7 min
+NO_REPLY_PING_SECONDS = int(os.getenv("WA_NO_REPLY_PING_SECONDS", "180"))
+NO_REPLY_CLOSE_SECONDS = int(os.getenv("WA_NO_REPLY_CLOSE_SECONDS", "420"))
 
-# Escalation guard: don't escalate immediately just because order id exists
 MAX_AI_ATTEMPTS_BEFORE_ESCALATION = int(os.getenv("WA_MAX_AI_ATTEMPTS", "2"))
 
-# --------------------------------------------------
-# In-memory session store
-# (Production later: move to Redis/Postgres)
-# --------------------------------------------------
 sessions: dict[str, dict] = {}
 
-# --------------------------------------------------
-# Session Management
-# --------------------------------------------------
+
 def _utcnow() -> datetime:
     return datetime.utcnow()
+
 
 def get_or_create_session(user_id: str) -> dict:
     now = _utcnow()
@@ -85,28 +67,27 @@ def get_or_create_session(user_id: str) -> dict:
             "last_intent": None,
             "last_user_message": None,
 
-            # Versioning
             "conversation_version": 1,
             "restart_count": 0,
             "restart_reason": None,
             "last_closed_at": None,
 
-            # Language
             "language": None,
             "text_direction": "ltr",
 
-            # Memory
             "order_id": None,
             "asked_order_id_count": 0,
             "no_count": 0,
 
-            # Day 50 — better UX
-            "issue_summary": "",          # stable summary of the issue
-            "ai_attempts": 0,             # how many AI attempts in current issue
-            "last_bot_message": "",       # last bot output
+            "issue_summary": "",
+            "ai_attempts": 0,
+            "last_bot_message": "",
             "last_user_ts": now.isoformat(),
             "last_bot_ts": None,
             "no_reply_ping_sent": False,
+
+            # ✅ Greet only once (Amazon behavior)
+            "has_greeted": False,
 
             "created_at": now.isoformat(),
         }
@@ -114,7 +95,6 @@ def get_or_create_session(user_id: str) -> dict:
 
     session = sessions[user_id]
 
-    # Safe restart after CLOSED
     if session.get("state") == "CLOSED":
         session["conversation_version"] = int(session.get("conversation_version", 1)) + 1
         session["restart_count"] = int(session.get("restart_count", 0)) + 1
@@ -132,6 +112,8 @@ def get_or_create_session(user_id: str) -> dict:
         session["ai_attempts"] = 0
         session["no_reply_ping_sent"] = False
 
+        session["has_greeted"] = False
+
         log_event(
             conversation_restart_event(
                 user_id=user_id,
@@ -143,18 +125,14 @@ def get_or_create_session(user_id: str) -> dict:
 
     return session
 
-# --------------------------------------------------
-# KPI utilities
-# --------------------------------------------------
+
 def collect_restart_kpis(session: dict, kpi_signals: list) -> None:
     if int(session.get("restart_count", 0)) > 0:
         kpi_signals.append("restart_after_close")
         if int(session.get("restart_count", 0)) >= 3:
             kpi_signals.append("frequent_restarts")
 
-# --------------------------------------------------
-# Priority Engine
-# --------------------------------------------------
+
 def get_customer_priority(user_id: str, session: dict, kpi_signals: list):
     if user_id.startswith("vip_"):
         return "P0", "VIP customer"
@@ -176,9 +154,7 @@ def get_customer_priority(user_id: str, session: dict, kpi_signals: list):
 
     return "P2", "Standard customer"
 
-# --------------------------------------------------
-# Basic NLP / Pattern Helpers (lightweight)
-# --------------------------------------------------
+
 _ORDER_ID_RE = re.compile(r"\b([A-Z]{2,5}\d{4,12}|\d{6,12})\b", re.IGNORECASE)
 
 def _norm(text: str) -> str:
@@ -216,18 +192,18 @@ def _looks_like_order_issue(text: str) -> bool:
     t = _norm(text)
     if not t:
         return False
-    # English
     if any(k in t for k in ["order", "delivery", "shipment", "tracking", "late", "delayed", "where is my order"]):
         return True
-    # Arabic
+    if any(k in t for k in ["refund", "return", "replacement", "cancel", "cancellation"]):
+        return True
     if any(k in t for k in ["طلب", "طلبي", "توصيل", "الشحنة", "تتبع", "متأخر", "تأخير", "وين الطلب", "تأخر التوصيل"]):
+        return True
+    if any(k in t for k in ["استرجاع", "استرجاع مبلغ", "ارجاع", "إرجاع", "تعويض", "إلغاء", "الغاء"]):
         return True
     return False
 
+
 def _detect_intent(text: str):
-    """
-    Minimal intent detection for the order flow.
-    """
     t = _norm(text)
     if _is_greeting(t):
         return "greeting"
@@ -241,28 +217,19 @@ def _detect_intent(text: str):
     if any(k in t for k in ["agent", "human", "call me", "representative"]):
         return "handoff"
 
-    # delivery/order delay (English)
     if any(k in t for k in ["delivery", "late", "delayed", "where is my order", "order delayed", "my order delayed"]):
         return "delivery_delay"
 
-    # delivery/order delay (Arabic)
     if any(k in t for k in ["طلب", "طلبي", "متأخر", "تأخير", "وين الطلب", "توصيل", "الشحنة", "تأخر التوصيل"]):
         return "delivery_delay"
 
-    # order id detection
     if _extract_order_id(text):
         return "order_id"
 
     return "other"
 
-# --------------------------------------------------
-# AI call (internal /chat) — uses server-side WA client
-# --------------------------------------------------
+
 def _call_supportpilot_chat(user_message: str, language: str) -> str:
-    """
-    Calls internal /chat endpoint.
-    Keeps WhatsApp fully server-side.
-    """
     api_base = (SP_API_BASE or "").strip()
     if not api_base:
         return "System error: SP_API_BASE not configured"
@@ -289,29 +256,26 @@ def _call_supportpilot_chat(user_message: str, language: str) -> str:
         print("AI CALL ERROR:", repr(e))
         return "System temporarily unavailable"
 
+
 def _safe_set_issue_summary(session: dict, intent: str, message_text: str) -> None:
-    """
-    Keep issue_summary stable; do NOT overwrite with OrderID-only message.
-    """
     t = (message_text or "").strip()
     if not t:
         return
-
     if intent in {"order_id", "greeting", "thanks"}:
         return
-
-    # overwrite only if it's meaningful (not too short)
     if len(t) >= 8:
         session["issue_summary"] = t
 
+
+def _maybe_prefix_greeting(session: dict, language: str, text: str) -> str:
+    if session.get("has_greeted"):
+        return text
+    session["has_greeted"] = True
+    if language == "ar":
+        return f"مرحبًا! شكرًا لتواصلك مع SupportPilot.\n\n{text}"
+    return f"Hello! Thank you for contacting SupportPilot.\n\n{text}"
+
 def _no_response_check(session: dict, language: str):
-    """
-    If user is silent after bot asked something, we can ping/close.
-    (This function is here for completeness, but needs a scheduler/automation
-     to actually run without new inbound messages.)
-    You CAN trigger it from your WhatsApp webhook when you receive delivery statuses,
-    or via a small cron endpoint later.
-    """
     try:
         last_bot_ts = session.get("last_bot_ts")
         if not last_bot_ts:
@@ -331,41 +295,32 @@ def _no_response_check(session: dict, language: str):
                 )
             )
             if language == "ar":
-                return "شكرًا لتواصلك معنا. يبدو أنك غير متصل الآن. يمكنك مراسلتنا في أي وقت وسنكون سعداء بمساعدتك. "
-            return "Thanks for reaching out. It looks like you’re not available right now. Feel free to message us anytime — we’ll be happy to help. "
+                return "شكرًا لتواصلك معنا. يبدو أنك غير متصل الآن. يمكنك مراسلتنا في أي وقت وسنكون سعداء بمساعدتك. 🌟"
+            return "Thanks for reaching out. It looks like you’re not available right now. Feel free to message us anytime — we’ll be happy to help. 🌟"
 
         if delta >= NO_REPLY_PING_SECONDS and not session.get("no_reply_ping_sent", False):
             session["no_reply_ping_sent"] = True
             if language == "ar":
-                return "هل ما زلت متصلاً؟ أنا هنا لمساعدتك. "
-            return "Are you still connected? I’m here to help. "
+                return "هل ما زلت متصلاً؟ أنا هنا لمساعدتك. ✅"
+            return "Are you still connected? I’m here to help. ✅"
 
     except Exception:
         return None
 
     return None
 
-# whatsapp_controller.py — Part 2/4
 
-# --------------------------------------------------
-# Core Conversation Router
-# --------------------------------------------------
 def handle_message(user_id: str, message_text: str, kpi_signals=None):
-    """
-    Main entry point:
-    returns: (reply_text, meta_dict)
-    """
     if kpi_signals is None:
         kpi_signals = []
 
     session = get_or_create_session(user_id)
-    session["user_id"] = user_id  # for no-response logging if needed
+    session["user_id"] = user_id
     session["last_user_ts"] = _utcnow().isoformat()
     session["no_reply_ping_sent"] = False
 
     collect_restart_kpis(session, kpi_signals)
 
-    # --- Incident mode KPI ---
     if is_incident_mode():
         kpi_signals.append("incident_mode")
         log_event(
@@ -375,7 +330,6 @@ def handle_message(user_id: str, message_text: str, kpi_signals=None):
             )
         )
 
-    # --- language ---
     detected = detect_language(message_text)
     preferred = get_preferred_language(user_id)
 
@@ -391,19 +345,13 @@ def handle_message(user_id: str, message_text: str, kpi_signals=None):
     session["text_direction"] = "rtl" if language == "ar" else "ltr"
     arabic_tone = select_arabic_tone(message_text) if language == "ar" else None
 
-    # store last user message
     session["last_user_message"] = message_text
 
-    # intent
     intent = _detect_intent(message_text)
     session["last_intent"] = intent
-    
-    # priority
+
     priority = get_customer_priority(user_id, session, kpi_signals)
 
-    # --------------------------------------------------
-    # Reset / Handoff direct
-    # --------------------------------------------------
     if intent == "reset":
         session["state"] = "ACTIVE"
         session["tries"] = 0
@@ -412,11 +360,12 @@ def handle_message(user_id: str, message_text: str, kpi_signals=None):
         session["no_count"] = 0
         session["issue_summary"] = ""
         session["ai_attempts"] = 0
+        session["has_greeted"] = False
 
         if language == "ar":
-            out = " تم إعادة ضبط المحادثة. كيف يمكنني مساعدتك اليوم؟"
+            out = "✅ تم إعادة ضبط المحادثة. كيف يمكنني مساعدتك اليوم؟"
         else:
-            out = " Reset done. How may I help you today?"
+            out = "✅ Reset done. How may I help you today?"
         session["last_bot_message"] = out
         session["last_bot_ts"] = _utcnow().isoformat()
         return out, {"state": session["state"]}
@@ -439,9 +388,6 @@ def handle_message(user_id: str, message_text: str, kpi_signals=None):
         session["last_bot_ts"] = _utcnow().isoformat()
         return reply, meta
 
-    # --------------------------------------------------
-    # Loop protection on repeated "No"
-    # --------------------------------------------------
     if _is_no(message_text):
         session["no_count"] = int(session.get("no_count", 0)) + 1
         if session["no_count"] >= 2:
@@ -457,9 +403,9 @@ def handle_message(user_id: str, message_text: str, kpi_signals=None):
             )
 
             if language == "ar":
-                out = "شكرًا لك. إذا احتجت أي مساعدة لاحقًا أنا موجود. "
+                out = "شكرًا لك. إذا احتجت أي مساعدة لاحقًا أنا موجود. 🌟"
             else:
-                out = "Thank you. If you need any help later, I’m here. "
+                out = "Thank you. If you need any help later, I’m here. 🌟"
 
             session["last_bot_message"] = out
             session["last_bot_ts"] = _utcnow().isoformat()
@@ -467,25 +413,22 @@ def handle_message(user_id: str, message_text: str, kpi_signals=None):
     else:
         session["no_count"] = 0
 
-    # --------------------------------------------------
-    # Greeting / Thanks / Goodbye
-    # --------------------------------------------------
     if intent == "greeting":
+        session["has_greeted"] = True
         if language == "ar":
             out = "مرحبًا! شكرًا لتواصلك مع SupportPilot. كيف يمكنني مساعدتك اليوم؟"
         else:
             out = "Hello! Thank you for contacting SupportPilot. How may I assist you today?"
-
         session["last_bot_message"] = out
         session["last_bot_ts"] = _utcnow().isoformat()
         return out, {"state": session["state"]}
 
     if intent == "thanks":
+        session["has_greeted"] = True
         if language == "ar":
             out = "على الرحب والسعة. هل هناك أي شيء آخر يمكنني مساعدتك به اليوم؟"
         else:
             out = "You’re most welcome. Is there anything else I can help you with today?"
-
         session["last_bot_message"] = out
         session["last_bot_ts"] = _utcnow().isoformat()
         return out, {"state": session["state"]}
@@ -503,23 +446,21 @@ def handle_message(user_id: str, message_text: str, kpi_signals=None):
         )
 
         if language == "ar":
-            out = "مع السلامة! إذا احتجت أي شيء، أنا موجود. "
+            out = "مع السلامة! إذا احتجت أي شيء، أنا موجود. ✅"
         else:
-            out = "Goodbye! If you need anything else, I’m here. "
+            out = "Goodbye! If you need anything else, I’m here. ✅"
 
         session["last_bot_message"] = out
         session["last_bot_ts"] = _utcnow().isoformat()
         return out, {"state": session["state"]}
 
-    # --------------------------------------------------
-    # Post-resolution confirmation state (prevents looping)
-    # --------------------------------------------------
     if session.get("state") == "AWAITING_CONFIRMATION":
         if _is_thanks(message_text) or _is_ack(message_text) or _is_yes(message_text):
             if language == "ar":
-                out = "شكراُ على انتظارك, مازلنا نتحقق من التفاصيل؟"
+                out = "تم ✅ هل هناك أي شيء آخر يمكنني مساعدتك به اليوم؟"
             else:
-                out = "Thank you for waiting. I’m still reviewing the details."
+                out = "All set ✅ Is there anything else I can help you with today?"
+            out = _maybe_prefix_greeting(session, language, out)
             session["last_bot_message"] = out
             session["last_bot_ts"] = _utcnow().isoformat()
             return out, {"state": session["state"]}
@@ -528,51 +469,40 @@ def handle_message(user_id: str, message_text: str, kpi_signals=None):
             session["state"] = "CLOSED"
             session["last_closed_at"] = _utcnow().isoformat()
             if language == "ar":
-                out = "شكرًا لتواصلك معنا. يومك سعيد "
+                out = "شكرًا لتواصلك معنا. يومك سعيد 🌟"
             else:
-                out = "Thank you for contacting us. Have a great day "
+                out = "Thank you for contacting us. Have a great day 🌟"
+            out = _maybe_prefix_greeting(session, language, out)
             session["last_bot_message"] = out
             session["last_bot_ts"] = _utcnow().isoformat()
             return out, {"state": session["state"]}
 
-        # If user wrote a new issue, continue normally:
         session["state"] = "ACTIVE"
         session["tries"] = 0
         session["ai_attempts"] = 0
 
-    # --------------------------------------------------
-    # Capture Order ID anytime
-    # --------------------------------------------------
     maybe_order_id = _extract_order_id(message_text)
     if maybe_order_id:
         session["order_id"] = maybe_order_id
 
-    # Update issue summary safely
     _safe_set_issue_summary(session, intent, message_text)
 
-# whatsapp_controller.py — Part 3/4
-
-    # --------------------------------------------------
-    # Order / Delivery delay flow (AI-first, HOLD language)
-    # --------------------------------------------------
     if intent == "delivery_delay" or _looks_like_order_issue(session.get("issue_summary", "")):
 
-        # If missing order id, ask (max twice) then escalate
         if not session.get("order_id"):
             session["state"] = "WAITING_ORDER_ID"
             session["asked_order_id_count"] = int(session.get("asked_order_id_count", 0)) + 1
 
             if session["asked_order_id_count"] <= 2:
                 if language == "ar":
-                    out = "شكرًا لتوضيح المشكلة. هل يمكنك تزويدي برقم الطلب (Order ID) حتى أتحقق من حالة الطلب؟\nإذا لم يكن متوفرًا، يمكنك مشاركة رقم الجوال أو البريد المسجل."
+                    out = "لتقديم المساعدة بشكل أدق، هل يمكنك تزويدي برقم الطلب (Order ID)؟\nإذا لم يكن متوفرًا، يمكنك مشاركة رقم الجوال أو البريد المسجل."
                 else:
-                    out = "Thanks for sharing that. Could you please provide your Order ID so I can check the order status?\nIf you don’t have it, you may share your registered phone number or email."
-
+                    out = "To assist you accurately, could you please share your Order ID?\nIf you don’t have it, you may share your registered phone number or email."
+                out = _maybe_prefix_greeting(session, language, out)
                 session["last_bot_message"] = out
                 session["last_bot_ts"] = _utcnow().isoformat()
                 return out, {"state": session["state"]}
 
-            # after 2 attempts -> escalate
             session["state"] = "ESCALATION"
             reply, meta = _escalate_to_human(
                 user_id=user_id,
@@ -590,8 +520,6 @@ def handle_message(user_id: str, message_text: str, kpi_signals=None):
             session["last_bot_ts"] = _utcnow().isoformat()
             return reply, meta
 
-        # We DO have order id -> DO NOT escalate immediately.
-        # Use HOLD language + AI-first resolution from policy docs.
         session["state"] = "ACTIVE"
 
         if language == "ar":
@@ -599,16 +527,13 @@ def handle_message(user_id: str, message_text: str, kpi_signals=None):
         else:
             hold = f"Thanks for sharing the Order ID ({session['order_id']}). Please allow me a moment — I’m checking the details now."
 
-        # Build message for internal AI (RAG)
         issue = (session.get("issue_summary") or "").strip()
         user_msg = f"Order ID: {session.get('order_id')}\nIssue: {issue or message_text}\nCustomer message: {message_text}"
 
         answer = _call_supportpilot_chat(user_msg, language=language)
 
-        # AI returned "need more details" too often -> escalate after a couple tries
         session["ai_attempts"] = int(session.get("ai_attempts", 0)) + 1
 
-        # If answer looks like uncertainty, try one clarifying question before escalation
         uncertain_phrases = [
             "provide a little more information",
             "share a bit more detail",
@@ -622,10 +547,10 @@ def handle_message(user_id: str, message_text: str, kpi_signals=None):
             if language == "ar":
                 out = (
                     f"{hold}\n\n"
-                    "حتى أساعدك بشكل أدق، هل المشكلة هي:\n"
+                    "حتى أساعدك بشكل أدق، هل الموضوع يتعلق بـ:\n"
                     "1) تأخر في التوصيل\n"
                     "2) تحديث حالة الشحنة\n"
-                    "3) مشكلة في المنتج\n"
+                    "3) استرجاع/إرجاع\n"
                     "اختر رقمًا (1/2/3) أو اكتب التفاصيل."
                 )
             else:
@@ -634,10 +559,10 @@ def handle_message(user_id: str, message_text: str, kpi_signals=None):
                     "To help you accurately, is this about:\n"
                     "1) Late delivery\n"
                     "2) Shipment status update\n"
-                    "3) Product issue\n"
+                    "3) Return/Refund\n"
                     "Reply with 1/2/3 or share details."
                 )
-
+            out = _maybe_prefix_greeting(session, language, out)
             session["last_bot_message"] = out
             session["last_bot_ts"] = _utcnow().isoformat()
             return out, {"state": session["state"]}
@@ -664,19 +589,14 @@ def handle_message(user_id: str, message_text: str, kpi_signals=None):
             session["last_bot_ts"] = _utcnow().isoformat()
             return reply, meta
 
-        # Normal: send hold + helpful answer
         out = f"{hold}\n\n{answer}".strip()
+        out = _maybe_prefix_greeting(session, language, out)
 
-        # prevent "ok/thanks/no" from re-triggering the same order flow
         session["state"] = "AWAITING_CONFIRMATION"
-
         session["last_bot_message"] = out
         session["last_bot_ts"] = _utcnow().isoformat()
         return out, {"state": session["state"]}
 
-    # --------------------------------------------------
-    # Generic fallback (AI-first) with anti-loop
-    # --------------------------------------------------
     session["tries"] = int(session.get("tries", 0)) + 1
 
     if session["tries"] >= 3:
@@ -697,33 +617,23 @@ def handle_message(user_id: str, message_text: str, kpi_signals=None):
         session["last_bot_ts"] = _utcnow().isoformat()
         return reply, meta
 
-    # One polite clarification
     if language == "ar":
         out = "شكرًا لرسالتك. لتقديم المساعدة بشكل أفضل، هل يمكنك توضيح التفاصيل أكثر؟ هل الموضوع متعلق بطلب/توصيل/استرجاع/منتج؟"
     else:
         out = "Thank you for your message. To assist you properly, could you please share a bit more detail — is this about an order, delivery, refund/return, or a product issue?"
 
+    out = _maybe_prefix_greeting(session, language, out)
     session["last_bot_message"] = out
     session["last_bot_ts"] = _utcnow().isoformat()
     return out, {"state": session["state"]}
 
-# whatsapp_controller.py — Part 4/4
-
-# --------------------------------------------------
-# Escalation / Ticket Dispatch
-# --------------------------------------------------
 def _extract_ticket_id(result):
-    """
-    Tries to extract a usable ticket id from different adapter formats.
-    """
     if not isinstance(result, dict):
         return None
 
-    # If vendor_orchestrator returns top-level ticket_id
     if result.get("ticket_id"):
         return result.get("ticket_id")
 
-    # If it returns { "result": {...} }
     inner = result.get("result")
     if isinstance(inner, dict):
         if inner.get("ticket_id"):
@@ -731,7 +641,6 @@ def _extract_ticket_id(result):
         if inner.get("id"):
             return inner.get("id")
 
-        # adapters shape: {"status":"created","vendor":"...","ticket":{...}}
         ticket_obj = inner.get("ticket")
         if isinstance(ticket_obj, dict):
             return (
@@ -758,7 +667,6 @@ def _escalate_to_human(
     if extra_context is None:
         extra_context = {}
 
-    # 🔐 Day 49 — escalation audit
     log_event(
         escalation_event(
             user_id=user_id,
@@ -769,7 +677,6 @@ def _escalate_to_human(
         )
     )
 
-    # Keep both keys (some adapters use reply_language)
     agent_constraints = {
         "no_sensitive_data": True,
         "max_questions": 2,
@@ -780,7 +687,6 @@ def _escalate_to_human(
         "text_direction": text_direction,
     }
 
-    # Base schema from your handoff_builder (do NOT break)
     payload = build_handoff_payload(
         user_id=user_id,
         current_state=session.get("state"),
@@ -791,7 +697,6 @@ def _escalate_to_human(
         kpi_signals=kpi_signals,
     )
 
-    # Enrich safely (adds fields; doesn't remove existing ones)
     payload.setdefault("meta", {})
     payload["meta"]["language"] = language
     payload["meta"]["text_direction"] = text_direction
@@ -822,27 +727,26 @@ def _escalate_to_human(
         print("ESCALATION ERROR:", repr(e))
         ticket_id = None
 
-    # After escalation, keep state as ESCALATION (prevents loops)
     session["state"] = "ESCALATION"
 
     if language == "ar":
         if ticket_id:
             return (
-                f"شكرًا لك. سأقوم برفع الطلب للدعم البشري للمراجعة  رقم التذكرة: {ticket_id}",
+                f"شكرًا لك. سأقوم برفع الطلب للدعم البشري للمراجعة ✅ رقم التذكرة: {ticket_id}",
                 {"state": session["state"], "ticket_id": ticket_id},
             )
         return (
-            "شكرًا لك. سأقوم برفع الطلب للدعم البشري للمراجعة  وسيتم التواصل معك قريبًا.",
+            "شكرًا لك. سأقوم برفع الطلب للدعم البشري للمراجعة ✅ وسيتم التواصل معك قريبًا.",
             {"state": session["state"], "ticket_id": None},
         )
 
     if ticket_id:
         return (
-            f"Thanks — I’m escalating this to our support team for further review  Ticket ID: {ticket_id}",
+            f"Thanks — I’m escalating this to our support team for further review ✅ Ticket ID: {ticket_id}",
             {"state": session["state"], "ticket_id": ticket_id},
         )
 
     return (
-        "Thanks — I’m escalating this to our support team for further review  They will contact you shortly.",
+        "Thanks — I’m escalating this to our support team for further review ✅ They will contact you shortly.",
         {"state": session["state"], "ticket_id": None},
     )

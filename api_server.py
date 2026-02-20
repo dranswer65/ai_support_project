@@ -285,27 +285,7 @@ def public_health():
 def public_health_double_slash():
     return {"status": "ok"}
 
-
-
-# ============================================================
-# WhatsApp verification (GET)
-# ============================================================
-@app.get("/whatsapp/webhook")
-def whatsapp_webhook_verify(
-    hub_mode: str | None = Query(default=None, alias="hub.mode"),
-    hub_verify_token: str | None = Query(default=None, alias="hub.verify_token"),
-    hub_challenge: str | None = Query(default=None, alias="hub.challenge"),
-):
-    # Meta verification ping
-    if hub_mode == "subscribe" and hub_verify_token and hub_challenge:
-        if WA_VERIFY_TOKEN and hub_verify_token == WA_VERIFY_TOKEN:
-            return PlainTextResponse(content=str(hub_challenge))
-        return PlainTextResponse(content="Invalid verify token", status_code=403)
-
-    return PlainTextResponse(content="OK")
-
-
-# ============================================================
+# # ============================================================
 # WhatsApp webhook (STATEFUL) — uses whatsapp_controller.py
 # ============================================================
 @app.post("/whatsapp/webhook")
@@ -324,21 +304,21 @@ async def whatsapp_webhook(request: Request):
 
         msg = messages[0]
         msg_id = (msg.get("id") or "").strip()
+        if not msg_id:
+            return {"ok": True}
 
-        if wa_is_duplicate(msg_id):
+        # ✅ ONE dedupe check only (avoid double-dedupe bugs)
+        # IMPORTANT: wa_is_duplicate_message should ALSO record msg_id as seen/processed.
+        # If your function only "checks" and doesn't "store", then update it to store.
+        if wa_is_duplicate_message(msg_id):
             print("WA DUPLICATE IGNORED:", msg_id)
-            return {"ok": True, "duplicate": True}
-
-        msg_id = msg.get("id")  # ✅ WhatsApp unique message id
-        if msg_id and wa_is_duplicate_message(msg_id):
-        # Already processed -> do NOT reply again
             return {"ok": True, "duplicate": True}
 
         print("MSG TYPE:", msg.get("type"))
         print("MSG RAW:", json.dumps(msg, ensure_ascii=False)[:1200])
 
-        from_wa = msg.get("from")  # wa_id
-        msg_type = msg.get("type")
+        from_wa = (msg.get("from") or "").strip()  # wa_id
+        msg_type = (msg.get("type") or "").strip()
 
         if not from_wa:
             return {"ok": True}
@@ -368,7 +348,6 @@ async def whatsapp_webhook(request: Request):
     except Exception as e:
         print("WHATSAPP ERROR:", repr(e))
         return {"ok": True}
-
 
 # ============================================================
 # Internal WA send (keeps api_server.py self-contained)
