@@ -1,7 +1,7 @@
 {
   "client_name": "supportpilot_demo",
   "default_tone": "formal",
-  "language": "en",
+  "language": "ar",
   "escalation_threshold": 0.38,
   "sla_hours": 24,
   "support_email": "support@supportpilot.ai",

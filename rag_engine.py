@@ -1,121 +1,119 @@
+# rag_engine.py
+from __future__ import annotations
+
 import json
 import math
-from pathlib import Path
-from openai import OpenAI
+from dataclasses import dataclass
 from datetime import datetime
+from pathlib import Path
+from typing import Any, Dict, List, Tuple
 
-
-# ----------------------------
-# Cost Settings
-# ----------------------------
+from openai import OpenAI
 
 TOKEN_PRICE_PER_1K = 0.002
-
-
-# ----------------------------
-# OpenAI Client
-# ----------------------------
-
 client = OpenAI()
 
 
 # ----------------------------
-# Load Client Config
+# Data Models
 # ----------------------------
 
-def load_client_config(client_name):
+@dataclass
+class RetrievedChunk:
+    score: float
+    text: str
+    source: str | None = None
 
-    base = Path(__file__).resolve().parent
 
-    path = base / "clients" / client_name / "config" / "settings.json"
+@dataclass
+class RagResult:
+    answer: str
+    tokens: int
+    cost: float
+    confidence: float
+    retrieved: List[RetrievedChunk]
+    ok: bool
+    reason: str
 
+
+# ----------------------------
+# Path Helpers (IMPORTANT)
+# ----------------------------
+
+def project_root() -> Path:
+    # rag_engine.py is at project root in your tree. If you later move it into a package,
+    # this still works because it climbs upward until it finds /clients.
+    here = Path(__file__).resolve()
+    for p in [here.parent, *here.parents]:
+        if (p / "clients").exists():
+            return p
+    return here.parent
+
+
+def _client_dir(client_name: str) -> Path:
+    root = project_root()
+    return root / "clients" / client_name
+
+
+# ----------------------------
+# Loaders
+# ----------------------------
+
+def load_client_config(client_name: str) -> Dict[str, Any]:
+    path = _client_dir(client_name) / "config" / "settings.json"
     if not path.exists():
         raise FileNotFoundError(f"No config for client: {client_name}")
-
-    with open(path, "r", encoding="utf-8") as f:
-        return json.load(f)
+    return json.loads(path.read_text(encoding="utf-8"))
 
 
-# ----------------------------
-# Load Client API Key
-# ----------------------------
-
-def load_client_key(client_name):
-
-    base = Path(__file__).resolve().parent
-
-    path = base / "clients" / client_name / "config" / "api_key.json"
-
+def load_client_key(client_name: str) -> str:
+    path = _client_dir(client_name) / "config" / "api_key.json"
     if not path.exists():
         raise FileNotFoundError(f"No API key for client: {client_name}")
-
-    with open(path, "r", encoding="utf-8") as f:
-        data = json.load(f)
-
-    return data.get("api_key")
+    data = json.loads(path.read_text(encoding="utf-8"))
+    return (data.get("api_key") or "").strip()
 
 
-# ----------------------------
-# Load Client Embeddings
-# ----------------------------
-
-def load_client_embeddings(client_name):
-
-    base = Path(__file__).resolve().parent
-
-    path = base / "clients" / client_name / "knowledge" / "embeddings.json"
-
+def load_client_embeddings(client_name: str) -> List[Dict[str, Any]]:
+    path = _client_dir(client_name) / "knowledge" / "embeddings.json"
     if not path.exists():
         raise FileNotFoundError(f"No data for client: {client_name}")
-
-    with open(path, "r", encoding="utf-8") as f:
-        return json.load(f)
+    return json.loads(path.read_text(encoding="utf-8"))
 
 
 # ----------------------------
-# Usage Logger
+# Logging (keep your current behavior)
 # ----------------------------
 
-def log_usage(client_name, tokens, cost):
-
-    usage_file = Path("usage/usage_log.json")
+def log_usage(client_name: str, tokens: int, cost: float) -> None:
+    usage_file = project_root() / "usage" / "usage_log.json"
+    usage_file.parent.mkdir(exist_ok=True)
 
     if not usage_file.exists():
-        usage_file.parent.mkdir(exist_ok=True)
-        usage_file.write_text("[]")
+        usage_file.write_text("[]", encoding="utf-8")
 
-    with open(usage_file, "r", encoding="utf-8") as f:
-        data = json.load(f)
+    data = json.loads(usage_file.read_text(encoding="utf-8"))
 
-    record = {
-        "client": client_name,
-        "tokens": tokens,
-        "cost": round(cost, 6),
-        "date": datetime.now().strftime("%Y-%m-%d")
-    }
+    data.append(
+        {
+            "client": client_name,
+            "tokens": tokens,
+            "cost": round(cost, 6),
+            "date": datetime.now().strftime("%Y-%m-%d"),
+        }
+    )
 
-    data.append(record)
-
-    with open(usage_file, "w", encoding="utf-8") as f:
-        json.dump(data, f, indent=2)
+    usage_file.write_text(json.dumps(data, indent=2), encoding="utf-8")
 
 
-# ----------------------------
-# Chat Logger
-# ----------------------------
-
-def log_chat(question, answer, tone):
-
-    logs_dir = Path("logs")
+def log_chat(question: str, answer: str, tone: str) -> None:
+    logs_dir = project_root() / "logs"
     logs_dir.mkdir(exist_ok=True)
-
     log_file = logs_dir / "chat_log.txt"
-
-    timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    ts = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
     with open(log_file, "a", encoding="utf-8") as f:
-
-        f.write(f"\n[{timestamp}]\n")
+        f.write(f"\n[{ts}]\n")
         f.write(f"Tone: {tone}\n")
         f.write(f"Q: {question}\n")
         f.write(f"A: {answer}\n")
@@ -123,94 +121,48 @@ def log_chat(question, answer, tone):
 
 
 # ----------------------------
-# Similarity Function
+# Similarity
 # ----------------------------
 
-def cosine_similarity(a, b):
-
+def cosine_similarity(a: List[float], b: List[float]) -> float:
     dot = sum(x * y for x, y in zip(a, b))
     norm_a = math.sqrt(sum(x * x for x in a))
     norm_b = math.sqrt(sum(y * y for y in b))
-
+    if norm_a == 0 or norm_b == 0:
+        return 0.0
     return dot / (norm_a * norm_b)
 
 
-# ----------------------------
-# Vector Search
-# ----------------------------
+def search_knowledge(query: str, client_data: List[Dict[str, Any]], top_k: int = 3) -> List[RetrievedChunk]:
+    resp = client.embeddings.create(model="text-embedding-3-small", input=query)
+    query_vec = resp.data[0].embedding
 
-def search_knowledge(query, client_data, top_k=3):
-
-    response = client.embeddings.create(
-        model="text-embedding-3-small",
-        input=query
-    )
-
-    query_vector = response.data[0].embedding
-
-    scores = []
-
+    scored: List[RetrievedChunk] = []
     for item in client_data:
+        score = cosine_similarity(query_vec, item["embedding"])
+        scored.append(
+            RetrievedChunk(
+                score=float(score),
+                text=str(item.get("text") or ""),
+                source=item.get("source"),
+            )
+        )
 
-        score = cosine_similarity(query_vector, item["embedding"])
-        scores.append((score, item))
-
-    scores.sort(reverse=True, key=lambda x: x[0])
-
-    return scores[:top_k]
-
-
-# ----------------------------
-# AI Generator
-# ----------------------------
-
-def generate_answer(system_prompt, user_prompt):
-
-    response = client.chat.completions.create(
-
-        model="gpt-4o-mini",
-
-        messages=[
-            {"role": "system", "content": system_prompt},
-            {"role": "user", "content": user_prompt}
-        ],
-
-        temperature=0.2
-    )
-
-    answer = response.choices[0].message.content
-    tokens = response.usage.total_tokens
-
-    return answer, tokens
+    scored.sort(key=lambda x: x.score, reverse=True)
+    return scored[:top_k]
 
 
 # ----------------------------
-# Quality Check
+# Answer generation + validation
 # ----------------------------
 
-def validate_answer(answer):
-
-    bad_phrases = [
-        "i think",
-        "maybe",
-        "not sure",
-        "probably",
-        "guess"
-    ]
-
-    for phrase in bad_phrases:
-        if phrase in answer.lower():
-            return False
-
-    return True
+def validate_answer(answer: str) -> bool:
+    bad_phrases = ["i think", "maybe", "not sure", "probably", "guess"]
+    a = (answer or "").lower()
+    return not any(p in a for p in bad_phrases)
 
 
-# ----------------------------
-# Prompt Builder
-# ----------------------------
-
-def build_prompt(question, results, tone, client_config):
-
+def build_system_prompt(context_chunks: List[RetrievedChunk], tone: str, client_config: Dict[str, Any], language: str) -> str:
     if tone == "friendly":
         style = "Use a warm, friendly, and supportive tone."
     elif tone == "premium":
@@ -218,144 +170,105 @@ def build_prompt(question, results, tone, client_config):
     else:
         style = "Use a formal, professional corporate tone."
 
-
     context = ""
+    for c in context_chunks:
+        if c.text.strip():
+            context += f"- {c.text}\n\n"
 
-    for score, item in results:
+    if language == "ar":
+        lang_line = "Reply in Arabic."
+    else:
+        lang_line = "Reply in English."
 
-        context += f"- {item['text']}\n\n"
-
-
-    system_prompt = f"""
-You are a professional AI customer support assistant for an e-commerce company in the UAE.
+    return f"""
+You are a professional AI customer support assistant for an e-commerce company in the GCC.
 
 Style:
 {style}
 
 Rules:
-1. Use ONLY the information provided.
-2. Do NOT guess.
-3. Be polite and professional.
+1) Use ONLY the information in Company Policies (context).
+2) If information is missing, ask ONE short clarifying question.
+3) Do NOT guess. Do NOT invent.
+4) Keep it clear and polite.
+5) {lang_line}
 
-Company Policies:
+Company Policies (context):
 {context}
 
 Legal Notice:
 {client_config.get("legal_notice", "")}
-"""
+""".strip()
 
-    return system_prompt, question
+
+def generate_answer(system_prompt: str, user_prompt: str) -> Tuple[str, int]:
+    resp = client.chat.completions.create(
+        model="gpt-4o-mini",
+        messages=[
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": user_prompt},
+        ],
+        temperature=0.2,
+    )
+    answer = resp.choices[0].message.content or ""
+    tokens = int(resp.usage.total_tokens or 0)
+    return answer.strip(), tokens
 
 
 # ----------------------------
-# MAIN
+# MAIN ENTRY FOR YOUR API
 # ----------------------------
 
-def run():
+def answer_with_rag(
+    client_name: str,
+    question: str,
+    tone: str = "formal",
+    language: str = "en",
+    top_k: int = 3,
+) -> RagResult:
+    cfg = load_client_config(client_name)
+    if not cfg.get("active", True):
+        return RagResult(
+            answer="Client suspended.",
+            tokens=0,
+            cost=0.0,
+            confidence=0.0,
+            retrieved=[],
+            ok=False,
+            reason="client_suspended",
+        )
 
-    print("\n=== AI Support System Login ===\n")
+    client_data = load_client_embeddings(client_name)
+    chunks = search_knowledge(question, client_data, top_k=top_k)
 
-    client_name = input("Enter client name: ").strip().lower()
-    client_key = input("Enter API key: ").strip()
+    # Confidence = best similarity score (simple, stable)
+    confidence = float(chunks[0].score) if chunks else 0.0
 
-
-    # Load Files
-    try:
-
-        client_config = load_client_config(client_name)
-
-        if not client_config.get("active", True):
-           print("❌ This client account is suspended.")
-           return
-
-        client_data = load_client_embeddings(client_name)
-        saved_key = load_client_key(client_name)
-
-    except Exception as e:
-
-        print(f"\n❌ {e}")
-        return
-
-
-    # Verify Key
-    if client_key != saved_key:
-
-        print("\n🚫 Invalid API Key. Access Denied.")
-        return
-
-
-    print("\n✅ Access Granted\n")
-
-
-    # Tone
-    tone = input("Select tone (formal / friendly / premium) [Enter=default]: ").strip().lower()
-
-    if not tone:
-        tone = client_config.get("default_tone", "formal")
-
-
-    question = input("\nAsk customer question: ").strip()
-
-    if not question:
-        print("❌ Invalid question.")
-        return
-
-
-    # Search
-    results = search_knowledge(question, client_data)
-
-
-    # Threshold
-    MIN_SCORE = client_config.get("escalation_threshold", 0.38)
-
-    filtered = [
-        (s, i) for s, i in results if s >= MIN_SCORE
-    ]
-
-
-    if not filtered:
-
-        print("\n⚠️ Escalated to Human Support.\n")
-
-        print("Your request will be reviewed by our support team.")
-        return
-
-
-    # Prompt
-    system_prompt, user_prompt = build_prompt(question, filtered, tone, client_config)
-
-
-    # AI
-    answer, tokens = generate_answer(system_prompt, user_prompt)
-
-
-    # Cost
-    cost = (tokens / 1000) * TOKEN_PRICE_PER_1K
+    # IMPORTANT: do NOT decide escalation here — only return confidence
+    system_prompt = build_system_prompt(chunks, tone=tone, client_config=cfg, language=language)
+    answer, tokens = generate_answer(system_prompt, question)
+    cost = (tokens / 1000.0) * TOKEN_PRICE_PER_1K
 
     log_usage(client_name, tokens, cost)
-
-
-    # Quality
-    if not validate_answer(answer):
-
-        print("\n⚠️ Manual Review Required.\n")
-        return
-
-
-    # Output
-    print("\n===== AI RESPONSE =====\n")
-    print(answer)
-
-
-    # Log
     log_chat(question, answer, tone)
 
+    if not validate_answer(answer):
+        return RagResult(
+            answer=answer,
+            tokens=tokens,
+            cost=cost,
+            confidence=confidence,
+            retrieved=chunks,
+            ok=False,
+            reason="failed_quality_check",
+        )
 
-
-# ----------------------------
-# ENTRY
-# ----------------------------
-
-if __name__ == "__main__":
-
-    run()
+    return RagResult(
+        answer=answer,
+        tokens=tokens,
+        cost=cost,
+        confidence=confidence,
+        retrieved=chunks,
+        ok=True,
+        reason="ok",
+    )

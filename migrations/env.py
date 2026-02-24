@@ -26,14 +26,11 @@ config.set_main_option("sqlalchemy.url", db_url)
 # ---- Import your SQLAlchemy Base + models here ----
 # IMPORTANT: Fix this import to match YOUR project structure.
 # Example options:
-# from compliance.models import Base
 # from compliance.db import Base
 # from app.db.base import Base
 
-from compliance.models import Base  # <-- change if needed
 
-target_metadata = Base.metadata
-
+target_metadata = None
 
 def run_migrations_offline() -> None:
     """Run migrations in 'offline' mode."""

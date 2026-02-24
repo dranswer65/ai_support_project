@@ -109,7 +109,13 @@ def _slots_prompt(lang: str) -> str:
         return "اختر الوقت المناسب:\n" + "\n".join([f"{i+1}) {s}" for i,s in enumerate(SLOTS)]) + "\n(اكتب رقم الخيار)"
     return "Choose a time:\n" + "\n".join([f"{i+1}) {s}" for i,s in enumerate(SLOTS)]) + "\n(Reply with number)"
 
-def handle_turn(user_id: str, message_text: str, language: str, session_in: Optional[Dict[str, Any]]=None) -> EngineResult:
+def handle_turn(
+    user_id: str,
+    message_text: str,
+    language: str,
+    session_in: Optional[Dict[str, Any]] = None
+) -> EngineResult:
+
     sess = dict(session_in or default_session(user_id))
     sess["user_id"] = user_id
     sess["last_user_message"] = message_text
@@ -123,16 +129,36 @@ def handle_turn(user_id: str, message_text: str, language: str, session_in: Opti
     t = _norm(message_text)
     actions: List[Dict[str, Any]] = []
 
+    # Goodbye
     if _is_goodbye(t):
         sess["state"] = STATE_CLOSED
-        out = "مع السلامة! ✅" if lang=="ar" else "Goodbye! ✅"
+        out = "مع السلامة! ✅" if lang == "ar" else "Goodbye! ✅"
         out = _greet(sess, lang, out)
         _set_bot(sess, out)
         return EngineResult(out, sess, actions)
 
+    # If already closed
+    if sess.get("state") == STATE_CLOSED:
+        if _is_no(t) or _is_yes(t) or _is_thanks(t) or _is_goodbye(t):
+            out = (
+                "شكرًا لك 🌟 إذا احتجت أي مساعدة لاحقًا أرسل لنا في أي وقت."
+                if lang == "ar"
+                else "Thanks 🌟 If you need help later, message us anytime."
+            )
+            _set_bot(sess, out)
+            return EngineResult(out, sess, actions)
+
+        # reopen if real request
+        sess["state"] = STATE_ACTIVE
+        sess["no_count"] = 0
+
     # Global thanks
     if _is_thanks(t):
-        out = "على الرحب والسعة ✅ هل تريد حجز موعد؟" if lang=="ar" else "You’re welcome ✅ Do you want to book an appointment?"
+        out = (
+            "على الرحب والسعة ✅ هل تريد حجز موعد؟"
+            if lang == "ar"
+            else "You’re welcome ✅ Do you want to book an appointment?"
+        )
         out = _greet(sess, lang, out)
         _set_bot(sess, out)
         return EngineResult(out, sess, actions)
@@ -140,10 +166,20 @@ def handle_turn(user_id: str, message_text: str, language: str, session_in: Opti
     # Global NO handling (never close)
     if _is_no(t):
         sess["no_count"] = int(sess.get("no_count", 0)) + 1
+
         if sess["no_count"] == 1:
-            out = "تمام 👍 إذا احتجت حجز موعد لاحقًا أنا جاهز." if lang=="ar" else "Okay 👍 If you need to book later, I’m here."
+            out = (
+                "تمام 👍 إذا احتجت حجز موعد لاحقًا أنا جاهز."
+                if lang == "ar"
+                else "Okay 👍 If you need to book later, I’m here."
+            )
         else:
-            out = "تحب تحجز موعد؟ اكتب: حجز موعد" if lang=="ar" else "Want to book? Type: book appointment"
+            out = (
+                "تحب تحجز موعد؟ اكتب: حجز موعد"
+                if lang == "ar"
+                else "Want to book? Type: book appointment"
+            )
+
         out = _greet(sess, lang, out)
         _set_bot(sess, out)
         sess["state"] = STATE_ACTIVE
@@ -151,23 +187,37 @@ def handle_turn(user_id: str, message_text: str, language: str, session_in: Opti
 
     # Start booking intent
     if sess.get("state") == STATE_ACTIVE:
-        if _looks_like_booking(t) or t in {"1","book","appointment","حجز","موعد","احجز"}:
+        if _looks_like_booking(t) or t in {
+            "1","book","appointment","حجز","موعد","احجز"
+        }:
             sess["state"] = STATE_BOOK_DEPT
             out = _dept_prompt(lang)
             out = _greet(sess, lang, out)
             _set_bot(sess, out)
             return EngineResult(out, sess, actions)
 
-        out = _greet(sess, lang, ("هل تريد حجز موعد؟ اكتب: حجز موعد" if lang=="ar" else "Do you want to book an appointment? Type: book appointment"))
+        out = _greet(
+            sess,
+            lang,
+            (
+                "هل تريد حجز موعد؟ اكتب: حجز موعد"
+                if lang == "ar"
+                else "Do you want to book an appointment? Type: book appointment"
+            ),
+        )
         _set_bot(sess, out)
         return EngineResult(out, sess, actions)
 
-    # Department
+    # Department selection
     if sess.get("state") == STATE_BOOK_DEPT:
         idx = int(t) - 1 if t.isdigit() else -1
         dept = None
-        if lang=="ar" and 0 <= idx < len(DEPTS_AR): dept = DEPTS_AR[idx]
-        if lang=="en" and 0 <= idx < len(DEPTS_EN): dept = DEPTS_EN[idx]
+
+        if lang == "ar" and 0 <= idx < len(DEPTS_AR):
+            dept = DEPTS_AR[idx]
+        if lang == "en" and 0 <= idx < len(DEPTS_EN):
+            dept = DEPTS_EN[idx]
+
         if not dept:
             out = _dept_prompt(lang)
             _set_bot(sess, out)
@@ -176,62 +226,97 @@ def handle_turn(user_id: str, message_text: str, language: str, session_in: Opti
         sess["dept"] = dept
         sess["state"] = STATE_BOOK_DOCTOR
         docs = DOCTORS.get(dept, [])
-        if lang=="ar":
-            out = "اختر الطبيب:\n" + "\n".join([f"{i+1}) {d}" for i,d in enumerate(docs)]) + "\n(اكتب رقم الخيار)"
+
+        if lang == "ar":
+            out = (
+                "اختر الطبيب:\n"
+                + "\n".join([f"{i+1}) {d}" for i, d in enumerate(docs)])
+                + "\n(اكتب رقم الخيار)"
+            )
         else:
-            out = "Choose doctor:\n" + "\n".join([f"{i+1}) {d}" for i,d in enumerate(docs)]) + "\n(Reply with number)"
+            out = (
+                "Choose doctor:\n"
+                + "\n".join([f"{i+1}) {d}" for i, d in enumerate(docs)])
+                + "\n(Reply with number)"
+            )
+
         _set_bot(sess, out)
         return EngineResult(out, sess, actions)
 
-    # Doctor
+    # Doctor selection
     if sess.get("state") == STATE_BOOK_DOCTOR:
         docs = DOCTORS.get(sess.get("dept"), [])
         idx = int(t) - 1 if t.isdigit() else -1
+
         if not (0 <= idx < len(docs)):
-            out = ("اختر رقم الطبيب من القائمة." if lang=="ar" else "Please choose a doctor number from the list.")
+            out = (
+                "اختر رقم الطبيب من القائمة."
+                if lang == "ar"
+                else "Please choose a doctor number from the list."
+            )
             _set_bot(sess, out)
             return EngineResult(out, sess, actions)
+
         sess["doctor"] = docs[idx]
         sess["state"] = STATE_BOOK_DATE
-        out = "اكتب التاريخ (مثال: 2026-02-24)" if lang=="ar" else "Enter date (example: 2026-02-24)"
+
+        out = (
+            "اكتب التاريخ (مثال: 2026-02-24)"
+            if lang == "ar"
+            else "Enter date (example: 2026-02-24)"
+        )
         _set_bot(sess, out)
         return EngineResult(out, sess, actions)
 
-    # Date (light validation)
+    # Date input
     if sess.get("state") == STATE_BOOK_DATE:
         if len(t) < 8:
-            out = "من فضلك اكتب التاريخ بهذا الشكل: 2026-02-24" if lang=="ar" else "Please enter date like: 2026-02-24"
+            out = (
+                "من فضلك اكتب التاريخ بهذا الشكل: 2026-02-24"
+                if lang == "ar"
+                else "Please enter date like: 2026-02-24"
+            )
             _set_bot(sess, out)
             return EngineResult(out, sess, actions)
+
         sess["date"] = message_text.strip()
         sess["state"] = STATE_BOOK_SLOT
         out = _slots_prompt(lang)
         _set_bot(sess, out)
         return EngineResult(out, sess, actions)
 
-    # Slot
+    # Slot selection
     if sess.get("state") == STATE_BOOK_SLOT:
         idx = int(t) - 1 if t.isdigit() else -1
+
         if not (0 <= idx < len(SLOTS)):
             out = _slots_prompt(lang)
             _set_bot(sess, out)
             return EngineResult(out, sess, actions)
+
         sess["slot"] = SLOTS[idx]
         sess["state"] = STATE_BOOK_PATIENT
-        out = "ما اسم المريض؟" if lang=="ar" else "Patient name?"
+        out = "ما اسم المريض؟" if lang == "ar" else "Patient name?"
         _set_bot(sess, out)
         return EngineResult(out, sess, actions)
 
     # Patient name
     if sess.get("state") == STATE_BOOK_PATIENT:
         name = (message_text or "").strip()
+
         if len(name) < 2:
-            out = "من فضلك اكتب الاسم الكامل." if lang=="ar" else "Please enter full name."
+            out = (
+                "من فضلك اكتب الاسم الكامل."
+                if lang == "ar"
+                else "Please enter full name."
+            )
             _set_bot(sess, out)
             return EngineResult(out, sess, actions)
+
         sess["patient_name"] = name
         sess["state"] = STATE_BOOK_CONFIRM
-        if lang=="ar":
+
+        if lang == "ar":
             out = (
                 "تأكيد الحجز ✅\n"
                 f"- القسم: {sess.get('dept')}\n"
@@ -251,35 +336,54 @@ def handle_turn(user_id: str, message_text: str, language: str, session_in: Opti
                 f"- Name: {sess.get('patient_name')}\n\n"
                 "Reply YES to confirm or NO to change."
             )
+
         _set_bot(sess, out)
         return EngineResult(out, sess, actions)
 
-    # Confirm
+    # Confirm booking
     if sess.get("state") == STATE_BOOK_CONFIRM:
         if _is_yes(t):
             sess["state"] = STATE_CONFIRMED
-            out = "تم ✅ تم إرسال الطلب للاستقبال لتأكيد الموعد. ستصلك رسالة تأكيد قريبًا." if lang=="ar" else "Booked ✅ Sent to receptionist for confirmation. You’ll receive confirmation shortly."
+
+            out = (
+                "تم ✅ تم إرسال الطلب للاستقبال لتأكيد الموعد. ستصلك رسالة تأكيد قريبًا."
+                if lang == "ar"
+                else "Booked ✅ Sent to receptionist for confirmation. You’ll receive confirmation shortly."
+            )
+
             _set_bot(sess, out)
-            # (later: action to create receptionist task/ticket)
             return EngineResult(out, sess, actions)
 
         if _is_no(t):
-            # Don’t close — ask what to change and jump back to dept
             sess["state"] = STATE_BOOK_DEPT
-            out = ("تمام 👍 لنعد من البداية. " if lang=="ar" else "Okay 👍 Let’s restart. ") + _dept_prompt(lang)
+            out = (
+                "تمام 👍 لنعد من البداية.\n" + _dept_prompt(lang)
+                if lang == "ar"
+                else "Okay 👍 Let’s restart.\n" + _dept_prompt(lang)
+            )
             _set_bot(sess, out)
             return EngineResult(out, sess, actions)
 
-        out = "اكتب نعم للتأكيد أو لا للتعديل." if lang=="ar" else "Reply YES to confirm or NO to change."
+        out = (
+            "اكتب نعم للتأكيد أو لا للتعديل."
+            if lang == "ar"
+            else "Reply YES to confirm or NO to change."
+        )
         _set_bot(sess, out)
         return EngineResult(out, sess, actions)
 
-    # Fallback
+    # Final fallback
     sess["state"] = STATE_ACTIVE
-    out = "هل تريد حجز موعد؟ اكتب: حجز موعد" if lang=="ar" else "Do you want to book an appointment? Type: book appointment"
+    out = (
+        "هل تريد حجز موعد؟ اكتب: حجز موعد"
+        if lang == "ar"
+        else "Do you want to book an appointment? Type: book appointment"
+    )
     _set_bot(sess, out)
     return EngineResult(out, sess, actions)
 
+
+# Engine wrapper (DO NOT REMOVE — used by whatsapp_controller)
 def run_engine(
     session: Dict[str, Any],
     user_message: str,
@@ -288,5 +392,14 @@ def run_engine(
     kpi_signals: Optional[list] = None,
 ) -> Dict[str, Any]:
     user_id = (session or {}).get("user_id") or "unknown"
-    res = handle_turn(user_id=user_id, message_text=user_message, language=language, session_in=session)
-    return {"reply_text": res.reply_text, "session": res.session, "actions": res.actions}
+    res = handle_turn(
+        user_id=user_id,
+        message_text=user_message,
+        language=language,
+        session_in=session,
+    )
+    return {
+        "reply_text": res.reply_text,
+        "session": res.session,
+        "actions": res.actions,
+    }
