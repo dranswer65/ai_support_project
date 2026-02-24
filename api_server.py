@@ -4,14 +4,13 @@ import asyncio
 from typing import Any, Dict
 
 import requests
-from fastapi import FastAPI, Request, BackgroundTasks, Query, HTTPException
+from fastapi import FastAPI, Request, Query, HTTPException
 from fastapi.responses import PlainTextResponse
 
 from database import AsyncSessionLocal
 from core.wa_dedupe_store_pg import ensure_wa_dedupe_table, claim_message_once
 from core.session_store_pg import ensure_sessions_table
 from whatsapp_controller import handle_message
-from conversation_logger import log_event
 
 # ----------------------------
 # Windows async fix (must be early)
@@ -26,7 +25,7 @@ WA_ACCESS_TOKEN = (os.getenv("WA_ACCESS_TOKEN", "") or "").strip()
 WA_PHONE_NUMBER_ID = (os.getenv("WA_PHONE_NUMBER_ID", "") or "").strip()
 WA_VERIFY_TOKEN = (os.getenv("WA_VERIFY_TOKEN", "") or "").strip()
 
-# Tenant (for sellable SaaS)
+# Tenant ID for sellable SaaS scoping
 WA_DEFAULT_CLIENT = (os.getenv("WA_DEFAULT_CLIENT", "supportpilot_demo") or "").strip()
 
 
@@ -49,59 +48,37 @@ def wa_send_text(to_wa_id: str, text_: str) -> Dict[str, Any]:
         return {"status_code": r.status_code, "text": r.text}
 
 
-def log_message(user_id: str, direction: str, text_: str) -> None:
-    try:
-        log_event(
-            event_type="wa_message",
-            user_id=user_id,
-            metadata={"direction": direction, "text": text_},
-        )
-    except Exception:
-        pass
-
-
-# ----------------------------
-# ONE APP ONLY
-# ----------------------------
 app = FastAPI(title="SupportPilot", version="0.1.0")
 
 
-@app.get("/")
+@app.api_route("/", methods=["GET", "HEAD"])
 async def root():
     return {"ok": True, "service": "SupportPilot"}
 
 
-@app.get("/health")
+# Railway health probes
+@app.api_route("/health", methods=["GET", "HEAD"])
 async def health():
     return {"ok": True}
 
 
-# Railway sometimes calls //health (double slash). Accept it too.
-@app.get("//health")
+@app.api_route("//health", methods=["GET", "HEAD"])
 async def health2():
     return {"ok": True}
 
 
 @app.on_event("startup")
 async def _startup():
-    # Optional: log env presence (no secrets)
-    try:
-        log_event(
-            event_type="startup_env",
-            user_id="system",
-            metadata={
-                "has_WA_ACCESS_TOKEN": bool(WA_ACCESS_TOKEN),
-                "has_WA_PHONE_NUMBER_ID": bool(WA_PHONE_NUMBER_ID),
-                "has_WA_VERIFY_TOKEN": bool(WA_VERIFY_TOKEN),
-                "WA_DEFAULT_CLIENT": WA_DEFAULT_CLIENT,
-            },
-        )
-    except Exception:
-        pass
+    print("[startup] env:",
+          "has_token=", bool(WA_ACCESS_TOKEN),
+          "has_phone_id=", bool(WA_PHONE_NUMBER_ID),
+          "has_verify_token=", bool(WA_VERIFY_TOKEN),
+          "tenant=", WA_DEFAULT_CLIENT)
 
     async with AsyncSessionLocal() as db:
         await ensure_wa_dedupe_table(db)
         await ensure_sessions_table(db)
+    print("[startup] tables ensured")
 
 
 # ----------------------------
@@ -122,15 +99,11 @@ async def whatsapp_verify(
 # WhatsApp webhook (POST)
 # ----------------------------
 @app.post("/whatsapp/webhook")
-async def whatsapp_webhook(request: Request, background: BackgroundTasks):
-    # Always ACK ok=True to avoid Meta retry storms
+async def whatsapp_webhook(request: Request):
     try:
         body = await request.json()
     except Exception as e:
-        try:
-            log_event("wa_webhook_error", "system", {"error": f"bad_json: {repr(e)}"})
-        except Exception:
-            pass
+        print("[webhook] bad json:", repr(e))
         return {"ok": True}
 
     try:
@@ -144,7 +117,7 @@ async def whatsapp_webhook(request: Request, background: BackgroundTasks):
                 value = (ch.get("value") or {})
                 messages = value.get("messages") or []
                 if not messages:
-                    continue  # statuses, etc.
+                    continue
 
                 for msg in messages:
                     msg_id = (msg.get("id") or "").strip()
@@ -158,7 +131,9 @@ async def whatsapp_webhook(request: Request, background: BackgroundTasks):
                     if not text_in:
                         continue
 
-                    # DB dedupe gate (TENANT-SAFE)
+                    print(f"[webhook] incoming from={from_wa} msg_id={msg_id} text={text_in!r}")
+
+                    # Dedupe (tenant-safe)
                     if msg_id:
                         async with AsyncSessionLocal() as db:
                             claimed = await claim_message_once(
@@ -168,45 +143,34 @@ async def whatsapp_webhook(request: Request, background: BackgroundTasks):
                                 wa_from=from_wa,
                                 phone_number_id=WA_PHONE_NUMBER_ID or None,
                             )
-                            if not claimed:
-                                continue  # duplicate retry from Meta
+                        if not claimed:
+                            print(f"[webhook] duplicate msg ignored msg_id={msg_id}")
+                            continue
 
-                    # Log + enqueue only after claim
-                    log_message(from_wa, "in", text_in)
-                    background.add_task(_process_wa_message, from_wa, text_in)
+                    # Process INLINE for reliability (demo)
+                    reply_text = ""
+                    try:
+                        async with AsyncSessionLocal() as db:
+                            reply_text, meta = await handle_message(
+                                db=db,
+                                user_id=from_wa,
+                                message_text=text_in,
+                                tenant_id=WA_DEFAULT_CLIENT,
+                            )
+                        print(f"[engine] meta={meta} reply={reply_text!r}")
+                    except Exception as e:
+                        print("[engine] error:", repr(e))
+                        continue
 
-        return {"ok": True, "queued": True}
+                    if reply_text:
+                        try:
+                            resp = wa_send_text(from_wa, reply_text)
+                            print("[wa_send] resp:", resp)
+                        except Exception as e:
+                            print("[wa_send] error:", repr(e))
 
-    except Exception as e:
-        try:
-            log_event("wa_webhook_error", "system", {"error": repr(e)})
-        except Exception:
-            pass
         return {"ok": True}
 
-
-async def _process_wa_message(from_wa: str, text_in: str) -> None:
-    try:
-        async with AsyncSessionLocal() as db:
-            reply_text, _meta = await handle_message(
-                db=db,
-                user_id=from_wa,
-                message_text=text_in,
-                tenant_id=WA_DEFAULT_CLIENT,
-            )
-
-        if reply_text:
-            try:
-                wa_send_text(from_wa, reply_text)
-                log_message(from_wa, "out", reply_text)
-            except Exception as send_err:
-                try:
-                    log_event("wa_send_error", "system", {"error": repr(send_err)})
-                except Exception:
-                    pass
-
     except Exception as e:
-        try:
-            log_event("wa_process_error", "system", {"error": repr(e), "from": from_wa, "text": text_in[:300]})
-        except Exception:
-            pass
+        print("[webhook] error:", repr(e))
+        return {"ok": True}
