@@ -80,6 +80,24 @@ async def _startup():
         await ensure_sessions_table(db)
     print("[startup] tables ensured")
 
+async def _process_wa_message(from_wa: str, text_in: str) -> None:
+    try:
+        async with AsyncSessionLocal() as db:
+            reply_text, _meta = await handle_message(
+                db=db,
+                user_id=from_wa,
+                message_text=text_in,
+                tenant_id=WA_DEFAULT_CLIENT,   # IMPORTANT for tenant-safe sessions
+            )
+            if reply_text:
+                wa_send_text(from_wa, reply_text)
+                log_message(from_wa, "out", reply_text)
+    except Exception as e:
+        try:
+            log_event("wa_worker_error", "system", {"error": repr(e), "from": from_wa, "text": text_in[:200]})
+        except Exception:
+            pass
+
 
 # ----------------------------
 # WhatsApp webhook verify (GET)
@@ -141,7 +159,7 @@ async def whatsapp_webhook(request: Request):
                                 tenant_id=WA_DEFAULT_CLIENT,
                                 msg_id=msg_id,
                                 wa_from=from_wa,
-                                phone_number_id=WA_PHONE_NUMBER_ID or None,
+                                phone_number_id=WA_PHONE_NUMBER_ID
                             )
                         if not claimed:
                             print(f"[webhook] duplicate msg ignored msg_id={msg_id}")

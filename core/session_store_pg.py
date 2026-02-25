@@ -1,7 +1,6 @@
 # core/session_store_pg.py
-# Postgres-backed session store (async SQLAlchemy)
-# Stores session dict as JSONB in one row per (tenant_id, user_id).
-# Adds: tenant support + versioning + safe upsert + optional cleanup.
+# Tenant-aware Postgres-backed session store (async SQLAlchemy)
+# One row per (tenant_id, user_id). Session stored as JSONB.
 
 from __future__ import annotations
 
@@ -14,21 +13,16 @@ from sqlalchemy.ext.asyncio import AsyncSession
 TABLE_NAME = "wa_sessions"
 
 
-async def ensure_sessions_table(db: AsyncSession) -> None:
-    """
-    Ensures tenant-aware schema.
+def _norm_tenant(tenant_id: Optional[str]) -> str:
+    t = (tenant_id or "default").strip()
+    return t or "default"
 
-    If you previously had:
-      wa_sessions(user_id PRIMARY KEY, session JSONB, ...)
-    this function will:
-      - add tenant_id column (default 'default')
-      - convert PK to (tenant_id, user_id)
-    """
-    # 1) Create if missing (already tenant-aware)
+
+async def ensure_sessions_table(db: AsyncSession) -> None:
     await db.execute(
         text(f"""
         CREATE TABLE IF NOT EXISTS {TABLE_NAME} (
-            tenant_id  TEXT NOT NULL DEFAULT 'default',
+            tenant_id  TEXT NOT NULL,
             user_id    TEXT NOT NULL,
             session    JSONB NOT NULL,
             version    BIGINT NOT NULL DEFAULT 1,
@@ -38,67 +32,13 @@ async def ensure_sessions_table(db: AsyncSession) -> None:
         );
         """)
     )
-    await db.commit()
-
-    # 2) If table existed with old schema, migrate safely (idempotent)
-    #    - add tenant_id if missing
-    #    - drop old PK on user_id if exists
-    #    - add new PK (tenant_id, user_id)
     await db.execute(
-        text(f"""
-        DO $$
-        DECLARE
-            pk_name text;
-            has_tenant boolean;
-        BEGIN
-            SELECT EXISTS (
-                SELECT 1
-                FROM information_schema.columns
-                WHERE table_name = '{TABLE_NAME}'
-                  AND column_name = 'tenant_id'
-            ) INTO has_tenant;
-
-            IF NOT has_tenant THEN
-                ALTER TABLE {TABLE_NAME} ADD COLUMN tenant_id TEXT NOT NULL DEFAULT 'default';
-            END IF;
-
-            -- find primary key constraint name
-            SELECT conname INTO pk_name
-            FROM pg_constraint
-            WHERE conrelid = '{TABLE_NAME}'::regclass
-              AND contype = 'p'
-            LIMIT 1;
-
-            -- If PK exists but isn't (tenant_id, user_id), replace it
-            IF pk_name IS NOT NULL THEN
-                -- Drop it (safe even if it's already the correct one; we'll re-add)
-                EXECUTE format('ALTER TABLE {TABLE_NAME} DROP CONSTRAINT %I', pk_name);
-            END IF;
-
-            -- Re-add desired PK
-            BEGIN
-                ALTER TABLE {TABLE_NAME} ADD PRIMARY KEY (tenant_id, user_id);
-            EXCEPTION
-                WHEN duplicate_object THEN
-                    -- already has correct PK
-                    NULL;
-            END;
-        END $$;
-        """)
+        text(f"CREATE INDEX IF NOT EXISTS idx_{TABLE_NAME}_updated_at ON {TABLE_NAME}(updated_at);")
     )
     await db.commit()
 
-    # Index for ops/cleanup
-    await db.execute(text(f"CREATE INDEX IF NOT EXISTS idx_{TABLE_NAME}_updated_at ON {TABLE_NAME}(updated_at DESC);"))
-    await db.commit()
 
-
-def _norm_tenant(tenant_id: Optional[str]) -> str:
-    t = (tenant_id or "default").strip()
-    return t or "default"
-
-
-async def get_session(db: AsyncSession, user_id: str, tenant_id: Optional[str] = None) -> Optional[Dict[str, Any]]:
+async def get_session(db: AsyncSession, *, user_id: str, tenant_id: Optional[str] = None) -> Optional[Dict[str, Any]]:
     tenant = _norm_tenant(tenant_id)
     res = await db.execute(
         text(f"SELECT session FROM {TABLE_NAME} WHERE tenant_id = :tenant_id AND user_id = :user_id"),
@@ -119,9 +59,7 @@ async def get_session(db: AsyncSession, user_id: str, tenant_id: Optional[str] =
 
 
 async def get_session_with_version(
-    db: AsyncSession,
-    user_id: str,
-    tenant_id: Optional[str] = None,
+    db: AsyncSession, *, user_id: str, tenant_id: Optional[str] = None
 ) -> Tuple[Optional[Dict[str, Any]], Optional[int]]:
     tenant = _norm_tenant(tenant_id)
     res = await db.execute(
@@ -146,6 +84,7 @@ async def get_session_with_version(
 
 async def upsert_session(
     db: AsyncSession,
+    *,
     user_id: str,
     session: Dict[str, Any],
     tenant_id: Optional[str] = None,
@@ -166,38 +105,9 @@ async def upsert_session(
     await db.commit()
 
 
-async def upsert_session_expected_version(
-    db: AsyncSession,
-    user_id: str,
-    session: Dict[str, Any],
-    expected_version: int,
-    tenant_id: Optional[str] = None,
-) -> bool:
-    tenant = _norm_tenant(tenant_id)
-    res = await db.execute(
-        text(f"""
-        UPDATE {TABLE_NAME}
-        SET session = :session::jsonb,
-            version = version + 1,
-            updated_at = NOW()
-        WHERE tenant_id = :tenant_id
-          AND user_id = :user_id
-          AND version = :expected_version
-        RETURNING version;
-        """),
-        {
-            "tenant_id": tenant,
-            "user_id": user_id,
-            "expected_version": int(expected_version),
-            "session": json.dumps(session, ensure_ascii=False),
-        },
-    )
-    await db.commit()
-    return res.first() is not None
-
-
 async def load_or_create_session(
     db: AsyncSession,
+    *,
     user_id: str,
     default_session: Dict[str, Any],
     tenant_id: Optional[str] = None,
@@ -222,11 +132,7 @@ async def load_or_create_session(
     return (sess2 or default_session), int(ver2 or 1)
 
 
-async def cleanup_old_sessions(
-    db: AsyncSession,
-    older_than_days: int = 30,
-    tenant_id: Optional[str] = None,
-) -> int:
+async def cleanup_old_sessions(db: AsyncSession, *, tenant_id: Optional[str] = None, older_than_days: int = 30) -> int:
     tenant = _norm_tenant(tenant_id)
     res = await db.execute(
         text(f"""
