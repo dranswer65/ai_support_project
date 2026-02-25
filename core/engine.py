@@ -298,6 +298,7 @@ def _main_menu_text(lang: str) -> str:
             "3️⃣ إلغاء موعد\n"
             "4️⃣ معلومات عن الأطباء\n"
             "5️⃣ مواعيد العمل\n"
+            "6️⃣ التأمينات المعتمدة\n"
             "9️⃣ التحدث مع موظف الاستقبال"
         )
     return (
@@ -309,6 +310,7 @@ def _main_menu_text(lang: str) -> str:
         "3️⃣ Cancel Appointment\n"
         "4️⃣ Doctor Information\n"
         "5️⃣ Hospital Timings\n"
+    "6️⃣ Approved Insurances\n"
         "9️⃣ Speak to Reception"
     )
 
