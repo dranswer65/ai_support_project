@@ -110,7 +110,6 @@ class EngineResult:
     session: Dict[str, Any]
     actions: List[Dict[str, Any]]
 
-
 # ----------------------------
 # Helpers
 # ----------------------------
@@ -201,7 +200,6 @@ def _greet_if_needed(sess: Dict[str, Any], lang: str, msg: str) -> str:
         f"{msg}"
     )
 
-
 def default_session(user_id: str) -> Dict[str, Any]:
     return {
         "engine": ENGINE_MARKER,
@@ -255,6 +253,35 @@ def _soft_invalid(sess: Dict[str, Any], lang: str, msg: str) -> str:
         return msg + "\n\nIf you prefer, I can transfer you to Reception: 9️⃣" + _utility_footer(lang)
     return msg
 
+def _make_appt_request_payload(
+    *,
+    intent: str,
+    dept_key: Optional[str] = None,
+    dept_label: Optional[str] = None,
+    doctor_key: Optional[str] = None,
+    doctor_label: Optional[str] = None,
+    appt_date: Optional[str] = None,
+    appt_time: Optional[str] = None,
+    patient_name: Optional[str] = None,
+    patient_mobile: Optional[str] = None,
+    patient_id: Optional[str] = None,
+    notes: str = "",
+) -> Dict[str, Any]:
+    # Must match core/appointment_requests_store_pg.py expectations
+    return {
+        "intent": (intent or "BOOK").strip().upper(),
+        "status": "PENDING",
+        "dept_key": dept_key,
+        "dept_label": dept_label,
+        "doctor_key": doctor_key,
+        "doctor_label": doctor_label,
+        "appt_date": appt_date,
+        "appt_time": appt_time,
+        "patient_name": patient_name,
+        "patient_mobile": patient_mobile,
+        "patient_id": patient_id,
+        "notes": (notes or "")[:1000],
+    }
 
 # ----------------------------
 # Intent discovery (light “AI-like”)
@@ -317,7 +344,6 @@ def _classify_intent(text: str, lang: str) -> str:
         return "BOOK"
 
     return "UNKNOWN"
-
 
 # ----------------------------
 # Prompts
@@ -411,37 +437,7 @@ def _insurance_text(lang: str) -> str:
 
 def _timings_text(lang: str) -> str:
     txt = CLINIC_TIMINGS_AR if lang == "ar" else CLINIC_TIMINGS_EN
-    return (txt + "\n" + (INSURANCE_AR if lang == "ar" else INSURANCE_EN) + _utility_footer(lang))
-
-def _step_prompt(sess: Dict[str, Any], lang: str) -> str:
-    st = sess.get("state")
-    if st == STATE_BOOK_DEPT:
-        return _dept_prompt(lang)
-    if st == STATE_BOOK_DOCTOR:
-        return _doctor_prompt(lang, sess.get("dept_key") or "")
-    if st == STATE_BOOK_DATE:
-        return _date_prompt(lang)
-    if st == STATE_BOOK_SLOT:
-        return _slot_prompt(lang, sess.get("date") or "")
-    if st == STATE_BOOK_PATIENT:
-        return _patient_info_prompt(lang)
-    if st == STATE_BOOK_CONFIRM:
-        return _build_confirmation(sess, lang)
-
-    if st == STATE_RESCHEDULE_LOOKUP:
-        return ("يرجى تزويدنا برقم الموعد أو رقم الجوال المسجل للمتابعة." if lang == "ar" else
-                "Please share your appointment reference or registered phone number to proceed.") + _utility_footer(lang)
-    if st == STATE_RESCHEDULE_NEW_DATE:
-        return ("يرجى اختيار التاريخ الجديد للموعد (مثال: 2026-02-25)" if lang == "ar" else
-                "Please enter the new date for the appointment (example: 2026-02-25)") + _utility_footer(lang)
-    if st == STATE_RESCHEDULE_NEW_SLOT:
-        return _slot_prompt(lang, sess.get("date") or "")
-
-    if st == STATE_CANCEL_LOOKUP:
-        return ("يرجى تزويدنا برقم الموعد أو رقم الجوال المسجل لإتمام الإلغاء." if lang == "ar" else
-                "Please share your appointment reference or registered phone number to cancel.") + _utility_footer(lang)
-
-    return _main_menu_text(lang)
+    return txt + _utility_footer(lang)
 
 def _build_confirmation(sess: Dict[str, Any], lang: str) -> str:
     if lang == "ar":
@@ -477,6 +473,36 @@ def _build_confirmation(sess: Dict[str, Any], lang: str) -> str:
         "0️⃣ Main Menu\n"
         "9️⃣ Reception"
     )
+
+def _step_prompt(sess: Dict[str, Any], lang: str) -> str:
+    st = sess.get("state")
+    if st == STATE_BOOK_DEPT:
+        return _dept_prompt(lang)
+    if st == STATE_BOOK_DOCTOR:
+        return _doctor_prompt(lang, sess.get("dept_key") or "")
+    if st == STATE_BOOK_DATE:
+        return _date_prompt(lang)
+    if st == STATE_BOOK_SLOT:
+        return _slot_prompt(lang, sess.get("date") or "")
+    if st == STATE_BOOK_PATIENT:
+        return _patient_info_prompt(lang)
+    if st == STATE_BOOK_CONFIRM:
+        return _build_confirmation(sess, lang)
+
+    if st == STATE_RESCHEDULE_LOOKUP:
+        return ("يرجى تزويدنا برقم الموعد أو رقم الجوال المسجل للمتابعة." if lang == "ar" else
+                "Please share your appointment reference or registered phone number to proceed.") + _utility_footer(lang)
+    if st == STATE_RESCHEDULE_NEW_DATE:
+        return ("يرجى اختيار التاريخ الجديد للموعد (مثال: 2026-02-25)" if lang == "ar" else
+                "Please enter the new date for the appointment (example: 2026-02-25)") + _utility_footer(lang)
+    if st == STATE_RESCHEDULE_NEW_SLOT:
+        return _slot_prompt(lang, sess.get("date") or "")
+
+    if st == STATE_CANCEL_LOOKUP:
+        return ("يرجى تزويدنا برقم الموعد أو رقم الجوال المسجل لإتمام الإلغاء." if lang == "ar" else
+                "Please share your appointment reference or registered phone number to cancel.") + _utility_footer(lang)
+
+    return _main_menu_text(lang)
 
 # ----------------------------
 # Patient info parsing (simple, safe)
@@ -566,7 +592,6 @@ def _handle_global_commands(sess: Dict[str, Any], text: str, lang: str) -> Optio
         return EngineResult(out, sess, [])
 
     return None
-
 
 # ----------------------------
 # Main turn handler
@@ -963,19 +988,19 @@ def handle_turn(
 
                 actions.append({
                     "type": "CREATE_APPOINTMENT_REQUEST",
-                    "payload": {
-                        "kind": "booking",
-                        "dept_key": sess.get("dept_key"),
-                        "dept_label": sess.get("dept_label"),
-                        "doctor_key": sess.get("doctor_key"),
-                        "doctor_label": sess.get("doctor_label"),
-                        "date": sess.get("date"),
-                        "slot": sess.get("slot"),
-                        "patient_name": sess.get("patient_name"),
-                        "patient_mobile": sess.get("patient_mobile"),
-                        "patient_id": sess.get("patient_id"),
-                        "source": "whatsapp",
-                    },
+                    "payload": _make_appt_request_payload(
+                        intent="BOOK",
+                        dept_key=sess.get("dept_key"),
+                        dept_label=sess.get("dept_label"),
+                        doctor_key=sess.get("doctor_key"),
+                        doctor_label=sess.get("doctor_label"),
+                        appt_date=sess.get("date"),
+                        appt_time=sess.get("slot"),
+                        patient_name=sess.get("patient_name"),
+                        patient_mobile=sess.get("patient_mobile"),
+                        patient_id=sess.get("patient_id"),
+                        notes="Booking request from WhatsApp demo flow.",
+                    ),
                 })
                 return EngineResult(out, sess, actions)
 
@@ -1063,15 +1088,15 @@ def handle_turn(
             sess["state"] = STATE_CLOSED
             sess["last_closed_at"] = _utcnow_iso()
 
+            notes = f"Reschedule request. Ref/Phone: {sess.get('appt_ref')}. New date/time: {sess.get('date')} {sess.get('slot')}."
             actions.append({
                 "type": "CREATE_APPOINTMENT_REQUEST",
-                "payload": {
-                    "kind": "reschedule",
-                    "appt_ref": sess.get("appt_ref"),
-                    "new_date": sess.get("date"),
-                    "new_slot": sess.get("slot"),
-                    "source": "whatsapp",
-                },
+                "payload": _make_appt_request_payload(
+                    intent="RESCHEDULE",
+                    appt_date=sess.get("date"),
+                    appt_time=sess.get("slot"),
+                    notes=notes,
+                ),
             })
             return EngineResult(out, sess, actions)
 
@@ -1107,13 +1132,13 @@ def handle_turn(
             sess["state"] = STATE_CLOSED
             sess["last_closed_at"] = _utcnow_iso()
 
+            notes = f"Cancel request. Ref/Phone: {sess.get('appt_ref')}."
             actions.append({
                 "type": "CREATE_APPOINTMENT_REQUEST",
-                "payload": {
-                    "kind": "cancel",
-                    "appt_ref": sess.get("appt_ref"),
-                    "source": "whatsapp",
-                },
+                "payload": _make_appt_request_payload(
+                    intent="CANCEL",
+                    notes=notes,
+                ),
             })
             return EngineResult(out, sess, actions)
 
@@ -1132,7 +1157,6 @@ def handle_turn(
     out = _greet_if_needed(sess, lang, _main_menu_text(lang))
     _set_bot(sess, out)
     return EngineResult(out, sess, actions)
-
 
 def run_engine(
     session: Dict[str, Any],
