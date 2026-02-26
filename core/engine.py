@@ -962,82 +962,82 @@ def handle_turn(
         return EngineResult(out, sess, actions)
 
     if sess.get("state") == STATE_BOOK_CONFIRM:
-    if _is_digit_choice(raw):
-        c = _to_int(raw)
+        if _is_digit_choice(raw):
+            c = _to_int(raw)
 
-        if c == 1:
-            # Confirm -> create appointment request (DB) then receptionist confirms
-            if lang == "ar":
+            if c == 1:
+                # Confirm -> create appointment request (DB) then receptionist confirms
+                if lang == "ar":
+                    out = (
+                       "تم استلام طلب الحجز ✅\n"
+                       "تم إرسال طلب الحجز إلى قسم الاستقبال بالمستشفى لتأكيد الموعد.\n"
+                       "يرجى الحضور قبل الموعد بـ 15 دقيقة.\n\n"
+                       + _closing(lang)
+                          )
+                else:
+                    out = (
+                        "Booking request received ✅\n"
+                        "Your booking request has been sent to hospital reception for confirmation.\n"
+                        "Please arrive 15 minutes before your appointment.\n\n"
+                        + _closing(lang)
+                    )
+
+                _set_bot(sess, out)
+                sess["state"] = STATE_CLOSED
+                sess["last_closed_at"] = _utcnow_iso()
+
+                actions.append({
+                    "type": "CREATE_APPOINTMENT_REQUEST",
+                    "payload": {
+                        "intent": "BOOK",
+                        "status": "PENDING",
+                        "dept_key": sess.get("dept_key"),
+                        "dept_label": sess.get("dept_label"),
+                        "doctor_key": sess.get("doctor_key"),
+                        "doctor_label": sess.get("doctor_label"),
+                        "appt_date": sess.get("date"),
+                        "appt_time": sess.get("slot"),
+                        "patient_name": sess.get("patient_name"),
+                        "patient_mobile": sess.get("patient_mobile"),
+                        "patient_id": sess.get("patient_id"),
+                        "notes": "Created via WhatsApp booking flow",
+                    },
+                })
+
+                return EngineResult(out, sess, actions)
+
+            if c == 2:
+                # Change -> restart from dept
+                sess["state"] = STATE_BOOK_DEPT
+                sess["mistakes"] = 0
                 out = (
-                    "تم استلام طلب الحجز ✅\n"
-                    "تم إرسال طلب الحجز إلى قسم الاستقبال بالمستشفى لتأكيد الموعد.\n"
-                    "يرجى الحضور قبل الموعد بـ 15 دقيقة.\n\n"
-                    + _closing(lang)
+                    "تمام. لنعد لاختيار القسم."
+                    if lang == "ar"
+                    else "Okay. Let’s choose the department again."
                 )
-            else:
+                out = out + "\n\n" + _dept_prompt(lang)
+                _set_bot(sess, out)
+                return EngineResult(out, sess, actions)
+
+            if c == 3:
+                # Cancel this in-progress request (not yet booked) -> go cancel confirm flow
+                sess["state"] = STATE_CANCEL_CONFIRM
                 out = (
-                    "Booking request received ✅\n"
-                    "Your booking request has been sent to hospital reception for confirmation.\n"
-                    "Please arrive 15 minutes before your appointment.\n\n"
-                    + _closing(lang)
+                    "هل ترغب بإلغاء هذا الطلب؟\n1️⃣ نعم\n2️⃣ لا"
+                    if lang == "ar"
+                    else "Do you want to cancel this request?\n1️⃣ Yes\n2️⃣ No"
                 )
+                out += _utility_footer(lang)
+                _set_bot(sess, out)
+                return EngineResult(out, sess, actions)
 
-            _set_bot(sess, out)
-            sess["state"] = STATE_CLOSED
-            sess["last_closed_at"] = _utcnow_iso()
-
-            actions.append({
-                "type": "CREATE_APPOINTMENT_REQUEST",
-                "payload": {
-                    "intent": "BOOK",
-                    "status": "PENDING",
-                    "dept_key": sess.get("dept_key"),
-                    "dept_label": sess.get("dept_label"),
-                    "doctor_key": sess.get("doctor_key"),
-                    "doctor_label": sess.get("doctor_label"),
-                    "appt_date": sess.get("date"),
-                    "appt_time": sess.get("slot"),
-                    "patient_name": sess.get("patient_name"),
-                    "patient_mobile": sess.get("patient_mobile"),
-                    "patient_id": sess.get("patient_id"),
-                    "notes": "Created via WhatsApp booking flow",
-                },
-            })
-
-            return EngineResult(out, sess, actions)
-
-        if c == 2:
-            # Change -> restart from dept
-            sess["state"] = STATE_BOOK_DEPT
-            sess["mistakes"] = 0
-            out = (
-                "تمام. لنعد لاختيار القسم."
-                if lang == "ar"
-                else "Okay. Let’s choose the department again."
-            )
-            out = out + "\n\n" + _dept_prompt(lang)
-            _set_bot(sess, out)
-            return EngineResult(out, sess, actions)
-
-        if c == 3:
-            # Cancel this in-progress request (not yet booked) -> go cancel confirm flow
-            sess["state"] = STATE_CANCEL_CONFIRM
-            out = (
-                "هل ترغب بإلغاء هذا الطلب؟\n1️⃣ نعم\n2️⃣ لا"
-                if lang == "ar"
-                else "Do you want to cancel this request?\n1️⃣ Yes\n2️⃣ No"
-            )
-            out += _utility_footer(lang)
-            _set_bot(sess, out)
-            return EngineResult(out, sess, actions)
-
-    out = _soft_invalid(
-        sess,
-        lang,
-        ("يرجى اختيار 1 أو 2 أو 3." if lang == "ar" else "Please choose 1, 2, or 3.")
-    )
-    _set_bot(sess, out)
-    return EngineResult(out, sess, actions)
+        out = _soft_invalid(
+            sess,
+            lang,
+            ("يرجى اختيار 1 أو 2 أو 3." if lang == "ar" else "Please choose 1, 2, or 3.")
+        )
+        _set_bot(sess, out)
+        return EngineResult(out, sess, actions)
 
     # ----------------------------
     # RESCHEDULE flow (demo)
