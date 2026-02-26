@@ -3,6 +3,7 @@ import os
 import sys
 import asyncio
 from typing import Any, Dict
+from sqlalchemy import text
 
 import requests
 from fastapi import FastAPI, Request, Query, HTTPException
@@ -29,6 +30,7 @@ WA_VERIFY_TOKEN = (os.getenv("WA_VERIFY_TOKEN", "") or "").strip()
 # Tenant scope (fast now; later map WA_PHONE_NUMBER_ID -> tenant_id in tenants table)
 WA_DEFAULT_CLIENT = (os.getenv("WA_DEFAULT_CLIENT", "supportpilot_demo") or "").strip()
 TENANT_ID = WA_DEFAULT_CLIENT  # alias to make intent clear
+from core.appointment_schema import ensure_appointment_requests_table
 
 
 def wa_send_text(to_wa_id: str, text_: str) -> Dict[str, Any]:
@@ -77,17 +79,17 @@ async def health2():
 
 @app.on_event("startup")
 async def _startup():
-    print(
-        "[startup] env:",
-        "has_token=", bool(WA_ACCESS_TOKEN),
-        "has_phone_id=", bool(WA_PHONE_NUMBER_ID),
-        "has_verify_token=", bool(WA_VERIFY_TOKEN),
-        "tenant=", TENANT_ID,
-    )
+    print("[startup] env:",
+          "has_token=", bool(WA_ACCESS_TOKEN),
+          "has_phone_id=", bool(WA_PHONE_NUMBER_ID),
+          "has_verify_token=", bool(WA_VERIFY_TOKEN),
+          "tenant=", WA_DEFAULT_CLIENT)
+
     async with AsyncSessionLocal() as db:
-        # IMPORTANT: ensure tables match tenant-aware schemas
         await ensure_wa_dedupe_table(db)
         await ensure_sessions_table(db)
+        await ensure_appointment_requests_table(db)   # ⭐ ADD THIS
+
     print("[startup] tables ensured")
 
 
@@ -193,3 +195,108 @@ async def whatsapp_webhook(request: Request):
     except Exception as e:
         print("[webhook] error:", repr(e))
         return JSONResponse({"ok": True})
+
+
+@app.get("/reception/requests")
+async def reception_list_requests(
+    tenant_id: str = Query(...),
+    status: str | None = Query(None),
+    limit: int = Query(50, ge=1, le=200),
+    offset: int = Query(0, ge=0),
+):
+    tenant = (tenant_id or "").strip()
+    if not tenant:
+        raise HTTPException(status_code=400, detail="tenant_id required")
+
+    where = "WHERE tenant_id = :tenant_id"
+    params: Dict[str, Any] = {"tenant_id": tenant, "limit": limit, "offset": offset}
+
+    if status:
+        where += " AND status = :status"
+        params["status"] = status.strip().upper()
+
+    q = f"""
+    SELECT
+      tenant_id, request_id, channel, user_id,
+      status, intent,
+      dept_key, dept_label,
+      doctor_key, doctor_label,
+      appt_date, appt_time,
+      patient_name, patient_mobile, patient_id,
+      notes, receptionist_note,
+      created_at, updated_at
+    FROM appointment_requests
+    {where}
+    ORDER BY created_at DESC
+    LIMIT :limit OFFSET :offset
+    """
+
+    async with AsyncSessionLocal() as db:
+        res = await db.execute(text(q), params)
+        rows = res.mappings().all()
+
+    return {"ok": True, "count": len(rows), "items": [dict(r) for r in rows]}
+
+
+@app.post("/reception/requests/{request_id}/status")
+async def reception_set_status(
+    request_id: str,
+    tenant_id: str = Query(...),
+    new_status: str = Query(...),
+):
+    tenant = (tenant_id or "").strip()
+    if not tenant:
+        raise HTTPException(status_code=400, detail="tenant_id required")
+
+    status = (new_status or "").strip().upper()
+    if status not in {"PENDING", "CONFIRMED", "CANCELLED", "DONE"}:
+        raise HTTPException(status_code=400, detail="Invalid new_status")
+
+    async with AsyncSessionLocal() as db:
+        res = await db.execute(
+            text("""
+            UPDATE appointment_requests
+            SET status = :status, updated_at = NOW()
+            WHERE tenant_id = :tenant_id AND request_id = :request_id
+            RETURNING request_id;
+            """),
+            {"tenant_id": tenant, "request_id": request_id, "status": status},
+        )
+        await db.commit()
+        ok = res.first() is not None
+
+    if not ok:
+        raise HTTPException(status_code=404, detail="request not found")
+
+    return {"ok": True, "request_id": request_id, "status": status}
+
+
+@app.post("/reception/requests/{request_id}/note")
+async def reception_set_note(
+    request_id: str,
+    tenant_id: str = Query(...),
+    note: str = Query(...),
+):
+    tenant = (tenant_id or "").strip()
+    if not tenant:
+        raise HTTPException(status_code=400, detail="tenant_id required")
+
+    note2 = (note or "").strip()[:2000]
+
+    async with AsyncSessionLocal() as db:
+        res = await db.execute(
+            text("""
+            UPDATE appointment_requests
+            SET receptionist_note = :note, updated_at = NOW()
+            WHERE tenant_id = :tenant_id AND request_id = :request_id
+            RETURNING request_id;
+            """),
+            {"tenant_id": tenant, "request_id": request_id, "note": note2},
+        )
+        await db.commit()
+        ok = res.first() is not None
+
+    if not ok:
+        raise HTTPException(status_code=404, detail="request not found")
+
+    return {"ok": True, "request_id": request_id}
