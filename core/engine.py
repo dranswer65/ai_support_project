@@ -1,14 +1,15 @@
-# core/engine.py — Clinic Booking Demo Engine (Arabic-first, strict menu, AI-assisted discovery)
+# core/engine.py — Clinic Booking Demo Engine
+# Arabic-first, strict menu, AI-assisted discovery, tenant-ready keys (dept_key/doctor_key)
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any, Dict, Optional, List
+from typing import Any, Dict, Optional, List, Tuple
 from datetime import datetime, timezone
 
 # ----------------------------
 # States
 # ----------------------------
-STATE_ACTIVE = "ACTIVE"                  # not in flow, show menu only when needed
+STATE_ACTIVE = "ACTIVE"                  # not in flow, show menu when needed
 STATE_MENU = "MENU"                      # showing main menu
 
 STATE_BOOK_DEPT = "BOOK_DEPT"
@@ -55,29 +56,50 @@ DEPTS = [
     {"key": "physio", "en": "Physiotherapy", "ar": "العلاج الطبيعي"},
 ]
 
+# IMPORTANT: doctor entries have stable "key" for DB wiring
 DOCTORS_BY_DEPT_KEY = {
-    "general": [{"en": "Dr. Ahmed", "ar": "د. أحمد"}, {"en": "Dr. Sara", "ar": "د. سارة"}],
-    "peds": [{"en": "Dr. Mona", "ar": "د. منى"}],
-    "gyn": [{"en": "Dr. Huda", "ar": "د. هدى"}],
-    "ortho": [{"en": "Dr. Khaled", "ar": "د. خالد"}],
-    "derm": [{"en": "Dr. Ali", "ar": "د. علي"}],
-    "ent": [{"en": "Dr. Faisal", "ar": "د. فيصل"}],
-    "cardio": [{"en": "Dr. Nasser", "ar": "د. ناصر"}],
-    "dental": [{"en": "Dr. Laila", "ar": "د. ليلى"}],
-    "neuro": [{"en": "Dr. Omar", "ar": "د. عمر"}],
-    "physio": [{"en": "Dr. Rana", "ar": "د. رنا"}],
+    "general": [
+        {"key": "dr_ahmed", "en": "Dr. Ahmed", "ar": "د. أحمد"},
+        {"key": "dr_sara", "en": "Dr. Sara", "ar": "د. سارة"},
+    ],
+    "peds": [
+        {"key": "dr_mona", "en": "Dr. Mona", "ar": "د. منى"},
+    ],
+    "gyn": [
+        {"key": "dr_huda", "en": "Dr. Huda", "ar": "د. هدى"},
+    ],
+    "ortho": [
+        {"key": "dr_khaled", "en": "Dr. Khaled", "ar": "د. خالد"},
+    ],
+    "derm": [
+        {"key": "dr_ali", "en": "Dr. Ali", "ar": "د. علي"},
+    ],
+    "ent": [
+        {"key": "dr_faisal", "en": "Dr. Faisal", "ar": "د. فيصل"},
+    ],
+    "cardio": [
+        {"key": "dr_nasser", "en": "Dr. Nasser", "ar": "د. ناصر"},
+    ],
+    "dental": [
+        {"key": "dr_laila", "en": "Dr. Laila", "ar": "د. ليلى"},
+    ],
+    "neuro": [
+        {"key": "dr_omar", "en": "Dr. Omar", "ar": "د. عمر"},
+    ],
+    "physio": [
+        {"key": "dr_rana", "en": "Dr. Rana", "ar": "د. رنا"},
+    ],
 }
 
 # Demo slots (later: compute from working hours + duration)
 SLOTS = ["10:00", "10:30", "11:00", "11:30", "17:00", "17:30", "18:00", "18:30"]
 
-# Demo timings info
+# Demo timings + insurance info
 CLINIC_TIMINGS_AR = "مواعيد العمل: يوميًا من 9:00 صباحًا إلى 9:00 مساءً (عدا الجمعة)."
 CLINIC_TIMINGS_EN = "Hospital hours: daily 9:00 AM to 9:00 PM (except Friday)."
 
-# Demo insurance list (optional)
-INSURANCE_AR = "قائمة التأمين: بوبا، التعاونية، ميدغلف (مثال)."
-INSURANCE_EN = "Insurance: Bupa, Tawuniya, Medgulf (example)."
+INSURANCE_AR = "التأمينات المعتمدة: بوبا، التعاونية، ميدغلف (مثال)."
+INSURANCE_EN = "Approved insurances: Bupa, Tawuniya, Medgulf (example)."
 
 # ----------------------------
 # Result type
@@ -139,7 +161,6 @@ def _set_bot(sess: Dict[str, Any], msg: str) -> None:
     sess["last_bot_ts"] = _utcnow_iso()
 
 def _utility_footer(lang: str) -> str:
-    # Always available while inside flows
     if lang == "ar":
         return "\n\n0️⃣ القائمة الرئيسية\n9️⃣ موظف الاستقبال"
     return "\n\n0️⃣ Main Menu\n9️⃣ Reception"
@@ -180,6 +201,7 @@ def _greet_if_needed(sess: Dict[str, Any], lang: str, msg: str) -> str:
         f"{msg}"
     )
 
+
 def default_session(user_id: str) -> Dict[str, Any]:
     return {
         "engine": ENGINE_MARKER,
@@ -196,9 +218,10 @@ def default_session(user_id: str) -> Dict[str, Any]:
         "last_bot_ts": None,
         "last_bot_message": "",
         # booking fields
-        "intent": None,            # BOOK / RESCHEDULE / CANCEL / DOCTOR_INFO / TIMINGS / RECEPTION
+        "intent": None,            # BOOK / RESCHEDULE / CANCEL / DOCTOR_INFO / TIMINGS / INSURANCE / RECEPTION
         "dept_key": None,
         "dept_label": None,
+        "doctor_key": None,
         "doctor_label": None,
         "date": None,
         "slot": None,
@@ -211,9 +234,14 @@ def default_session(user_id: str) -> Dict[str, Any]:
     }
 
 def _reset_flow_fields(sess: Dict[str, Any]) -> None:
-    for k in ["dept_key", "dept_label", "doctor_label", "date", "slot",
-              "patient_name", "patient_mobile", "patient_id",
-              "appt_ref"]:
+    for k in [
+        "intent",
+        "dept_key", "dept_label",
+        "doctor_key", "doctor_label",
+        "date", "slot",
+        "patient_name", "patient_mobile", "patient_id",
+        "appt_ref",
+    ]:
         sess[k] = None
     sess["mistakes"] = 0
     sess["no_count"] = 0
@@ -222,11 +250,11 @@ def _reset_flow_fields(sess: Dict[str, Any]) -> None:
 def _soft_invalid(sess: Dict[str, Any], lang: str, msg: str) -> str:
     sess["mistakes"] = int(sess.get("mistakes", 0)) + 1
     if sess["mistakes"] >= 2:
-        # after 2 mistakes, offer reception stronger
         if lang == "ar":
             return msg + "\n\nإذا رغبت، يمكنني تحويلك لموظف الاستقبال: 9️⃣" + _utility_footer(lang)
         return msg + "\n\nIf you prefer, I can transfer you to Reception: 9️⃣" + _utility_footer(lang)
     return msg
+
 
 # ----------------------------
 # Intent discovery (light “AI-like”)
@@ -252,11 +280,23 @@ def _classify_intent(text: str, lang: str) -> str:
     if t in {"9", "reception", "human", "agent", "موظف", "الاستقبال", "موظف الاستقبال"}:
         return "RECEPTION"
 
-    # booking
-    if any(k in t for k in ["book", "booking", "appointment", "schedule", "see a doctor", "visit"]):
-        return "BOOK"
-    if any(k in t for k in ["حجز", "موعد", "احجز", "أريد حجز", "اريد حجز", "حجز موعد"]):
-        return "BOOK"
+    # insurance
+    if any(k in t for k in ["insurance", "insurances", "approved insurance", "coverage", "tawuniya", "bupa"]):
+        return "INSURANCE"
+    if any(k in t for k in ["تأمين", "التأمين", "التأمينات", "التأمينات المعتمدة", "بوبا", "التعاونية", "ميدغلف"]):
+        return "INSURANCE"
+
+    # timings
+    if any(k in t for k in ["timings", "hours", "working hours", "clinic hours", "open", "close"]):
+        return "TIMINGS"
+    if any(k in t for k in ["مواعيد العمل", "ساعات العمل", "دوام", "متى تفتح", "متى تغلق"]):
+        return "TIMINGS"
+
+    # doctor info
+    if any(k in t for k in ["doctor info", "doctors", "doctor information", "doctor list"]):
+        return "DOCTOR_INFO"
+    if any(k in t for k in ["معلومات الطبيب", "الأطباء", "معلومات عن الأطباء", "قائمة الأطباء"]):
+        return "DOCTOR_INFO"
 
     # reschedule
     if any(k in t for k in ["reschedule", "change appointment", "move appointment"]):
@@ -270,19 +310,14 @@ def _classify_intent(text: str, lang: str) -> str:
     if any(k in t for k in ["إلغاء", "الغاء", "إلغاء موعد", "الغاء موعد"]):
         return "CANCEL"
 
-    # doctor info
-    if any(k in t for k in ["doctor info", "doctors", "doctor information", "doctor list"]):
-        return "DOCTOR_INFO"
-    if any(k in t for k in ["معلومات الطبيب", "الأطباء", "معلومات عن الأطباء", "قائمة الأطباء"]):
-        return "DOCTOR_INFO"
-
-    # timings
-    if any(k in t for k in ["timings", "hours", "working hours", "clinic hours", "open", "close"]):
-        return "TIMINGS"
-    if any(k in t for k in ["مواعيد العمل", "ساعات العمل", "دوام", "متى تفتح", "متى تغلق"]):
-        return "TIMINGS"
+    # booking
+    if any(k in t for k in ["book", "booking", "appointment", "schedule", "see a doctor", "visit"]):
+        return "BOOK"
+    if any(k in t for k in ["حجز", "موعد", "احجز", "أريد حجز", "اريد حجز", "حجز موعد"]):
+        return "BOOK"
 
     return "UNKNOWN"
+
 
 # ----------------------------
 # Prompts
@@ -310,7 +345,7 @@ def _main_menu_text(lang: str) -> str:
         "3️⃣ Cancel Appointment\n"
         "4️⃣ Doctor Information\n"
         "5️⃣ Hospital Timings\n"
-    "6️⃣ Approved Insurances\n"
+        "6️⃣ Approved Insurances\n"
         "9️⃣ Speak to Reception"
     )
 
@@ -333,6 +368,19 @@ def _date_prompt(lang: str) -> str:
     return "Please enter your preferred appointment date (example: 2026-02-25)" + _utility_footer(lang)
 
 def _slot_prompt(lang: str, date_str: str) -> str:
+    if not SLOTS:
+        if lang == "ar":
+            return (
+                f"لا توجد مواعيد متاحة بتاريخ {date_str} حالياً.\n"
+                "يرجى اختيار تاريخ آخر أو التواصل مع موظف الاستقبال.\n"
+                + _utility_footer(lang)
+            )
+        return (
+            f"No slots are available on {date_str} at the moment.\n"
+            "Please choose another date or contact Reception.\n"
+            + _utility_footer(lang)
+        )
+
     lines = [f"{i}) {s}" for i, s in enumerate(SLOTS, start=1)]
     if lang == "ar":
         return f"المواعيد المتاحة بتاريخ {date_str} هي:\n" + "\n".join(lines) + "\n\n(اكتب رقم الخيار)" + _utility_footer(lang)
@@ -357,6 +405,14 @@ def _patient_info_prompt(lang: str) -> str:
         + _utility_footer(lang)
     )
 
+def _insurance_text(lang: str) -> str:
+    txt = INSURANCE_AR if lang == "ar" else INSURANCE_EN
+    return txt + _utility_footer(lang)
+
+def _timings_text(lang: str) -> str:
+    txt = CLINIC_TIMINGS_AR if lang == "ar" else CLINIC_TIMINGS_EN
+    return (txt + "\n" + (INSURANCE_AR if lang == "ar" else INSURANCE_EN) + _utility_footer(lang))
+
 def _step_prompt(sess: Dict[str, Any], lang: str) -> str:
     st = sess.get("state")
     if st == STATE_BOOK_DEPT:
@@ -370,40 +426,8 @@ def _step_prompt(sess: Dict[str, Any], lang: str) -> str:
     if st == STATE_BOOK_PATIENT:
         return _patient_info_prompt(lang)
     if st == STATE_BOOK_CONFIRM:
-        # Rebuild confirmation text quickly
-        if lang == "ar":
-            return (
-                "تأكيد الحجز ✅\n"
-                f"👤 الاسم: {sess.get('patient_name')}\n"
-                f"📱 الجوال: {sess.get('patient_mobile')}\n"
-                + (f"🪪 الهوية/الإقامة: {sess.get('patient_id')}\n" if sess.get("patient_id") else "")
-                + f"👨‍⚕️ الطبيب: {sess.get('doctor_label')}\n"
-                + f"🏥 القسم: {sess.get('dept_label')}\n"
-                + f"📅 التاريخ: {sess.get('date')}\n"
-                + f"⏰ الوقت: {sess.get('slot')}\n\n"
-                "يرجى الرد:\n"
-                "1️⃣ تأكيد\n"
-                "2️⃣ تعديل\n"
-                "3️⃣ إلغاء\n"
-                "0️⃣ القائمة الرئيسية\n"
-                "9️⃣ موظف الاستقبال"
-            )
-        return (
-            "Confirm booking ✅\n"
-            f"👤 Name: {sess.get('patient_name')}\n"
-            f"📱 Mobile: {sess.get('patient_mobile')}\n"
-            + (f"🪪 ID/Iqama: {sess.get('patient_id')}\n" if sess.get("patient_id") else "")
-            + f"👨‍⚕️ Doctor: {sess.get('doctor_label')}\n"
-            + f"🏥 Department: {sess.get('dept_label')}\n"
-            + f"📅 Date: {sess.get('date')}\n"
-            + f"⏰ Time: {sess.get('slot')}\n\n"
-            "Please reply:\n"
-            "1️⃣ Confirm\n"
-            "2️⃣ Change\n"
-            "3️⃣ Cancel\n"
-            "0️⃣ Main Menu\n"
-            "9️⃣ Reception"
-        )
+        return _build_confirmation(sess, lang)
+
     if st == STATE_RESCHEDULE_LOOKUP:
         return ("يرجى تزويدنا برقم الموعد أو رقم الجوال المسجل للمتابعة." if lang == "ar" else
                 "Please share your appointment reference or registered phone number to proceed.") + _utility_footer(lang)
@@ -412,15 +436,52 @@ def _step_prompt(sess: Dict[str, Any], lang: str) -> str:
                 "Please enter the new date for the appointment (example: 2026-02-25)") + _utility_footer(lang)
     if st == STATE_RESCHEDULE_NEW_SLOT:
         return _slot_prompt(lang, sess.get("date") or "")
+
     if st == STATE_CANCEL_LOOKUP:
         return ("يرجى تزويدنا برقم الموعد أو رقم الجوال المسجل لإتمام الإلغاء." if lang == "ar" else
                 "Please share your appointment reference or registered phone number to cancel.") + _utility_footer(lang)
+
     return _main_menu_text(lang)
+
+def _build_confirmation(sess: Dict[str, Any], lang: str) -> str:
+    if lang == "ar":
+        return (
+            "تأكيد الحجز ✅\n"
+            f"👤 الاسم: {sess.get('patient_name')}\n"
+            f"📱 الجوال: {sess.get('patient_mobile')}\n"
+            + (f"🪪 الهوية/الإقامة: {sess.get('patient_id')}\n" if sess.get("patient_id") else "")
+            + f"👨‍⚕️ الطبيب: {sess.get('doctor_label')}\n"
+            + f"🏥 القسم: {sess.get('dept_label')}\n"
+            + f"📅 التاريخ: {sess.get('date')}\n"
+            + f"⏰ الوقت: {sess.get('slot')}\n\n"
+            "يرجى الرد:\n"
+            "1️⃣ تأكيد\n"
+            "2️⃣ تعديل\n"
+            "3️⃣ إلغاء\n"
+            "0️⃣ القائمة الرئيسية\n"
+            "9️⃣ موظف الاستقبال"
+        )
+    return (
+        "Confirm booking ✅\n"
+        f"👤 Name: {sess.get('patient_name')}\n"
+        f"📱 Mobile: {sess.get('patient_mobile')}\n"
+        + (f"🪪 ID/Iqama: {sess.get('patient_id')}\n" if sess.get("patient_id") else "")
+        + f"👨‍⚕️ Doctor: {sess.get('doctor_label')}\n"
+        + f"🏥 Department: {sess.get('dept_label')}\n"
+        + f"📅 Date: {sess.get('date')}\n"
+        + f"⏰ Time: {sess.get('slot')}\n\n"
+        "Please reply:\n"
+        "1️⃣ Confirm\n"
+        "2️⃣ Change\n"
+        "3️⃣ Cancel\n"
+        "0️⃣ Main Menu\n"
+        "9️⃣ Reception"
+    )
 
 # ----------------------------
 # Patient info parsing (simple, safe)
 # ----------------------------
-def _extract_name_mobile_id(raw: str) -> tuple[Optional[str], Optional[str], Optional[str]]:
+def _extract_name_mobile_id(raw: str) -> Tuple[Optional[str], Optional[str], Optional[str]]:
     raw = (raw or "").strip()
     if not raw:
         return None, None, None
@@ -428,12 +489,10 @@ def _extract_name_mobile_id(raw: str) -> tuple[Optional[str], Optional[str], Opt
     lines = [ln.strip() for ln in raw.splitlines() if ln.strip()]
     name = lines[0] if lines else raw
 
-    # phone: digits + optional leading +
     digits_plus = "".join(ch for ch in raw if ch.isdigit() or ch == "+")
     digits_only = "".join(ch for ch in digits_plus if ch.isdigit())
     mobile = digits_plus if len(digits_only) >= 8 else None
 
-    # ID/Iqama heuristic: 8-15 digits (we keep optional)
     all_digits = "".join(ch for ch in raw if ch.isdigit())
     pid = all_digits if 8 <= len(all_digits) <= 15 else None
 
@@ -497,10 +556,6 @@ def _handle_global_commands(sess: Dict[str, Any], text: str, lang: str) -> Optio
         _set_bot(sess, out)
         return EngineResult(out, sess, [{"type": "ESCALATE", "reason": "user_requested_reception"}])
 
-    # backward-compat: if user types "6" treat as reception too
-    if tlow == "6":
-        return _handle_global_commands(sess, "9", lang)
-
     # Goodbye
     if _is_goodbye(text):
         sess["state"] = STATE_CLOSED
@@ -559,7 +614,6 @@ def handle_turn(
 
         if _is_digit_choice(raw) and _to_int(raw) == 1:
             sess["timeout_pending"] = False
-            # Continue = re-prompt the current step
             out = _step_prompt(sess, lang)
             out = _greet_if_needed(sess, lang, out)
             _set_bot(sess, out)
@@ -572,7 +626,6 @@ def handle_turn(
         return EngineResult(out, sess, actions)
 
     if _passive_timeout_detect(sess):
-        # allow 0/9 override; otherwise set pending
         g = _handle_global_commands(sess, raw, lang)
         if g:
             sess["last_user_ts"] = _utcnow_iso()
@@ -655,12 +708,21 @@ def handle_turn(
                 return EngineResult(out, sess, actions)
 
             if choice == 5:
-                out = (CLINIC_TIMINGS_AR if lang == "ar" else CLINIC_TIMINGS_EN)
-                out += "\n" + (INSURANCE_AR if lang == "ar" else INSURANCE_EN)
-                out = _greet_if_needed(sess, lang, out + _utility_footer(lang))
+                out = _timings_text(lang)
+                out = _greet_if_needed(sess, lang, out)
                 _set_bot(sess, out)
                 sess["menu_shown"] = True
                 return EngineResult(out, sess, actions)
+
+            if choice == 6:
+                out = _insurance_text(lang)
+                out = _greet_if_needed(sess, lang, out)
+                _set_bot(sess, out)
+                sess["menu_shown"] = True
+                return EngineResult(out, sess, actions)
+
+            if choice == 9:
+                return _handle_global_commands(sess, "9", lang) or EngineResult(_main_menu_text(lang), sess, actions)
 
             # invalid menu number
             sess["menu_shown"] = True
@@ -669,7 +731,7 @@ def handle_turn(
             _set_bot(sess, out)
             return EngineResult(out, sess, actions)
 
-        # free text -> classify intent (AI-like)
+        # free text -> classify intent
         sess["menu_shown"] = True
         intent = _classify_intent(message_text, lang)
 
@@ -677,9 +739,14 @@ def handle_turn(
             return _handle_global_commands(sess, "9", lang) or EngineResult(_main_menu_text(lang), sess, actions)
 
         if intent == "TIMINGS":
-            out = (CLINIC_TIMINGS_AR if lang == "ar" else CLINIC_TIMINGS_EN)
-            out += "\n" + (INSURANCE_AR if lang == "ar" else INSURANCE_EN)
-            out = _greet_if_needed(sess, lang, out + _utility_footer(lang))
+            out = _timings_text(lang)
+            out = _greet_if_needed(sess, lang, out)
+            _set_bot(sess, out)
+            return EngineResult(out, sess, actions)
+
+        if intent == "INSURANCE":
+            out = _insurance_text(lang)
+            out = _greet_if_needed(sess, lang, out)
             _set_bot(sess, out)
             return EngineResult(out, sess, actions)
 
@@ -763,30 +830,43 @@ def handle_turn(
         docs = DOCTORS_BY_DEPT_KEY.get(sess.get("dept_key") or "", [])
         idx = _to_int(raw, -1) - 1 if _is_digit_choice(raw) else -1
 
-        chosen = None
+        chosen_label = None
+        chosen_key = None
+
         if 0 <= idx < len(docs):
-            chosen = docs[idx]["ar"] if lang == "ar" else docs[idx]["en"]
+            chosen_key = docs[idx].get("key")
+            chosen_label = docs[idx]["ar"] if lang == "ar" else docs[idx]["en"]
         else:
+            # allow text match
             for doc in docs:
                 if _norm_low(doc["ar"]) in tlow or _norm_low(doc["en"]) in tlow:
-                    chosen = doc["ar"] if lang == "ar" else doc["en"]
+                    chosen_key = doc.get("key")
+                    chosen_label = doc["ar"] if lang == "ar" else doc["en"]
                     break
 
-        if not chosen:
+        if not chosen_label:
             out = _soft_invalid(sess, lang, ("يرجى اختيار رقم طبيب صحيح." if lang == "ar" else "Please choose a valid doctor number."))
             out = out + "\n\n" + _doctor_prompt(lang, sess.get("dept_key") or "")
             _set_bot(sess, out)
             return EngineResult(out, sess, actions)
 
-        sess["doctor_label"] = chosen
+        sess["doctor_key"] = chosen_key
+        sess["doctor_label"] = chosen_label
         sess["mistakes"] = 0
 
         if sess.get("intent") == "DOCTOR_INFO":
-            # show info then offer main menu
             if lang == "ar":
-                out = f"تم عرض الأطباء المتاحين لقسم *{sess.get('dept_label')}*.\nهل ترغبون بحجز موعد؟\n\n1️⃣ حجز موعد\n0️⃣ القائمة الرئيسية\n9️⃣ موظف الاستقبال"
+                out = (
+                    f"تم عرض الأطباء المتاحين لقسم *{sess.get('dept_label')}*.\n"
+                    "هل ترغبون بحجز موعد؟\n\n"
+                    "1️⃣ حجز موعد\n0️⃣ القائمة الرئيسية\n9️⃣ موظف الاستقبال"
+                )
             else:
-                out = f"Available doctors for *{sess.get('dept_label')}* are listed above.\nWould you like to book an appointment?\n\n1️⃣ Book Appointment\n0️⃣ Main Menu\n9️⃣ Reception"
+                out = (
+                    f"Available doctors for *{sess.get('dept_label')}* are listed above.\n"
+                    "Would you like to book an appointment?\n\n"
+                    "1️⃣ Book Appointment\n0️⃣ Main Menu\n9️⃣ Reception"
+                )
             _set_bot(sess, out)
             sess["state"] = STATE_MENU
             return EngineResult(out, sess, actions)
@@ -813,6 +893,12 @@ def handle_turn(
 
     if sess.get("state") == STATE_BOOK_SLOT:
         idx = _to_int(raw, -1) - 1 if _is_digit_choice(raw) else -1
+
+        if not SLOTS:
+            out = _slot_prompt(lang, sess.get("date") or "")
+            _set_bot(sess, out)
+            return EngineResult(out, sess, actions)
+
         if not (0 <= idx < len(SLOTS)):
             out = _soft_invalid(sess, lang, ("يرجى اختيار رقم وقت صحيح." if lang == "ar" else "Please choose a valid time slot number."))
             out = out + "\n\n" + _slot_prompt(lang, sess.get("date") or "")
@@ -846,7 +932,7 @@ def handle_turn(
 
         sess["mistakes"] = 0
         sess["state"] = STATE_BOOK_CONFIRM
-        out = _step_prompt(sess, lang)
+        out = _build_confirmation(sess, lang)
         _set_bot(sess, out)
         return EngineResult(out, sess, actions)
 
@@ -855,7 +941,7 @@ def handle_turn(
             c = _to_int(raw)
 
             if c == 1:
-                # Confirm -> receptionist confirmation (sellable)
+                # Confirm -> create appointment request (DB) then receptionist confirms
                 if lang == "ar":
                     out = (
                         "تم استلام طلب الحجز ✅\n"
@@ -870,20 +956,26 @@ def handle_turn(
                         "Please arrive 15 minutes before your appointment.\n\n"
                         + _closing(lang)
                     )
+
                 _set_bot(sess, out)
                 sess["state"] = STATE_CLOSED
                 sess["last_closed_at"] = _utcnow_iso()
+
                 actions.append({
-                    "type": "RECEPTION_BOOKING_REQUEST",
+                    "type": "CREATE_APPOINTMENT_REQUEST",
                     "payload": {
-                        "dept": sess.get("dept_label"),
-                        "doctor": sess.get("doctor_label"),
+                        "kind": "booking",
+                        "dept_key": sess.get("dept_key"),
+                        "dept_label": sess.get("dept_label"),
+                        "doctor_key": sess.get("doctor_key"),
+                        "doctor_label": sess.get("doctor_label"),
                         "date": sess.get("date"),
-                        "time": sess.get("slot"),
+                        "slot": sess.get("slot"),
                         "patient_name": sess.get("patient_name"),
                         "patient_mobile": sess.get("patient_mobile"),
                         "patient_id": sess.get("patient_id"),
-                    }
+                        "source": "whatsapp",
+                    },
                 })
                 return EngineResult(out, sess, actions)
 
@@ -897,6 +989,7 @@ def handle_turn(
                 return EngineResult(out, sess, actions)
 
             if c == 3:
+                # Cancel this in-progress request (not yet booked) -> go cancel confirm flow
                 sess["state"] = STATE_CANCEL_CONFIRM
                 out = ("هل ترغب بإلغاء هذا الطلب؟\n1️⃣ نعم\n2️⃣ لا" if lang == "ar" else "Do you want to cancel this request?\n1️⃣ Yes\n2️⃣ No")
                 out += _utility_footer(lang)
@@ -932,17 +1025,29 @@ def handle_turn(
         return EngineResult(out, sess, actions)
 
     if sess.get("state") == STATE_RESCHEDULE_NEW_SLOT:
+        if not SLOTS:
+            out = _slot_prompt(lang, sess.get("date") or "")
+            _set_bot(sess, out)
+            return EngineResult(out, sess, actions)
+
         idx = _to_int(raw, -1) - 1 if _is_digit_choice(raw) else -1
         if not (0 <= idx < len(SLOTS)):
             out = _soft_invalid(sess, lang, ("يرجى اختيار رقم وقت صحيح." if lang == "ar" else "Please choose a valid slot number."))
             _set_bot(sess, out)
             return EngineResult(out, sess, actions)
+
         sess["slot"] = SLOTS[idx]
         sess["state"] = STATE_RESCHEDULE_CONFIRM
         if lang == "ar":
-            out = f"يرجى تأكيد رغبتكم في تعديل الموعد إلى:\n📅 {sess.get('date')}\n⏰ {sess.get('slot')}\n\n1️⃣ تأكيد\n2️⃣ رجوع للقائمة"
+            out = (
+                f"يرجى تأكيد رغبتكم في تعديل الموعد إلى:\n📅 {sess.get('date')}\n⏰ {sess.get('slot')}\n\n"
+                "1️⃣ تأكيد\n2️⃣ رجوع للقائمة"
+            )
         else:
-            out = f"Please confirm rescheduling to:\n📅 {sess.get('date')}\n⏰ {sess.get('slot')}\n\n1️⃣ Confirm\n2️⃣ Back to Menu"
+            out = (
+                f"Please confirm rescheduling to:\n📅 {sess.get('date')}\n⏰ {sess.get('slot')}\n\n"
+                "1️⃣ Confirm\n2️⃣ Back to Menu"
+            )
         out += _utility_footer(lang)
         _set_bot(sess, out)
         return EngineResult(out, sess, actions)
@@ -953,10 +1058,21 @@ def handle_turn(
                 out = "تم استلام طلب التعديل ✅\nسيقوم الاستقبال بتأكيد الموعد الجديد قريبًا.\n\n" + _closing(lang)
             else:
                 out = "Reschedule request received ✅\nReception will confirm the new appointment shortly.\n\n" + _closing(lang)
+
             _set_bot(sess, out)
             sess["state"] = STATE_CLOSED
             sess["last_closed_at"] = _utcnow_iso()
-            actions.append({"type": "RESCHEDULE_REQUEST", "payload": {"ref": sess.get("appt_ref"), "date": sess.get("date"), "time": sess.get("slot")}})
+
+            actions.append({
+                "type": "CREATE_APPOINTMENT_REQUEST",
+                "payload": {
+                    "kind": "reschedule",
+                    "appt_ref": sess.get("appt_ref"),
+                    "new_date": sess.get("date"),
+                    "new_slot": sess.get("slot"),
+                    "source": "whatsapp",
+                },
+            })
             return EngineResult(out, sess, actions)
 
         if _is_digit_choice(raw) and _to_int(raw) == 2:
@@ -982,13 +1098,23 @@ def handle_turn(
 
     if sess.get("state") == STATE_CANCEL_CONFIRM:
         if _is_digit_choice(raw) and _to_int(raw) == 1:
-            out = ("تم إلغاء الموعد بنجاح ✅\nفي حال رغبتكم بحجز موعد جديد، يسعدنا خدمتك.\n\n" + _closing(lang)
-                   if lang == "ar" else
-                   "Your appointment has been successfully cancelled ✅\nIf you need a new appointment, we will be pleased to assist you.\n\n" + _closing(lang))
+            out = (
+                "تم إلغاء الموعد بنجاح ✅\nفي حال رغبتكم بحجز موعد جديد، يسعدنا خدمتك.\n\n" + _closing(lang)
+                if lang == "ar"
+                else "Your appointment has been successfully cancelled ✅\nIf you need a new appointment, we will be pleased to assist you.\n\n" + _closing(lang)
+            )
             _set_bot(sess, out)
             sess["state"] = STATE_CLOSED
             sess["last_closed_at"] = _utcnow_iso()
-            actions.append({"type": "CANCEL_REQUEST", "payload": {"ref": sess.get("appt_ref")}})
+
+            actions.append({
+                "type": "CREATE_APPOINTMENT_REQUEST",
+                "payload": {
+                    "kind": "cancel",
+                    "appt_ref": sess.get("appt_ref"),
+                    "source": "whatsapp",
+                },
+            })
             return EngineResult(out, sess, actions)
 
         if _is_digit_choice(raw) and _to_int(raw) == 2:
