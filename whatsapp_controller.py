@@ -1,9 +1,9 @@
 # whatsapp_controller.py
 # Thin WhatsApp Controller (Stable + Tenant-aware)
-# - Loads session from Postgres (core/session_store_pg.py) by (tenant_id, user_id)
-# - Runs engine (core/engine.py)
+# - Loads session by (tenant_id, user_id)
+# - Runs engine
 # - Executes actions:
-#     - CREATE_APPOINTMENT_REQUEST -> inserts into appointment_requests (receptionist queue)
+#     - CREATE_APPOINTMENT_REQUEST -> inserts into appointment_requests
 #     - CALL_RAG -> internal /chat (optional)
 #     - ESCALATE -> vendor escalation stack
 # - Saves session back to Postgres
@@ -14,7 +14,6 @@ import os
 import re
 import requests
 from typing import Any, Dict, Optional, Tuple, List
-from datetime import datetime, timezone, timedelta
 
 import anyio
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -29,7 +28,6 @@ from core.session_store_pg import get_session, upsert_session
 from profiles.user_profile_store import get_preferred_language, set_language_preference
 from incident.incident_state import is_incident_mode
 
-# Optional audit (won’t crash if audit modules change)
 try:
     from compliance.audit_logger import log_event
     from compliance.audit_events import escalation_event, incident_mode_event
@@ -45,6 +43,7 @@ from escalation_router import route_escalation
 from handoff_builder import build_handoff_payload
 from vendor_orchestrator import dispatch_ticket
 
+from datetime import datetime, timezone, timedelta
 
 # ----------------------------
 # End-message patterns (close guard)
@@ -79,12 +78,11 @@ def _is_end_message(text: str, language: str) -> bool:
 def _utc_now_iso() -> str:
     return datetime.now(timezone.utc).isoformat()
 
-def _parse_iso(dt: str) -> Optional[datetime]:
+def _parse_iso(dt: str) -> datetime | None:
     try:
         return datetime.fromisoformat(dt.replace("Z", "+00:00"))
     except Exception:
         return None
-
 
 # ----------------------------
 # Strong language hint (script based)
@@ -92,7 +90,7 @@ def _parse_iso(dt: str) -> Optional[datetime]:
 _LATIN_RE = re.compile(r"[A-Za-z]")
 _ARABIC_RE = re.compile(r"[\u0600-\u06FF]")
 
-def _strong_language_hint(text: str) -> Optional[str]:
+def _strong_language_hint(text: str) -> str | None:
     t = (text or "").strip()
     if not t:
         return None
@@ -104,7 +102,6 @@ def _strong_language_hint(text: str) -> Optional[str]:
         return "en"
     return None
 
-
 # ----------------------------
 # Env
 # ----------------------------
@@ -114,7 +111,6 @@ WA_DEFAULT_CLIENT = (os.getenv("WA_DEFAULT_CLIENT", "supportpilot_demo") or "").
 def _norm_tenant(tenant_id: Optional[str]) -> str:
     t = (tenant_id or WA_DEFAULT_CLIENT or "default").strip()
     return t or "default"
-
 
 # ----------------------------
 # RAG helper (optional)
@@ -157,7 +153,6 @@ async def _call_supportpilot_chat(*, user_message: str, language: str, tenant_id
         tenant_id=tenant_id,
     )
 
-
 # ----------------------------
 # Escalation helper
 # ----------------------------
@@ -165,21 +160,17 @@ def _extract_ticket_id(result: Any) -> Optional[str]:
     if not isinstance(result, dict):
         return None
     if result.get("ticket_id"):
-        return str(result.get("ticket_id"))
+        return result.get("ticket_id")
 
     inner = result.get("result")
     if isinstance(inner, dict):
         if inner.get("ticket_id"):
-            return str(inner.get("ticket_id"))
+            return inner.get("ticket_id")
         if inner.get("id"):
-            return str(inner.get("id"))
+            return inner.get("id")
         ticket_obj = inner.get("ticket")
         if isinstance(ticket_obj, dict):
-            return (
-                ticket_obj.get("id")
-                or ticket_obj.get("ticket_id")
-                or ticket_obj.get("unique_external_id")
-            )
+            return ticket_obj.get("id") or ticket_obj.get("ticket_id") or ticket_obj.get("unique_external_id")
     return None
 
 def _get_customer_priority(user_id: str, session: Dict[str, Any], kpi_signals: List[str]) -> Tuple[str, str]:
@@ -219,7 +210,7 @@ async def _escalate_to_human(
         user_id=user_id,
         current_state=session.get("state"),
         last_user_message=session.get("last_user_message"),
-        last_intent=session.get("last_intent") or session.get("intent"),
+        last_intent=session.get("last_intent"),
         decision_rule=decision_rule,
         decision_reason=decision_reason,
         kpi_signals=kpi_signals,
@@ -234,16 +225,7 @@ async def _escalate_to_human(
 
     payload.setdefault("conversation", {})
     payload["conversation"].setdefault("context", {})
-    payload["conversation"]["context"].update(
-        {
-            "arabic_tone": arabic_tone,
-            "dept_key": session.get("dept_key"),
-            "doctor_key": session.get("doctor_key"),
-            "appointment_date": session.get("date"),
-            "appointment_time": session.get("slot"),
-            **extra_context,
-        }
-    )
+    payload["conversation"]["context"].update({ "arabic_tone": arabic_tone, **extra_context })
 
     ticket_id = None
     try:
@@ -257,67 +239,39 @@ async def _escalate_to_human(
 
     if language == "ar":
         if ticket_id:
-            return (
-                f"شكرًا لكم. تم تحويل طلبكم إلى موظف الاستقبال ✅ رقم التذكرة: {ticket_id}",
-                {"state": session["state"], "ticket_id": ticket_id},
-            )
-        return (
-            "شكرًا لكم. تم تحويل طلبكم إلى موظف الاستقبال ✅ وسيتم التواصل معكم قريبًا.",
-            {"state": session["state"], "ticket_id": None},
-        )
+            return (f"شكرًا لكم. تم تحويل طلبكم إلى موظف الاستقبال ✅ رقم التذكرة: {ticket_id}", {"state": session["state"], "ticket_id": ticket_id})
+        return ("شكرًا لكم. تم تحويل طلبكم إلى موظف الاستقبال ✅ وسيتم التواصل معكم قريبًا.", {"state": session["state"], "ticket_id": None})
 
     if ticket_id:
-        return (
-            f"Thanks — I’m transferring you to Reception ✅ Ticket ID: {ticket_id}",
-            {"state": session["state"], "ticket_id": ticket_id},
-        )
-    return (
-        "Thanks — I’m transferring you to Reception ✅ A staff member will reply shortly during working hours.",
-        {"state": session["state"], "ticket_id": None},
-    )
-
+        return (f"Thanks — I’m transferring you to Reception ✅ Ticket ID: {ticket_id}", {"state": session["state"], "ticket_id": ticket_id})
+    return ("Thanks — I’m transferring you to Reception ✅ A staff member will reply shortly during working hours.", {"state": session["state"], "ticket_id": None})
 
 # ----------------------------
-# Action payload normalization -> DB schema mapping
+# Normalize appointment payload to match DB schema
 # ----------------------------
-def _map_kind_to_intent(kind: str) -> str:
-    k = (kind or "").strip().lower()
-    if k in ("booking", "book", "appointment", "create"):
-        return "BOOK"
-    if k in ("reschedule", "change", "modify", "move"):
-        return "RESCHEDULE"
-    if k in ("cancel", "cancellation", "delete"):
-        return "CANCEL"
-    return "BOOK"
+def _normalize_appt_payload(payload: Dict[str, Any]) -> Dict[str, Any]:
+    p = dict(payload or {})
 
-def _normalize_appointment_payload(payload: Dict[str, Any]) -> Dict[str, Any]:
-    """
-    Engine payloads are allowed to be flexible.
-    DB schema expects: dept_key/label, doctor_key/label, appt_date, appt_time, patient_*, notes.
-    """
-    kind = (payload.get("kind") or "").strip()
-    intent = _map_kind_to_intent(kind)
+    # Engine sometimes sends: kind/date/slot. DB expects: intent + appt_date/appt_time.
+    kind = (p.get("kind") or "").strip().lower()
+    if not p.get("intent"):
+        if kind == "booking":
+            p["intent"] = "BOOK"
+        elif kind == "reschedule":
+            p["intent"] = "RESCHEDULE"
+        elif kind == "cancel":
+            p["intent"] = "CANCEL"
 
-    # Engine currently uses date/slot; DB uses appt_date/appt_time
-    appt_date = payload.get("appt_date") or payload.get("date") or payload.get("new_date")
-    appt_time = payload.get("appt_time") or payload.get("time") or payload.get("slot") or payload.get("new_slot")
+    if not p.get("status"):
+        p["status"] = "PENDING"
 
-    out: Dict[str, Any] = {
-        "intent": intent,
-        "status": (payload.get("status") or "PENDING").strip().upper(),
-        "dept_key": payload.get("dept_key"),
-        "dept_label": payload.get("dept_label"),
-        "doctor_key": payload.get("doctor_key"),
-        "doctor_label": payload.get("doctor_label"),
-        "appt_date": appt_date,
-        "appt_time": appt_time,
-        "patient_name": payload.get("patient_name"),
-        "patient_mobile": payload.get("patient_mobile"),
-        "patient_id": payload.get("patient_id"),
-        "notes": (payload.get("notes") or payload.get("appt_ref") or "")[:1000],
-    }
-    return out
+    # map date/slot -> appt_date/appt_time (keep both to be safe)
+    if not p.get("appt_date") and p.get("date"):
+        p["appt_date"] = p.get("date")
+    if not p.get("appt_time") and p.get("slot"):
+        p["appt_time"] = p.get("slot")
 
+    return p
 
 # ----------------------------
 # MAIN entrypoint
@@ -341,7 +295,6 @@ async def handle_message(
 
     session = await get_session(db, user_id=user_id, tenant_id=tenant)
     if not isinstance(session, dict):
-        # minimal default session (engine will fill keys)
         session = {
             "user_id": user_id,
             "state": "ACTIVE",
@@ -353,19 +306,15 @@ async def handle_message(
             "last_bot_ts": None,
             "last_user_ts": None,
             "conversation_version": 1,
-            "last_closed_at": None,
         }
 
     session["user_id"] = user_id
     session["last_user_message"] = message_text
 
-    # Language resolution
+    # ✅ FIX: English now works on first message
     hint = _strong_language_hint(message_text)
-    if hint and hint != (session.get("language") or ""):
-        language = hint
-    else:
-        language = preferred or (session.get("language") or "").strip().lower() or detected or "en"
-
+    session_lang = (session.get("language") or "").strip().lower()
+    language = hint or preferred or detected or session_lang or "en"
     if language not in ("en", "ar"):
         language = "en"
 
@@ -379,7 +328,7 @@ async def handle_message(
     session["text_direction"] = "rtl" if language == "ar" else "ltr"
     arabic_tone = select_arabic_tone(message_text) if language == "ar" else None
 
-    # Close-state guard (prevents “second No” reopening menu)
+    # Close-state guard
     last_closed_at = session.get("last_closed_at")
     closed_dt = _parse_iso(last_closed_at) if isinstance(last_closed_at, str) else None
     recently_closed = False
@@ -414,40 +363,32 @@ async def handle_message(
     priority = _get_customer_priority(user_id, session, kpi_signals)
     text_direction = session.get("text_direction", "ltr")
 
-    # Execute actions
     for act in actions:
         if not isinstance(act, dict):
             continue
 
         atype = (act.get("type") or "").strip().upper()
 
-        # 1) Create receptionist queue record
         if atype == "CREATE_APPOINTMENT_REQUEST":
             raw_payload = act.get("payload") or {}
-            db_payload = _normalize_appointment_payload(raw_payload)
+            payload = _normalize_appt_payload(raw_payload)
             try:
                 req_id = await create_appointment_request(
                     db=db,
                     tenant_id=tenant,
                     user_id=user_id,
-                    payload=db_payload,
+                    payload=payload,
                 )
                 meta["appointment_request_id"] = req_id
             except Exception as e:
                 meta["appointment_request_error"] = repr(e)
 
-        # 2) Optional RAG
         elif atype == "CALL_RAG":
             query = (act.get("query") or "").strip()
             if query:
-                answer = await _call_supportpilot_chat(
-                    user_message=query,
-                    language=language,
-                    tenant_id=tenant,
-                )
+                answer = await _call_supportpilot_chat(user_message=query, language=language, tenant_id=tenant)
                 reply_text = f"{reply_text}\n\n{answer}".strip()
 
-        # 3) Escalation
         elif atype == "ESCALATE":
             rule = (act.get("rule") or "engine_escalation").strip()
             reason = (act.get("reason") or "Escalation requested by engine").strip()
@@ -467,12 +408,10 @@ async def handle_message(
             reply_text = esc_reply
             meta.update(esc_meta)
 
-    # Close on end messages
     if _is_end_message(message_text, language=language):
         session["state"] = "CLOSED"
         session["last_closed_at"] = _utc_now_iso()
 
-    # Persist session
     try:
         await upsert_session(db, user_id=user_id, session=session, tenant_id=tenant)
     except Exception:
