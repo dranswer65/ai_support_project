@@ -47,7 +47,7 @@ from datetime import datetime, timezone, timedelta
 # ----------------------------
 # Normalizers
 # ----------------------------
-_ARABIC_DIGITS = str.maketrans("٠١٢٣٤٥٦٧٨٩١٢٣٤٥٦٧٨٩", "01234567890123456789")
+_ARABIC_DIGITS = str.maketrans("٠١٢٣٤٥٦٧٨٩", "0123456789")
 def _normalize_digits(s: str) -> str:
     return (s or "").translate(_ARABIC_DIGITS)
 
