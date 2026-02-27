@@ -29,7 +29,7 @@ STATE_CANCEL_CONFIRM = "CANCEL_CONFIRM"
 
 STATE_CLOSED = "CLOSED"
 STATE_ESCALATION = "ESCALATION"
-
+RECEPTION_PHONE = "0555000000000"
 ENGINE_MARKER = "CLINIC_BOOKING_ENGINE_V1"
 
 PASSIVE_TIMEOUT_SECONDS = 5 * 60  # 5 minutes
@@ -505,6 +505,16 @@ def _handle_global_commands(sess: Dict[str, Any], text: str, lang: str) -> Optio
         return EngineResult(out, sess, [])
 
     return None
+    # Thanks/ack during flow: don't restart greeting/menu
+    if _is_thanks(text) or _is_ack(text):
+        st = sess.get("state")
+        if st and st not in {STATE_MENU, STATE_ACTIVE, STATE_CLOSED, STATE_ESCALATION}:
+            if lang == "ar":
+                out = "على الرحب والسعة 🌿\n" + _step_prompt(sess, lang)
+            else:
+                out = "You’re welcome 🌿\n" + _step_prompt(sess, lang)
+            _set_bot(sess, out)
+            return EngineResult(out, sess, [])
 
 # ----------------------------
 # Main turn handler

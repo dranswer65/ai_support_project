@@ -1,12 +1,17 @@
 # whatsapp_controller.py
 # Thin WhatsApp Controller (Stable + Tenant-aware)
-# - Loads session by (tenant_id, user_id)
-# - Runs engine
+# - Loads session from Postgres (core/session_store_pg.py) by (tenant_id, user_id)
+# - Runs engine (core/engine.py)
 # - Executes actions:
-#     - CREATE_APPOINTMENT_REQUEST -> inserts into appointment_requests
+#     - CREATE_APPOINTMENT_REQUEST -> inserts into appointment_requests (receptionist queue)
 #     - CALL_RAG -> internal /chat (optional)
 #     - ESCALATE -> vendor escalation stack
 # - Saves session back to Postgres
+#
+# Fixes:
+# - Prevent language flipping to EN on numeric replies (1/4/etc)
+# - Idempotency: if same message repeats within a few seconds, return last_bot_message
+# - Better default session: use engine.default_session so required keys exist
 
 from __future__ import annotations
 
@@ -22,12 +27,13 @@ from language.language_detector import detect_language
 from language.arabic_tone_engine import select_arabic_tone
 
 from core.appointment_requests_store_pg import create_appointment_request
-from core.engine import run_engine
+from core.engine import run_engine, default_session  # ✅ use engine default session
 from core.session_store_pg import get_session, upsert_session
 
 from profiles.user_profile_store import get_preferred_language, set_language_preference
 from incident.incident_state import is_incident_mode
 
+# Optional audit (won’t crash if audit modules change)
 try:
     from compliance.audit_logger import log_event
     from compliance.audit_events import escalation_event, incident_mode_event
@@ -44,6 +50,7 @@ from handoff_builder import build_handoff_payload
 from vendor_orchestrator import dispatch_ticket
 
 from datetime import datetime, timezone, timedelta
+
 
 # ----------------------------
 # End-message patterns (close guard)
@@ -84,6 +91,7 @@ def _parse_iso(dt: str) -> datetime | None:
     except Exception:
         return None
 
+
 # ----------------------------
 # Strong language hint (script based)
 # ----------------------------
@@ -102,6 +110,16 @@ def _strong_language_hint(text: str) -> str | None:
         return "en"
     return None
 
+def _is_short_or_numeric(text: str) -> bool:
+    t = (text or "").strip()
+    if not t:
+        return True
+    if t.isdigit():
+        return True
+    # Short acknowledgements like ".", "ok", "1", "4" should not flip language via detector
+    return len(t) <= 2
+
+
 # ----------------------------
 # Env
 # ----------------------------
@@ -111,6 +129,7 @@ WA_DEFAULT_CLIENT = (os.getenv("WA_DEFAULT_CLIENT", "supportpilot_demo") or "").
 def _norm_tenant(tenant_id: Optional[str]) -> str:
     t = (tenant_id or WA_DEFAULT_CLIENT or "default").strip()
     return t or "default"
+
 
 # ----------------------------
 # RAG helper (optional)
@@ -152,6 +171,7 @@ async def _call_supportpilot_chat(*, user_message: str, language: str, tenant_id
         language=language,
         tenant_id=tenant_id,
     )
+
 
 # ----------------------------
 # Escalation helper
@@ -210,7 +230,7 @@ async def _escalate_to_human(
         user_id=user_id,
         current_state=session.get("state"),
         last_user_message=session.get("last_user_message"),
-        last_intent=session.get("last_intent"),
+        last_intent=session.get("last_intent") or session.get("intent"),
         decision_rule=decision_rule,
         decision_reason=decision_reason,
         kpi_signals=kpi_signals,
@@ -225,7 +245,12 @@ async def _escalate_to_human(
 
     payload.setdefault("conversation", {})
     payload["conversation"].setdefault("context", {})
-    payload["conversation"]["context"].update({ "arabic_tone": arabic_tone, **extra_context })
+    payload["conversation"]["context"].update(
+        {
+            "arabic_tone": arabic_tone,
+            **extra_context,
+        }
+    )
 
     ticket_id = None
     try:
@@ -239,39 +264,47 @@ async def _escalate_to_human(
 
     if language == "ar":
         if ticket_id:
-            return (f"شكرًا لكم. تم تحويل طلبكم إلى موظف الاستقبال ✅ رقم التذكرة: {ticket_id}", {"state": session["state"], "ticket_id": ticket_id})
-        return ("شكرًا لكم. تم تحويل طلبكم إلى موظف الاستقبال ✅ وسيتم التواصل معكم قريبًا.", {"state": session["state"], "ticket_id": None})
+            return (
+                f"شكرًا لكم. تم تحويل طلبكم إلى موظف الاستقبال ✅ رقم التذكرة: {ticket_id}",
+                {"state": session["state"], "ticket_id": ticket_id},
+            )
+        return (
+            "شكرًا لكم. تم تحويل طلبكم إلى موظف الاستقبال ✅ وسيتم التواصل معكم قريبًا.",
+            {"state": session["state"], "ticket_id": None},
+        )
 
     if ticket_id:
-        return (f"Thanks — I’m transferring you to Reception ✅ Ticket ID: {ticket_id}", {"state": session["state"], "ticket_id": ticket_id})
-    return ("Thanks — I’m transferring you to Reception ✅ A staff member will reply shortly during working hours.", {"state": session["state"], "ticket_id": None})
+        return (
+            f"Thanks — I’m transferring you to Reception ✅ Ticket ID: {ticket_id}",
+            {"state": session["state"], "ticket_id": ticket_id},
+        )
+    return (
+        "Thanks — I’m transferring you to Reception ✅ A staff member will reply shortly during working hours.",
+        {"state": session["state"], "ticket_id": None},
+    )
+
 
 # ----------------------------
-# Normalize appointment payload to match DB schema
+# Idempotency / anti-duplicate (even if webhook dedupe fails)
 # ----------------------------
-def _normalize_appt_payload(payload: Dict[str, Any]) -> Dict[str, Any]:
-    p = dict(payload or {})
+def _is_fast_duplicate(session: Dict[str, Any], message_text: str) -> bool:
+    """
+    If the exact same user message arrives again within a short window,
+    return the last bot message instead of re-processing (prevents loops).
+    """
+    prev = (session.get("last_user_message") or "").strip()
+    cur = (message_text or "").strip()
+    if not prev or not cur:
+        return False
+    if prev != cur:
+        return False
 
-    # Engine sometimes sends: kind/date/slot. DB expects: intent + appt_date/appt_time.
-    kind = (p.get("kind") or "").strip().lower()
-    if not p.get("intent"):
-        if kind == "booking":
-            p["intent"] = "BOOK"
-        elif kind == "reschedule":
-            p["intent"] = "RESCHEDULE"
-        elif kind == "cancel":
-            p["intent"] = "CANCEL"
+    last_ts = session.get("last_user_ts")
+    dt = _parse_iso(last_ts) if isinstance(last_ts, str) else None
+    if not dt:
+        return False
+    return (datetime.now(timezone.utc) - dt) <= timedelta(seconds=12)
 
-    if not p.get("status"):
-        p["status"] = "PENDING"
-
-    # map date/slot -> appt_date/appt_time (keep both to be safe)
-    if not p.get("appt_date") and p.get("date"):
-        p["appt_date"] = p.get("date")
-    if not p.get("appt_time") and p.get("slot"):
-        p["appt_time"] = p.get("slot")
-
-    return p
 
 # ----------------------------
 # MAIN entrypoint
@@ -290,33 +323,38 @@ async def handle_message(
         kpi_signals = []
     kpi_signals = list(kpi_signals)
 
-    detected = (detect_language(message_text) or "en").strip().lower()
-    preferred = (get_preferred_language(user_id) or "").strip().lower()
-
+    # Load session
     session = await get_session(db, user_id=user_id, tenant_id=tenant)
     if not isinstance(session, dict):
-        session = {
-            "user_id": user_id,
-            "state": "ACTIVE",
-            "language": "ar",
-            "text_direction": "rtl",
-            "has_greeted": False,
-            "last_user_message": None,
-            "last_bot_message": "",
-            "last_bot_ts": None,
-            "last_user_ts": None,
-            "conversation_version": 1,
-        }
+        session = default_session(user_id)  # ✅ ensures has_greeted/menu_shown/etc exist
 
+    # Anti-duplicate protection BEFORE we mutate last_user_message
+    if _is_fast_duplicate(session, message_text):
+        last_bot = (session.get("last_bot_message") or "").strip()
+        meta = {"state": session.get("state"), "tenant_id": tenant, "duplicate": True}
+        return (last_bot or ("تم" if session.get("language") == "ar" else "Done"), meta)
+
+    # Save last user message for next dedupe check
     session["user_id"] = user_id
     session["last_user_message"] = message_text
 
-    # ✅ FIX: English now works on first message
+    # Language resolution (FIXED)
+    preferred = (get_preferred_language(user_id) or "").strip().lower()
+    sess_lang = (session.get("language") or "").strip().lower()
+
     hint = _strong_language_hint(message_text)
-    session_lang = (session.get("language") or "").strip().lower()
-    language = hint or preferred or detected or session_lang or "en"
-    if language not in ("en", "ar"):
-        language = "en"
+
+    if hint:
+        language = hint
+    else:
+        # If message is numeric/short (like "1", "4"), do NOT use detector to flip language.
+        if _is_short_or_numeric(message_text):
+            language = preferred or sess_lang or "ar"
+        else:
+            detected = (detect_language(message_text) or "").strip().lower()
+            language = preferred or sess_lang or detected or "ar"
+
+    language = "ar" if language.startswith("ar") else "en"
 
     if session.get("language") != language:
         session["language"] = language
@@ -328,7 +366,7 @@ async def handle_message(
     session["text_direction"] = "rtl" if language == "ar" else "ltr"
     arabic_tone = select_arabic_tone(message_text) if language == "ar" else None
 
-    # Close-state guard
+    # Close-state guard (prevents “second No” reopening menu)
     last_closed_at = session.get("last_closed_at")
     closed_dt = _parse_iso(last_closed_at) if isinstance(last_closed_at, str) else None
     recently_closed = False
@@ -363,6 +401,7 @@ async def handle_message(
     priority = _get_customer_priority(user_id, session, kpi_signals)
     text_direction = session.get("text_direction", "ltr")
 
+    # Execute actions
     for act in actions:
         if not isinstance(act, dict):
             continue
@@ -370,8 +409,27 @@ async def handle_message(
         atype = (act.get("type") or "").strip().upper()
 
         if atype == "CREATE_APPOINTMENT_REQUEST":
-            raw_payload = act.get("payload") or {}
-            payload = _normalize_appt_payload(raw_payload)
+            payload = act.get("payload") or {}
+
+            # ✅ Normalize engine payload -> DB schema keys
+            # engine uses: date/slot, kind
+            # DB expects: appt_date/appt_time, intent
+            if "appt_date" not in payload and payload.get("date"):
+                payload["appt_date"] = payload.get("date")
+            if "appt_time" not in payload and payload.get("slot"):
+                payload["appt_time"] = payload.get("slot")
+
+            if "intent" not in payload:
+                kind = (payload.get("kind") or "").strip().upper()
+                payload["intent"] = kind or "BOOK"
+
+            if "status" not in payload:
+                payload["status"] = "PENDING"
+
+            # Optional note
+            if "notes" not in payload:
+                payload["notes"] = ""
+
             try:
                 req_id = await create_appointment_request(
                     db=db,
@@ -386,7 +444,11 @@ async def handle_message(
         elif atype == "CALL_RAG":
             query = (act.get("query") or "").strip()
             if query:
-                answer = await _call_supportpilot_chat(user_message=query, language=language, tenant_id=tenant)
+                answer = await _call_supportpilot_chat(
+                    user_message=query,
+                    language=language,
+                    tenant_id=tenant,
+                )
                 reply_text = f"{reply_text}\n\n{answer}".strip()
 
         elif atype == "ESCALATE":
@@ -408,13 +470,15 @@ async def handle_message(
             reply_text = esc_reply
             meta.update(esc_meta)
 
+    # Close on end messages
     if _is_end_message(message_text, language=language):
         session["state"] = "CLOSED"
         session["last_closed_at"] = _utc_now_iso()
 
+    # Persist session (don’t silently swallow — expose error in meta)
     try:
         await upsert_session(db, user_id=user_id, session=session, tenant_id=tenant)
-    except Exception:
-        pass
+    except Exception as e:
+        meta["session_save_error"] = repr(e)
 
     return reply_text or ("تم" if language == "ar" else "Done"), meta
