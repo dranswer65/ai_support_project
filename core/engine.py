@@ -103,7 +103,8 @@ class EngineResult:
 # ----------------------------
 # Helpers
 # ----------------------------
-_ARABIC_DIGITS = str.maketrans("٠١٢٣٤٥٦٧٨٩١٢٣٤٥٦٧٨٩", "01234567890123456789")
+
+_ARABIC_DIGITS = str.maketrans("٠١٢٣٤٥٦٧٨٩", "0123456789")
 # Note: includes both Arabic-Indic (٠١٢...) and Eastern Arabic-Indic (١٢٣...)
 
 def _normalize_digits(s: str) -> str:
