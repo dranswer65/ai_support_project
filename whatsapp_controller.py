@@ -1,5 +1,4 @@
-# whatsapp_controller.py — Sticky handoff + language lock controller
-
+# whatsapp_controller.py — Sticky handoff + language lock controller (FINAL)
 from __future__ import annotations
 
 import os
@@ -21,7 +20,6 @@ from escalation_router import route_escalation
 from handoff_builder import build_handoff_payload
 from vendor_orchestrator import dispatch_ticket
 
-SP_API_BASE = (os.getenv("SP_API_BASE", "http://127.0.0.1:8000") or "").strip()
 WA_DEFAULT_CLIENT = (os.getenv("WA_DEFAULT_CLIENT", "supportpilot_demo") or "").strip()
 
 _AGENT_KEYS = [
@@ -58,11 +56,6 @@ def _handoff_active(session: Dict[str, Any]) -> bool:
     session["handoff_active"] = False
     session["handoff_until"] = None
     return False
-
-def _handoff_wait_msg(language: str) -> str:
-    if (language or "").startswith("ar"):
-        return "تم تحويلكم إلى موظف الاستقبال ✅ الرجاء الانتظار... (للعودة للقائمة اكتب 0)"
-    return "You’re being connected to Reception ✅ Please wait... (Reply 0 for the menu)"
 
 def _extract_ticket_id(result: Any) -> Optional[str]:
     if not isinstance(result, dict):
@@ -106,24 +99,35 @@ async def _escalate_to_human(
     except Exception:
         ticket_id = None
 
+    # Sticky handoff window
     session["handoff_active"] = True
     session["handoff_until"] = (datetime.now(timezone.utc) + timedelta(minutes=30)).isoformat()
     session["state"] = "ESCALATION"
+    session["last_step"] = "ESCALATION"
     session["escalation_flag"] = True
 
+    # IMPORTANT: Patient-friendly ticket ref (don’t show raw UUID as primary)
+    short_ref = None
+    if ticket_id and isinstance(ticket_id, str) and len(ticket_id) >= 6:
+        short_ref = ticket_id.split("-")[0].upper()
+
     if language == "ar":
-        if ticket_id:
-            return (f"تم تحويلكم إلى موظف الاستقبال ✅ رقم التذكرة: {ticket_id}", {"ticket_id": ticket_id})
-        return ("تم تحويلكم إلى موظف الاستقبال ✅ الرجاء الانتظار...", {"ticket_id": None})
-    if ticket_id:
-        return (f"Connecting you to Reception ✅ Ticket ID: {ticket_id}", {"ticket_id": ticket_id})
-    return ("Connecting you to Reception ✅ Please wait...", {"ticket_id": None})
+        if short_ref:
+            return (f"تم تحويلكم إلى موظف الاستقبال ✅ رقم الطلب: #{short_ref}\nللعودة للقائمة اكتب 0", {"ticket_id": ticket_id})
+        return ("تم تحويلكم إلى موظف الاستقبال ✅\nللعودة للقائمة اكتب 0", {"ticket_id": None})
+
+    if short_ref:
+        return (f"Connecting you to Reception ✅ Ref: #{short_ref}\nReply 0 for the menu", {"ticket_id": ticket_id})
+    return ("Connecting you to Reception ✅\nReply 0 for the menu", {"ticket_id": None})
 
 def _resolve_language_for_turn(message_text: str, session: Dict[str, Any], user_id: str) -> str:
+    # If locked, never change
     if bool(session.get("language_locked")):
         return "ar" if str(session.get("language") or "ar").startswith("ar") else "en"
 
     raw = (message_text or "").strip()
+
+    # If user typing numeric during flows, keep current
     if raw.isdigit():
         return "ar" if str(session.get("language") or "ar").startswith("ar") else "en"
 
@@ -152,7 +156,7 @@ async def handle_message(
             "language_locked": False,
             "text_direction": "rtl",
             "has_greeted": False,
-            "conversation_version": 1,
+            "conversation_version": 4,
             "escalation_flag": False,
             "handoff_active": False,
             "handoff_until": None,
@@ -165,15 +169,19 @@ async def handle_message(
     session["text_direction"] = "rtl" if language == "ar" else "ltr"
     arabic_tone = select_arabic_tone(message_text) if language == "ar" else None
 
-    # ✅ If already handed off, ALWAYS reply with wait message (never empty)
+    # ✅ Sticky handoff: bot must STOP replying while handoff is active.
+    # Only allow "0" to exit handoff back to menu.
     if _handoff_active(session):
         if (message_text or "").strip() == "0":
             session["handoff_active"] = False
             session["handoff_until"] = None
+            # Return to menu (NOT language selection)
+            session["state"] = "MAIN_MENU"
+            session["last_step"] = "MAIN_MENU"
         else:
-            out = _handoff_wait_msg(language)
+            # Silent mode: no bot reply after transfer.
             await upsert_session(db, user_id=user_id, session=session, tenant_id=tenant)
-            return out, {"tenant_id": tenant, "state": session.get("state"), "handoff_active": True}
+            return "", {"tenant_id": tenant, "state": session.get("state"), "handoff_active": True}
 
     # ✅ Agent override before engine
     if _wants_agent(message_text):
