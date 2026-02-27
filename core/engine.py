@@ -1,18 +1,19 @@
-# core/engine.py — Clinic Booking Demo Engine
+# core/engine.py — Clinic Booking Demo Engine (PATCHED)
 # Arabic-first, strict menu, AI-assisted discovery, tenant-ready keys (dept_key/doctor_key)
-# Fixes:
-# - Greeting detection (won’t be treated as invalid input)
-# - Arabic-Indic digits supported (١٢٣ -> 123)
-# - No “ID copied from mobile”
-# - “Thanks/شكراً” after CLOSED -> polite close (no forced numeric)
-# - Session expiry: long inactivity resets to menu
-# - Less clutter: footer shown mostly during flows
+# Patch includes:
+# ✅ 3-level status model: ACTIVE | COMPLETED | ABANDONED
+# ✅ Date validation + flexibility (accept 2026-02-25 and 25-02-2026; normalize to ISO)
+# ✅ Reject past dates
+# ✅ Phone number validation (basic, GCC-friendly)
+# ✅ Arabic-Indic + Eastern Arabic-Indic + Persian digits normalization
+# ✅ Never store patient_id if it equals mobile
+# ✅ Greeting/thanks behaviors remain deterministic
 
 from __future__ import annotations
 
 from dataclasses import dataclass
 from typing import Any, Dict, Optional, List, Tuple
-from datetime import datetime, timezone
+from datetime import datetime, timezone, date
 
 # ----------------------------
 # States
@@ -37,6 +38,13 @@ STATE_CANCEL_CONFIRM = "CANCEL_CONFIRM"
 
 STATE_CLOSED = "CLOSED"
 STATE_ESCALATION = "ESCALATION"
+
+# ----------------------------
+# 3-Level Status Model
+# ----------------------------
+STATUS_ACTIVE = "ACTIVE"
+STATUS_COMPLETED = "COMPLETED"
+STATUS_ABANDONED = "ABANDONED"
 
 ENGINE_MARKER = "CLINIC_BOOKING_ENGINE_V1"
 
@@ -104,8 +112,10 @@ class EngineResult:
 # Helpers
 # ----------------------------
 
-_ARABIC_DIGITS = str.maketrans("٠١٢٣٤٥٦٧٨٩", "0123456789")
-# Note: includes both Arabic-Indic (٠١٢...) and Eastern Arabic-Indic (١٢٣...)
+# Arabic-Indic (٠١٢٣٤٥٦٧٨٩), Eastern Arabic-Indic (١٢٣٤٥٦٧٨٩), Persian (۰۱۲۳۴۵۶۷۸۹)
+_DIGITS_FROM = "٠١٢٣٤٥٦٧٨٩" + "١٢٣٤٥٦٧٨٩" + "۰۱۲۳۴۵۶۷۸۹"
+_DIGITS_TO   = "0123456789" + "123456789" + "0123456789"
+_ARABIC_DIGITS = str.maketrans(_DIGITS_FROM, _DIGITS_TO)
 
 def _normalize_digits(s: str) -> str:
     return (s or "").translate(_ARABIC_DIGITS)
@@ -154,19 +164,54 @@ def _is_ack(t: str) -> bool:
 
 def _is_greeting(t: str) -> bool:
     tl = _norm_low(t)
-    # keep short, avoid false positives
     en = {"hi", "hello", "hey", "good morning", "good evening", "good afternoon"}
     ar = {"السلام عليكم", "السلام عليكم ورحمة الله", "السلام عليكم ورحمه الله", "مرحبا", "أهلا", "اهلا", "هلا", "صباح الخير", "مساء الخير"}
     if tl in en:
         return True
     return any(p in tl for p in ar)
 
+def _digits_only(x: Any) -> str:
+    return "".join(ch for ch in str(x or "") if ch.isdigit())
+
+def _parse_date_to_iso(s: str) -> Optional[str]:
+    """
+    Accept:
+      - YYYY-MM-DD
+      - DD-MM-YYYY
+    Normalize to YYYY-MM-DD
+    """
+    s0 = _normalize_digits((s or "").strip())
+    if not s0:
+        return None
+    s0 = s0.replace("/", "-").replace(".", "-")
+    for fmt in ("%Y-%m-%d", "%d-%m-%Y"):
+        try:
+            return datetime.strptime(s0, fmt).strftime("%Y-%m-%d")
+        except ValueError:
+            pass
+    return None
+
+def _is_past_date(iso_yyyy_mm_dd: str) -> bool:
+    try:
+        d = datetime.strptime(iso_yyyy_mm_dd, "%Y-%m-%d").date()
+        return d < date.today()
+    except Exception:
+        return False
+
+def _is_valid_gcc_mobile(mobile: Optional[str]) -> bool:
+    """
+    Basic validation:
+      - digits count 9..13 (covers KSA/UAE formats incl country code)
+    """
+    d = _digits_only(mobile)
+    return 9 <= len(d) <= 13
+
 def _set_bot(sess: Dict[str, Any], msg: str) -> None:
     sess["last_bot_message"] = msg
     sess["last_bot_ts"] = _utcnow_iso()
+    sess["last_step"] = sess.get("state")  # keep a last_step marker for ops
 
 def _utility_footer(lang: str) -> str:
-    # show in flows; not needed in every single menu message
     if lang == "ar":
         return "\n\n0️⃣ القائمة الرئيسية\n9️⃣ موظف الاستقبال"
     return "\n\n0️⃣ Main Menu\n9️⃣ Reception"
@@ -213,7 +258,11 @@ def default_session(user_id: str) -> Dict[str, Any]:
     return {
         "engine": ENGINE_MARKER,
         "user_id": user_id,
+
+        "status": STATUS_ACTIVE,          # ✅ new
         "state": STATE_ACTIVE,
+        "last_step": STATE_ACTIVE,        # ✅ new
+
         "language": "ar",
         "text_direction": "rtl",
         "has_greeted": False,
@@ -355,8 +404,8 @@ def _doctor_prompt(lang: str, dept_key: str) -> str:
 
 def _date_prompt(lang: str) -> str:
     if lang == "ar":
-        return "يرجى كتابة التاريخ المناسب للموعد (مثال: 2026-02-25)"
-    return "Please enter your preferred appointment date (example: 2026-02-25)"
+        return "يرجى كتابة التاريخ المناسب للموعد (مثال: 2026-02-25 أو 25-02-2026)"
+    return "Please enter your preferred appointment date (example: 2026-02-25 or 25-02-2026)"
 
 def _slot_prompt(lang: str, date_str: str) -> str:
     if not SLOTS:
@@ -451,8 +500,8 @@ def _step_prompt(sess: Dict[str, Any], lang: str) -> str:
                  else "Please share your appointment reference or registered phone number to proceed.")
                 + _utility_footer(lang))
     if st == STATE_RESCHEDULE_NEW_DATE:
-        return (("يرجى اختيار التاريخ الجديد للموعد (مثال: 2026-02-25)" if lang == "ar"
-                 else "Please enter the new date for the appointment (example: 2026-02-25)")
+        return (("يرجى اختيار التاريخ الجديد للموعد (مثال: 2026-02-25 أو 25-02-2026)" if lang == "ar"
+                 else "Please enter the new date for the appointment (example: 2026-02-25 or 25-02-2026)")
                 + _utility_footer(lang))
     if st == STATE_RESCHEDULE_NEW_SLOT:
         return _slot_prompt(lang, sess.get("date") or "") + _utility_footer(lang)
@@ -473,15 +522,15 @@ def _extract_name_mobile_id(raw: str) -> Tuple[Optional[str], Optional[str], Opt
     if not raw0:
         return None, None, None
 
-    raw = _normalize_digits(raw0)
+    rawN = _normalize_digits(raw0)
 
-    lines = [ln.strip() for ln in raw.splitlines() if ln.strip()]
-    name = lines[0] if lines else raw
+    lines = [ln.strip() for ln in rawN.splitlines() if ln.strip()]
+    name = lines[0] if lines else rawN
 
     # collect digit sequences (8+ digits) and keep order
     seqs: List[str] = []
-    cur = []
-    for ch in raw:
+    cur: List[str] = []
+    for ch in rawN:
         if ch.isdigit() or ch == "+":
             cur.append(ch)
         else:
@@ -512,7 +561,6 @@ def _extract_name_mobile_id(raw: str) -> Tuple[Optional[str], Optional[str], Opt
     # also allow explicit ID keywords in text
     low = _norm_low(raw0)
     if pid is None and any(k in low for k in ["iqama", "id", "national id", "هوية", "الإقامة", "اقامة", "رقم الهوية"]):
-        # pick last 8-15 digit sequence if exists and not equal to mobile
         a = "".join(c for c in (mobile or "") if c.isdigit())
         for cand in reversed(seqs):
             b = "".join(c for c in cand if c.isdigit())
@@ -570,6 +618,7 @@ def _handle_global_commands(sess: Dict[str, Any], text: str, lang: str) -> Optio
     tlow = _norm_low(text)
 
     if tlow == "0":
+        sess["status"] = STATUS_ACTIVE
         sess["state"] = STATE_MENU
         sess["mistakes"] = 0
         sess["timeout_pending"] = False
@@ -580,6 +629,7 @@ def _handle_global_commands(sess: Dict[str, Any], text: str, lang: str) -> Optio
         return EngineResult(out, sess, [])
 
     if tlow == "9":
+        sess["status"] = STATUS_ACTIVE
         sess["state"] = STATE_ESCALATION
         sess["timeout_pending"] = False
         if lang == "ar":
@@ -591,6 +641,7 @@ def _handle_global_commands(sess: Dict[str, Any], text: str, lang: str) -> Optio
 
     if _is_goodbye(text):
         sess["state"] = STATE_CLOSED
+        sess["status"] = STATUS_COMPLETED
         sess["last_closed_at"] = _utcnow_iso()
         sess["timeout_pending"] = False
         out = _closing(lang)
@@ -611,6 +662,12 @@ def handle_turn(
     sess = dict(session_in or default_session(user_id))
     sess["user_id"] = user_id
 
+    # Ensure status exists
+    if not sess.get("status"):
+        sess["status"] = STATUS_ACTIVE
+    if not sess.get("last_step"):
+        sess["last_step"] = sess.get("state") or STATE_ACTIVE
+
     lang = _lang(language or sess.get("language") or "ar")
     sess["language"] = lang
     sess["text_direction"] = "rtl" if lang == "ar" else "ltr"
@@ -619,9 +676,10 @@ def handle_turn(
     tlow = _norm_low(message_text)
     actions: List[Dict[str, Any]] = []
 
-    # --- session expiry: after long inactivity, reset to menu
+    # --- session expiry: after long inactivity, reset to menu and mark ABANDONED
     if _session_expired(sess) and sess.get("state") not in {STATE_CLOSED, STATE_ESCALATION}:
         _reset_flow_fields(sess)
+        sess["status"] = STATUS_ABANDONED
         sess["state"] = STATE_MENU
         sess["timeout_pending"] = False
         out = ("تم إنهاء الجلسة بسبب عدم النشاط. يرجى اختيار من القائمة للمتابعة."
@@ -640,6 +698,7 @@ def handle_turn(
         return EngineResult(out, sess, actions)
 
     if _looks_like_angry(message_text):
+        sess["status"] = STATUS_ACTIVE
         sess["state"] = STATE_ESCALATION
         if lang == "ar":
             out = "نفهم انزعاجكم، ونعتذر عن أي إزعاج.\nسيتم تحويلكم الآن إلى موظف الاستقبال للمساعدة."
@@ -651,6 +710,7 @@ def handle_turn(
 
     # If user sends greeting at any time -> reset to menu (unless they are mid-confirm step)
     if _is_greeting(message_text) and sess.get("state") not in {STATE_BOOK_CONFIRM}:
+        sess["status"] = STATUS_ACTIVE
         sess["state"] = STATE_MENU
         sess["timeout_pending"] = False
         out = _greet_if_needed(sess, lang, _main_menu_text(lang))
@@ -676,6 +736,7 @@ def handle_turn(
             return EngineResult(out, sess, actions)
 
         sess["timeout_pending"] = False
+        sess["status"] = STATUS_ABANDONED
         sess["state"] = STATE_MENU
         out = ("تم إيقاف الخطوات السابقة. يرجى اختيار من القائمة للمتابعة."
                if lang == "ar"
@@ -712,21 +773,24 @@ def handle_turn(
                    else "Happy to help ✅ If you’d like a new booking, reply 0 to see the menu.")
             _set_bot(sess, out)
             return EngineResult(out, sess, actions)
+        sess["status"] = STATUS_ACTIVE
         sess["state"] = STATE_MENU
 
     # First contact: show menu once
     if not sess.get("menu_shown"):
+        sess["status"] = STATUS_ACTIVE
         sess["state"] = STATE_MENU
 
     # MENU / ACTIVE
     if sess.get("state") in {STATE_MENU, STATE_ACTIVE}:
         sess["menu_shown"] = True
+        sess["status"] = STATUS_ACTIVE
 
         # if user just says thanks in menu, be polite (don’t force numeric)
         if _is_thanks(raw):
-            out = ("العفو ✅ إذا رغبت بخدمة أخرى اكتب 0 لعرض القائمة."
+            out = ("العفو 😊\nإذا رغبت بخدمة أخرى اكتب 0 لعرض القائمة."
                    if lang == "ar"
-                   else "You’re welcome ✅ If you need anything else, reply 0 for the menu.")
+                   else "You’re welcome 😊\nIf you need anything else, reply 0 for the menu.")
             _set_bot(sess, out)
             return EngineResult(out, sess, actions)
 
@@ -736,6 +800,7 @@ def handle_turn(
             if choice == 1:
                 _reset_flow_fields(sess)
                 sess["intent"] = "BOOK"
+                sess["status"] = STATUS_ACTIVE
                 sess["state"] = STATE_BOOK_DEPT
                 out = _step_prompt(sess, lang)
                 out = _greet_if_needed(sess, lang, out)
@@ -745,6 +810,7 @@ def handle_turn(
             if choice == 2:
                 _reset_flow_fields(sess)
                 sess["intent"] = "RESCHEDULE"
+                sess["status"] = STATUS_ACTIVE
                 sess["state"] = STATE_RESCHEDULE_LOOKUP
                 out = _step_prompt(sess, lang)
                 out = _greet_if_needed(sess, lang, out)
@@ -754,6 +820,7 @@ def handle_turn(
             if choice == 3:
                 _reset_flow_fields(sess)
                 sess["intent"] = "CANCEL"
+                sess["status"] = STATUS_ACTIVE
                 sess["state"] = STATE_CANCEL_LOOKUP
                 out = _step_prompt(sess, lang)
                 out = _greet_if_needed(sess, lang, out)
@@ -763,6 +830,7 @@ def handle_turn(
             if choice == 4:
                 _reset_flow_fields(sess)
                 sess["intent"] = "DOCTOR_INFO"
+                sess["status"] = STATUS_ACTIVE
                 sess["state"] = STATE_BOOK_DEPT
                 out = _step_prompt(sess, lang)
                 out = _greet_if_needed(sess, lang, out)
@@ -810,6 +878,7 @@ def handle_turn(
         if intent == "DOCTOR_INFO":
             _reset_flow_fields(sess)
             sess["intent"] = "DOCTOR_INFO"
+            sess["status"] = STATUS_ACTIVE
             sess["state"] = STATE_BOOK_DEPT
             out = _step_prompt(sess, lang)
             out = _greet_if_needed(sess, lang, out)
@@ -819,6 +888,7 @@ def handle_turn(
         if intent == "RESCHEDULE":
             _reset_flow_fields(sess)
             sess["intent"] = "RESCHEDULE"
+            sess["status"] = STATUS_ACTIVE
             sess["state"] = STATE_RESCHEDULE_LOOKUP
             out = _step_prompt(sess, lang)
             out = _greet_if_needed(sess, lang, out)
@@ -828,6 +898,7 @@ def handle_turn(
         if intent == "CANCEL":
             _reset_flow_fields(sess)
             sess["intent"] = "CANCEL"
+            sess["status"] = STATUS_ACTIVE
             sess["state"] = STATE_CANCEL_LOOKUP
             out = _step_prompt(sess, lang)
             out = _greet_if_needed(sess, lang, out)
@@ -837,6 +908,7 @@ def handle_turn(
         if intent == "BOOK":
             _reset_flow_fields(sess)
             sess["intent"] = "BOOK"
+            sess["status"] = STATUS_ACTIVE
             sess["state"] = STATE_BOOK_DEPT
             out = _step_prompt(sess, lang)
             out = _greet_if_needed(sess, lang, out)
@@ -874,6 +946,7 @@ def handle_turn(
         sess["dept_key"] = dept_key
         sess["dept_label"] = dept_label
         sess["mistakes"] = 0
+        sess["status"] = STATUS_ACTIVE
         sess["state"] = STATE_BOOK_DOCTOR
         out = _doctor_prompt(lang, dept_key) + _utility_footer(lang)
         _set_bot(sess, out)
@@ -920,26 +993,47 @@ def handle_turn(
                     "1️⃣ Book Appointment\n0️⃣ Main Menu\n9️⃣ Reception"
                 )
             _set_bot(sess, out)
+            sess["status"] = STATUS_ACTIVE
             sess["state"] = STATE_MENU
             return EngineResult(out, sess, actions)
 
+        sess["status"] = STATUS_ACTIVE
         sess["state"] = STATE_BOOK_DATE
         out = _date_prompt(lang) + _utility_footer(lang)
         _set_bot(sess, out)
         return EngineResult(out, sess, actions)
 
     if sess.get("state") == STATE_BOOK_DATE:
-        d = _normalize_digits(_norm(message_text))
-        if len(d) < 8:
-            out = _soft_invalid(sess, lang, ("يرجى كتابة التاريخ بالشكل الصحيح: 2026-02-25" if lang == "ar" else "Please enter date like: 2026-02-25"))
+        iso = _parse_date_to_iso(message_text)
+        if not iso:
+            out = _soft_invalid(
+                sess,
+                lang,
+                ("يرجى كتابة التاريخ بشكل صحيح مثل: 2026-02-25 أو 25-02-2026"
+                 if lang == "ar"
+                 else "Please enter a valid date like: 2026-02-25 or 25-02-2026"),
+            )
             out = out + "\n\n" + (_date_prompt(lang) + _utility_footer(lang))
             _set_bot(sess, out)
             return EngineResult(out, sess, actions)
 
-        sess["date"] = d
+        if _is_past_date(iso):
+            out = _soft_invalid(
+                sess,
+                lang,
+                ("لا يمكن اختيار تاريخ في الماضي. يرجى اختيار تاريخ قادم."
+                 if lang == "ar"
+                 else "Past dates are not allowed. Please choose a future date."),
+            )
+            out = out + "\n\n" + (_date_prompt(lang) + _utility_footer(lang))
+            _set_bot(sess, out)
+            return EngineResult(out, sess, actions)
+
+        sess["date"] = iso
         sess["mistakes"] = 0
+        sess["status"] = STATUS_ACTIVE
         sess["state"] = STATE_BOOK_SLOT
-        out = _slot_prompt(lang, d) + _utility_footer(lang)
+        out = _slot_prompt(lang, iso) + _utility_footer(lang)
         _set_bot(sess, out)
         return EngineResult(out, sess, actions)
 
@@ -958,6 +1052,7 @@ def handle_turn(
 
         sess["slot"] = SLOTS[idx]
         sess["mistakes"] = 0
+        sess["status"] = STATUS_ACTIVE
         sess["state"] = STATE_BOOK_PATIENT
         out = _patient_info_prompt(lang) + _utility_footer(lang)
         _set_bot(sess, out)
@@ -966,9 +1061,27 @@ def handle_turn(
     if sess.get("state") == STATE_BOOK_PATIENT:
         name, mobile, pid = _extract_name_mobile_id(message_text)
 
+        # phone validation
+        if mobile and not _is_valid_gcc_mobile(mobile):
+            out = _soft_invalid(
+                sess,
+                lang,
+                ("رقم الجوال غير صحيح. يرجى إدخال رقم جوال صحيح."
+                 if lang == "ar"
+                 else "Mobile number looks invalid. Please enter a valid mobile number."),
+            )
+            out = out + "\n\n" + (_patient_info_prompt(lang) + _utility_footer(lang))
+            _set_bot(sess, out)
+            return EngineResult(out, sess, actions)
+
         sess["patient_name"] = name
         sess["patient_mobile"] = mobile
         sess["patient_id"] = pid
+
+        # safety: never store id if equals mobile
+        if sess.get("patient_id") and sess.get("patient_mobile"):
+            if _digits_only(sess["patient_id"]) == _digits_only(sess["patient_mobile"]):
+                sess["patient_id"] = None
 
         if not sess.get("patient_name") or not sess.get("patient_mobile"):
             out = (
@@ -981,13 +1094,13 @@ def handle_turn(
             return EngineResult(out, sess, actions)
 
         sess["mistakes"] = 0
+        sess["status"] = STATUS_ACTIVE
         sess["state"] = STATE_BOOK_CONFIRM
         out = _build_confirmation(sess, lang) + _utility_footer(lang)
         _set_bot(sess, out)
         return EngineResult(out, sess, actions)
 
     if sess.get("state") == STATE_BOOK_CONFIRM:
-        # allow thanks/ok -> treat as "not confirming" and keep prompt (or move to menu)
         if _is_thanks(raw) or _is_ack(raw) or _is_greeting(raw):
             out = ("يرجى تأكيد الطلب باختيار 1 أو تعديل 2 أو إلغاء 3." if lang == "ar"
                    else "Please confirm by choosing 1, or change with 2, or cancel with 3.")
@@ -1016,6 +1129,7 @@ def handle_turn(
 
                 _set_bot(sess, out)
                 sess["state"] = STATE_CLOSED
+                sess["status"] = STATUS_COMPLETED
                 sess["last_closed_at"] = _utcnow_iso()
 
                 actions.append({
@@ -1038,6 +1152,7 @@ def handle_turn(
                 return EngineResult(out, sess, actions)
 
             if c == 2:
+                sess["status"] = STATUS_ACTIVE
                 sess["state"] = STATE_BOOK_DEPT
                 sess["mistakes"] = 0
                 out = ("تمام. لنعد لاختيار القسم.\n\n" if lang == "ar" else "Okay. Let’s choose the department again.\n\n")
@@ -1046,6 +1161,7 @@ def handle_turn(
                 return EngineResult(out, sess, actions)
 
             if c == 3:
+                sess["status"] = STATUS_ACTIVE
                 sess["state"] = STATE_CANCEL_CONFIRM
                 out = ("هل ترغب بإلغاء هذا الطلب؟\n1️⃣ نعم\n2️⃣ لا" if lang == "ar" else "Do you want to cancel this request?\n1️⃣ Yes\n2️⃣ No")
                 out += _utility_footer(lang)
@@ -1062,23 +1178,34 @@ def handle_turn(
     # ----------------------------
     if sess.get("state") == STATE_RESCHEDULE_LOOKUP:
         sess["appt_ref"] = _norm(message_text)[:80]
+        sess["status"] = STATUS_ACTIVE
         sess["state"] = STATE_RESCHEDULE_NEW_DATE
-        out = ("يرجى اختيار التاريخ الجديد للموعد (مثال: 2026-02-25)" if lang == "ar"
-               else "Please enter the new date for the appointment (example: 2026-02-25)")
+        out = ("يرجى اختيار التاريخ الجديد للموعد (مثال: 2026-02-25 أو 25-02-2026)" if lang == "ar"
+               else "Please enter the new date for the appointment (example: 2026-02-25 or 25-02-2026)")
         out += _utility_footer(lang)
         _set_bot(sess, out)
         return EngineResult(out, sess, actions)
 
     if sess.get("state") == STATE_RESCHEDULE_NEW_DATE:
-        d = _normalize_digits(_norm(message_text))
-        if len(d) < 8:
-            out = _soft_invalid(sess, lang, ("يرجى كتابة التاريخ بالشكل الصحيح: 2026-02-25" if lang == "ar" else "Please enter date like: 2026-02-25"))
+        iso = _parse_date_to_iso(message_text)
+        if not iso:
+            out = _soft_invalid(sess, lang, ("يرجى كتابة التاريخ بشكل صحيح مثل: 2026-02-25 أو 25-02-2026"
+                                             if lang == "ar" else "Please enter a valid date like: 2026-02-25 or 25-02-2026"))
             out += _utility_footer(lang)
             _set_bot(sess, out)
             return EngineResult(out, sess, actions)
-        sess["date"] = d
+
+        if _is_past_date(iso):
+            out = _soft_invalid(sess, lang, ("لا يمكن اختيار تاريخ في الماضي. يرجى اختيار تاريخ قادم."
+                                             if lang == "ar" else "Past dates are not allowed. Please choose a future date."))
+            out += _utility_footer(lang)
+            _set_bot(sess, out)
+            return EngineResult(out, sess, actions)
+
+        sess["date"] = iso
+        sess["status"] = STATUS_ACTIVE
         sess["state"] = STATE_RESCHEDULE_NEW_SLOT
-        out = _slot_prompt(lang, d) + _utility_footer(lang)
+        out = _slot_prompt(lang, iso) + _utility_footer(lang)
         _set_bot(sess, out)
         return EngineResult(out, sess, actions)
 
@@ -1096,6 +1223,7 @@ def handle_turn(
             return EngineResult(out, sess, actions)
 
         sess["slot"] = SLOTS[idx]
+        sess["status"] = STATUS_ACTIVE
         sess["state"] = STATE_RESCHEDULE_CONFIRM
         if lang == "ar":
             out = (
@@ -1118,6 +1246,7 @@ def handle_turn(
                    else "Reschedule request received ✅\nReception will confirm the new appointment shortly.\n\n" + _closing(lang))
             _set_bot(sess, out)
             sess["state"] = STATE_CLOSED
+            sess["status"] = STATUS_COMPLETED
             sess["last_closed_at"] = _utcnow_iso()
 
             actions.append({
@@ -1133,6 +1262,7 @@ def handle_turn(
             return EngineResult(out, sess, actions)
 
         if _is_digit_choice(raw) and _to_int(raw) == 2:
+            sess["status"] = STATUS_ACTIVE
             sess["state"] = STATE_MENU
             out = _greet_if_needed(sess, lang, _main_menu_text(lang))
             _set_bot(sess, out)
@@ -1148,6 +1278,7 @@ def handle_turn(
     # ----------------------------
     if sess.get("state") == STATE_CANCEL_LOOKUP:
         sess["appt_ref"] = _norm(message_text)[:80]
+        sess["status"] = STATUS_ACTIVE
         sess["state"] = STATE_CANCEL_CONFIRM
         out = ("يرجى تأكيد إلغاء الموعد:\n1️⃣ تأكيد الإلغاء\n2️⃣ رجوع"
                if lang == "ar" else "Please confirm cancellation:\n1️⃣ Confirm cancel\n2️⃣ Back")
@@ -1164,6 +1295,7 @@ def handle_turn(
             )
             _set_bot(sess, out)
             sess["state"] = STATE_CLOSED
+            sess["status"] = STATUS_COMPLETED
             sess["last_closed_at"] = _utcnow_iso()
 
             actions.append({
@@ -1177,6 +1309,7 @@ def handle_turn(
             return EngineResult(out, sess, actions)
 
         if _is_digit_choice(raw) and _to_int(raw) == 2:
+            sess["status"] = STATUS_ACTIVE
             sess["state"] = STATE_MENU
             out = _greet_if_needed(sess, lang, _main_menu_text(lang))
             _set_bot(sess, out)
@@ -1188,6 +1321,7 @@ def handle_turn(
         return EngineResult(out, sess, actions)
 
     # Fallback
+    sess["status"] = STATUS_ACTIVE
     sess["state"] = STATE_MENU
     out = _greet_if_needed(sess, lang, _main_menu_text(lang))
     _set_bot(sess, out)
