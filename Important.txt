@@ -1,6 +1,8 @@
 python -m uvicorn api_server:app --port 8000
 python -m uvicorn whatsapp_bot:app --port 9000
 ngrok http 9000
+py -m uvicorn api_server:app --port 8010
+
 
 DASHBOARD: 
 cd C:\Users\Shireen\OneDrive\Desktop\ai_support_project
@@ -20,7 +22,7 @@ git add .
 git commit -m "update engine.py"
 git push
 
-
+EAA7LZAZA438uoBQwtErBBK58wZA8Vu0II8GVySRGhueFBnYg6mpqtznGJSUbPlBKueZCDdHyh3zaWUtzjWgrPOvlNLWcOIYxiqhJyVuqPTUSYZC92EDPlbyzDZBfXAwG9LpcUF6YZCn91TsfHZCcQi6NeUZBCmDUb2aZCvbZBmbK7XLNFOyW7XHBpQaonrnP7xDmcbk0QZDZD
 
 
 📈 Next (Day 39+ Options)
