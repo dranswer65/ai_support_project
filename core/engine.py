@@ -1,18 +1,21 @@
 # core/engine.py — Enterprise WhatsApp Clinic Engine (V4.3)
 # - Arabic-first greeting + language lock + menu + booking flows
 # - 0 = show menu
-# - 9 = Reception (99 accepted)
+# - 99 = Reception (9 is used by Neurology option)
 #
-# V4.3 Fixes (based on your latest WhatsApp tests):
-# ✅ Main-menu does NOT repeat after every message:
-#    - If user types non-numeric while in MAIN_MENU, we send a short hint (not the full menu)
-#    - After 2 mistakes, we show full menu once
-# ✅ Session-expiry does NOT reset language / language_locked
-# ✅ Session-expiry returns MAIN_MENU immediately if language is locked
-# ✅ Input normalization fixes ",0" / "،0" and punctuation around numeric commands
-# ✅ Greeting detection uses cleaned text
-# ✅ Keeps V4.2 improvements: no redundant "0" inside main menu, reception=9, name parsing removes mobile from name,
-#    wording is “Booking Request Summary”
+# V4.3 Fixes (based on latest WhatsApp tests):
+# ✅ Reception moved to 99 (avoids conflict with Neurology=9)
+# ✅ Greeting "Hi/Hello" when NOT locked shows English welcome (not Arabic)
+# ✅ Patient details collection supports multi-turn:
+#    - If name-only sent -> ask ONLY for mobile
+#    - If mobile-only sent -> ask ONLY for name
+#    - If both present -> proceed to summary
+# ✅ Reschedule/Cancellation lookup: explicit NOT FOUND response (no silent fallback)
+# ✅ Symptom guard: if user writes symptom text while not locked, do NOT show language welcome; route to menu + suggest Reception
+#
+# NOTE:
+# - Booking/reschedule/cancel "search" is demo-safe: it does NOT query DB here.
+#   It validates input and shows "not found" guidance instead of falling through.
 
 from __future__ import annotations
 
@@ -65,7 +68,7 @@ DEPTS = [
     {"key": "ent", "en": "ENT", "ar": "الأنف والأذن والحنجرة"},
     {"key": "cardio", "en": "Cardiology", "ar": "أمراض القلب"},
     {"key": "dental", "en": "Dentistry", "ar": "طب الأسنان"},
-    {"key": "neuro", "en": "Neurology", "ar": "الأعصاب"},
+    {"key": "neuro", "en": "Neurology", "ar": "الأعصاب"},  # ✅ 9 stays Neurology
     {"key": "physio", "en": "Physiotherapy", "ar": "العلاج الطبيعي"},
 ]
 
@@ -161,14 +164,9 @@ def _to_int(t: str, default: int = -1) -> int:
 
 def _is_greeting(text: str) -> bool:
     tl = _low(text)
+    # keep these simple; controller can do more advanced intent
     en = {"hi", "hello", "hey", "good morning", "good evening", "good afternoon"}
-    ar = {
-        "السلام عليكم",
-        "السلام عليكم ورحمة الله",
-        "السلام عليكم ورحمه الله",
-        "مرحبا", "أهلا", "اهلا", "هلا",
-        "صباح الخير", "مساء الخير"
-    }
+    ar = {"السلام عليكم", "السلام عليكم ورحمة الله", "السلام عليكم ورحمه الله", "مرحبا", "أهلا", "اهلا", "هلا", "صباح الخير", "مساء الخير"}
     if tl in en:
         return True
     raw = _clean_input(text)
@@ -199,7 +197,6 @@ def default_session(user_id: str) -> Dict[str, Any]:
         "has_greeted": False,
 
         "mistakes": 0,
-        "menu_mistakes": 0,  # ✅ V4.3 anti-menu spam
         "last_user_ts": _utcnow_iso(),
         "last_bot_ts": None,
         "last_bot_message": "",
@@ -219,6 +216,9 @@ def default_session(user_id: str) -> Dict[str, Any]:
 
         "handoff_active": False,
         "escalation_flag": False,
+
+        # ✅ support multi-turn patient capture
+        "pending_patient": {"name": None, "mobile": None, "pid": None},
     }
 
 
@@ -233,7 +233,7 @@ def _reset_flow_fields(sess: Dict[str, Any]) -> None:
     ]:
         sess[k] = None
     sess["mistakes"] = 0
-    sess["menu_mistakes"] = 0
+    sess["pending_patient"] = {"name": None, "mobile": None, "pid": None}
 
 
 def _seconds_since(prev_iso: Optional[str]) -> Optional[float]:
@@ -250,7 +250,7 @@ def _session_expired_from(prev_iso: Optional[str]) -> bool:
     return sec >= SESSION_EXPIRE_SECONDS
 
 
-def _welcome_text() -> str:
+def _welcome_text_ar() -> str:
     return (
         f"مرحبًا بكم في *{CLINIC_NAME_AR}* 🏥\n"
         "المساعد الافتراضي الرسمي عبر واتساب.\n\n"
@@ -260,7 +260,20 @@ def _welcome_text() -> str:
         "*(Please select your preferred language)*\n"
         "1️⃣ العربية\n"
         "2️⃣ English\n\n"
-        "للتحدث مع الاستقبال في أي وقت اكتب: *Agent* أو 9 (أو 99)"
+        "للتحدث مع الاستقبال في أي وقت اكتب: *Agent* أو 99"
+    )
+
+
+def _welcome_text_en() -> str:
+    return (
+        f"Welcome to *{CLINIC_NAME_EN}* 🏥\n"
+        "Official WhatsApp virtual assistant.\n\n"
+        f"📞 Reception: *{RECEPTION_PHONE}*\n"
+        f"🚑 Emergency: *{EMERGENCY_NUMBER}*\n\n"
+        "Please select your preferred language:\n"
+        "1️⃣ العربية\n"
+        "2️⃣ English\n\n"
+        "To reach Reception anytime, type *Agent* or 99"
     )
 
 
@@ -276,7 +289,7 @@ def _main_menu(lang: str) -> str:
             "6️⃣ التأمينات المعتمدة\n"
             "7️⃣ الموقع والاتجاهات\n"
             "8️⃣ معلومات التواصل\n"
-            "9️⃣ موظف الاستقبال"
+            "99️⃣ موظف الاستقبال"
         )
     return (
         "Main Menu:\n\n"
@@ -288,20 +301,14 @@ def _main_menu(lang: str) -> str:
         "6️⃣ Accepted Insurance\n"
         "7️⃣ Location & Directions\n"
         "8️⃣ Contact Information\n"
-        "9️⃣ Reception"
+        "99️⃣ Reception"
     )
-
-
-def _menu_hint(lang: str) -> str:
-    if lang == "ar":
-        return "فضلاً اختر رقمًا من القائمة (1-9)، أو اكتب 0 لعرض القائمة، أو 9 لموظف الاستقبال."
-    return "Please reply with a menu number (1–9), or reply 0 to show the menu, or 9 for Reception."
 
 
 def _footer(lang: str) -> str:
     if lang == "ar":
-        return "\n\n0️⃣ القائمة الرئيسية\n9️⃣ موظف الاستقبال"
-    return "\n\n0️⃣ Main Menu\n9️⃣ Reception"
+        return "\n\n0️⃣ القائمة الرئيسية\n99️⃣ موظف الاستقبال"
+    return "\n\n0️⃣ Main Menu\n99️⃣ Reception"
 
 
 def _dept_prompt(lang: str) -> str:
@@ -332,7 +339,7 @@ def _slot_prompt(lang: str, date_str: str) -> str:
     return f"Available time slots on {date_str}:\n\n" + "\n".join(lines) + "\n\n(Reply with slot number)" + _footer(lang)
 
 
-def _patient_prompt(lang: str) -> str:
+def _patient_prompt_full(lang: str) -> str:
     if lang == "ar":
         return (
             "لإتمام الحجز، يرجى إرسال (يفضل برسالة واحدة):\n"
@@ -350,6 +357,18 @@ def _patient_prompt(lang: str) -> str:
         "Note: This service is not for medical emergencies."
         + _footer(lang)
     )
+
+
+def _patient_ask_mobile_only(lang: str) -> str:
+    if lang == "ar":
+        return "شكرًا. فضلاً أرسل رقم الجوال فقط." + _footer(lang)
+    return "Thanks. Please send your mobile number only." + _footer(lang)
+
+
+def _patient_ask_name_only(lang: str) -> str:
+    if lang == "ar":
+        return "شكرًا. فضلاً أرسل الاسم الكامل فقط." + _footer(lang)
+    return "Thanks. Please send your full name only." + _footer(lang)
 
 
 def _insurance_text(lang: str) -> str:
@@ -372,8 +391,8 @@ def _soft_invalid(sess: Dict[str, Any], lang: str, msg: str) -> str:
     sess["mistakes"] = int(sess.get("mistakes", 0)) + 1
     if sess["mistakes"] >= 2:
         if lang == "ar":
-            return msg + "\n\nإذا رغبت، يمكنني تحويلك لموظف الاستقبال: 9 (أو 99)"
-        return msg + "\n\nIf you prefer, I can connect you to Reception: 9 (or 99)"
+            return msg + "\n\nإذا رغبت، يمكنني تحويلك لموظف الاستقبال: 99"
+        return msg + "\n\nIf you prefer, I can connect you to Reception: 99"
     return msg
 
 
@@ -401,6 +420,9 @@ def _is_past_date(ymd: str) -> bool:
         return False
 
 
+_MOBILE_RE = re.compile(r"\+?\d[\d\s\-]{7,}\d")
+
+
 def _extract_name_mobile_id(raw: str) -> Tuple[Optional[str], Optional[str], Optional[str]]:
     raw0 = (raw or "").strip()
     if not raw0:
@@ -408,6 +430,7 @@ def _extract_name_mobile_id(raw: str) -> Tuple[Optional[str], Optional[str], Opt
 
     text = _normalize_digits(raw0)
 
+    # Find digit sequences (mobile/id)
     seqs: List[str] = []
     cur: List[str] = []
     for ch in text:
@@ -437,17 +460,35 @@ def _extract_name_mobile_id(raw: str) -> Tuple[Optional[str], Optional[str], Opt
                 pid = cand
                 break
 
+    # Name = original text with extracted mobile/pid removed
     name_candidate = text
     if mobile:
         name_candidate = name_candidate.replace(mobile, " ")
     if pid:
         name_candidate = name_candidate.replace(pid, " ")
     name_candidate = re.sub(r"\s+", " ", name_candidate).strip()
-
     lines = [ln.strip() for ln in name_candidate.splitlines() if ln.strip()]
     name = lines[0] if lines else name_candidate
 
+    # If user wrote ONLY digits, treat it as mobile only
+    only_digits = re.fullmatch(r"\+?\d{8,15}", _clean_input(text).replace(" ", ""))
+    if only_digits:
+        return None, text.strip(), None
+
     return name or None, mobile, pid
+
+
+def _valid_mobile(m: Optional[str]) -> bool:
+    if not m:
+        return False
+    digits = "".join(c for c in m if c.isdigit())
+    return 8 <= len(digits) <= 15
+
+
+def _looks_like_reference(s: str) -> bool:
+    # SSH-YYMMDD-1234 or similar
+    t = (s or "").strip().upper()
+    return bool(re.fullmatch(r"[A-Z]{2,6}-\d{6}-\d{3,6}", t))
 
 
 def _make_reference(prefix: str = "SSH") -> str:
@@ -499,6 +540,32 @@ def _confirmation(sess: Dict[str, Any], lang: str) -> str:
     )
 
 
+def _symptom_guard_message(lang: str) -> str:
+    if lang == "ar":
+        return (
+            "⚠️ يبدو أنك تذكر أعراضًا صحية.\n"
+            "إذا كانت الحالة شديدة أو طارئة، اتصل على 997 فورًا.\n"
+            "يمكنني تحويلك لموظف الاستقبال للمساعدة: 99\n\n"
+            "0️⃣ القائمة الرئيسية"
+        )
+    return (
+        "⚠️ It sounds like you’re describing a medical symptom.\n"
+        "If it is severe or urgent, please call 997 immediately.\n"
+        "I can connect you to Reception for help: 99\n\n"
+        "0️⃣ Main Menu"
+    )
+
+
+def _looks_like_symptom(text: str) -> bool:
+    # lightweight safety catch (NOT full emergency detection; controller handles true emergencies)
+    t = _low(text)
+    keys = [
+        "pain", "hurt", "kidney", "bleeding", "faint", "unconscious", "breathing", "shortness",
+        "ألم", "الم", "يوجع", "كلية", "كلى", "نزيف", "اغمى", "إغماء", "تنفس", "ضيق",
+    ]
+    return any(k in t for k in keys)
+
+
 def handle_turn(
     user_id: str,
     message_text: str,
@@ -519,14 +586,13 @@ def handle_turn(
     prev_last = sess.get("last_user_ts")
     sess["last_user_ts"] = _utcnow_iso()
 
-    # Session expiry handling (keeps language & lock)
+    # Session expiry handling (keep language/lock)
     if prev_last and _session_expired_from(prev_last) and sess.get("state") != STATE_ESCALATION:
         locked = bool(sess.get("language_locked"))
         keep_lang = sess.get("language") or lang
 
         _reset_flow_fields(sess)
         sess["status"] = STATUS_ABANDONED
-
         sess["language"] = keep_lang
         sess["text_direction"] = "rtl" if keep_lang == "ar" else "ltr"
         sess["language_locked"] = locked
@@ -538,10 +604,15 @@ def handle_turn(
             sess["last_step"] = STATE_MENU
             out = _main_menu(keep_lang)
         else:
-            sess["state"] = STATE_LANG
-            sess["last_step"] = STATE_LANG
-            out = _welcome_text()
-
+            # ✅ if expired but user wrote symptom-like text, do NOT show language welcome
+            if _looks_like_symptom(message_text):
+                sess["state"] = STATE_MENU
+                sess["last_step"] = STATE_MENU
+                out = _symptom_guard_message("en")  # default English on symptom at first contact
+            else:
+                sess["state"] = STATE_LANG
+                sess["last_step"] = STATE_LANG
+                out = _welcome_text_en()  # ✅ default EN welcome on fresh start
         _set_bot(sess, out)
         return EngineResult(out, sess, [])
 
@@ -550,48 +621,56 @@ def handle_turn(
         if not bool(sess.get("language_locked")):
             sess["state"] = STATE_LANG
             sess["last_step"] = STATE_LANG
-            out = _welcome_text()
+            out = _welcome_text_en()  # ✅ default EN welcome
             _set_bot(sess, out)
             return EngineResult(out, sess, [])
         sess["state"] = STATE_MENU
         sess["last_step"] = STATE_MENU
-        sess["menu_mistakes"] = 0
         out = _main_menu(lang)
         _set_bot(sess, out)
         return EngineResult(out, sess, [])
 
-    # Reception shortcuts (9 primary, 99 alias)
-    if low in {"9", "99"}:
+    # Reception shortcuts (✅ 99 primary; accept "99" only to avoid neuro=9)
+    if low in {"99"}:
         sess["state"] = STATE_ESCALATION
         sess["last_step"] = STATE_ESCALATION
         sess["escalation_flag"] = True
-        sess["menu_mistakes"] = 0
-        out = (
-            "تم تحويلكم إلى موظف الاستقبال ✅ الرجاء الانتظار... (للعودة للقائمة اكتب 0)"
-            if lang == "ar" else
-            "Connecting you to Reception ✅ Please wait... (Reply 0 for menu)"
-        )
+        out = ("تم تحويلكم إلى موظف الاستقبال ✅ الرجاء الانتظار... (للعودة للقائمة اكتب 0)"
+               if lang == "ar" else "Connecting you to Reception ✅ Please wait... (Reply 0 for menu)")
         _set_bot(sess, out)
         return EngineResult(out, sess, [{"type": "ESCALATE", "reason": "user_requested_reception"}])
 
     if _is_thanks(raw):
-        out = (
-            "العفو ✅ إذا احتجت أي شيء آخر اكتب 0 لعرض القائمة."
-            if lang == "ar" else
-            "You’re welcome ✅ If you need anything else, reply 0 for the menu."
-        )
+        out = ("العفو ✅ إذا احتجت أي شيء آخر اكتب 0 لعرض القائمة."
+               if lang == "ar" else "You’re welcome ✅ If you need anything else, reply 0 for the menu.")
         _set_bot(sess, out)
         return EngineResult(out, sess, [])
 
+    # Greeting handling when NOT locked:
     if _is_greeting(raw) and not bool(sess.get("language_locked")):
         sess["state"] = STATE_LANG
         sess["last_step"] = STATE_LANG
-        out = _welcome_text()
+        # ✅ English greeting produces English welcome
+        if _low(raw) in {"hi", "hello", "hey", "good morning", "good evening", "good afternoon"}:
+            out = _welcome_text_en()
+        else:
+            out = _welcome_text_ar()
         _set_bot(sess, out)
         return EngineResult(out, sess, [])
 
     # Language selection
     if sess.get("state") == STATE_LANG or not bool(sess.get("language_locked")):
+        # ✅ If user writes symptom-like text before selecting language, do NOT show welcome
+        if _looks_like_symptom(message_text):
+            sess["language_locked"] = True
+            sess["language"] = "en"
+            sess["text_direction"] = "ltr"
+            sess["state"] = STATE_MENU
+            sess["last_step"] = STATE_MENU
+            out = _symptom_guard_message("en")
+            _set_bot(sess, out)
+            return EngineResult(out, sess, [])
+
         if _is_digit_choice(raw):
             c = _to_int(raw)
             if c == 1:
@@ -601,7 +680,6 @@ def handle_turn(
                 sess["status"] = STATUS_ACTIVE
                 sess["state"] = STATE_MENU
                 sess["last_step"] = STATE_MENU
-                sess["menu_mistakes"] = 0
                 out = _main_menu("ar")
                 _set_bot(sess, out)
                 return EngineResult(out, sess, [])
@@ -612,14 +690,13 @@ def handle_turn(
                 sess["status"] = STATUS_ACTIVE
                 sess["state"] = STATE_MENU
                 sess["last_step"] = STATE_MENU
-                sess["menu_mistakes"] = 0
                 out = _main_menu("en")
                 _set_bot(sess, out)
                 return EngineResult(out, sess, [])
 
         sess["state"] = STATE_LANG
         sess["last_step"] = STATE_LANG
-        out = _welcome_text()
+        out = _welcome_text_en()  # ✅ default EN welcome
         _set_bot(sess, out)
         return EngineResult(out, sess, [])
 
@@ -627,21 +704,18 @@ def handle_turn(
         sess["status"] = STATUS_ACTIVE
         sess["state"] = STATE_MENU
         sess["last_step"] = STATE_MENU
-        sess["menu_mistakes"] = 0
         out = _main_menu(lang)
         _set_bot(sess, out)
         return EngineResult(out, sess, [])
 
-    # MAIN MENU routing (V4.3 anti-repeat)
+    # MAIN MENU routing
     if sess.get("state") == STATE_MENU:
         if not raw:
-            # do NOT reprint menu on empty messages; just hint
-            out = _menu_hint(lang)
+            out = _main_menu(lang)
             _set_bot(sess, out)
             return EngineResult(out, sess, [])
 
         if _is_digit_choice(raw):
-            sess["menu_mistakes"] = 0
             choice = _to_int(raw)
 
             if choice == 1:
@@ -702,7 +776,7 @@ def handle_turn(
                 _set_bot(sess, out)
                 return EngineResult(out, sess, [])
 
-            if choice == 9:
+            if choice == 99:
                 sess["state"] = STATE_ESCALATION
                 sess["last_step"] = STATE_ESCALATION
                 sess["escalation_flag"] = True
@@ -716,18 +790,101 @@ def handle_turn(
             _set_bot(sess, out)
             return EngineResult(out, sess, [])
 
-        # Non-numeric while in menu: show hint, not full menu
-        sess["menu_mistakes"] = int(sess.get("menu_mistakes", 0)) + 1
-        if int(sess["menu_mistakes"]) >= 2:
-            sess["menu_mistakes"] = 0
-            out = _main_menu(lang)
-        else:
-            out = _menu_hint(lang)
-
+        out = _main_menu(lang)
         _set_bot(sess, out)
         return EngineResult(out, sess, [])
 
-    # BOOKING FLOWS (same as V4.2)
+    # ✅ RESCHEDULE LOOKUP (explicit not-found; no fallback)
+    if sess.get("state") == STATE_RESCHEDULE_LOOKUP:
+        if low in {"0"}:
+            sess["state"] = STATE_MENU
+            sess["last_step"] = STATE_MENU
+            out = _main_menu(lang)
+            _set_bot(sess, out)
+            return EngineResult(out, sess, [])
+
+        if low == "99":
+            sess["state"] = STATE_ESCALATION
+            sess["last_step"] = STATE_ESCALATION
+            sess["escalation_flag"] = True
+            out = ("تم تحويلكم إلى موظف الاستقبال ✅" if lang == "ar" else "Connecting you to Reception ✅")
+            _set_bot(sess, out)
+            return EngineResult(out, sess, [{"type": "ESCALATE", "reason": "reschedule_help"}])
+
+        ref_or_mobile = raw.strip()
+        # validate format
+        is_ref = _looks_like_reference(ref_or_mobile)
+        is_mobile = _valid_mobile(ref_or_mobile)
+
+        if not (is_ref or is_mobile):
+            msg = ("المدخل غير صحيح. أدخل رقم المرجع (مثل SSH-260301-1234) أو رقم الجوال."
+                   if lang == "ar"
+                   else "Invalid input. Enter your reference (e.g., SSH-260301-1234) or your mobile number.")
+            out = _soft_invalid(sess, lang, msg) + _footer(lang)
+            _set_bot(sess, out)
+            return EngineResult(out, sess, [])
+
+        # Demo: no DB lookup here; always not-found
+        if lang == "ar":
+            out = (
+                "لم نعثر على حجز مرتبط بهذه البيانات.\n"
+                "يرجى التأكد من الرقم والمحاولة مرة أخرى أو إدخال رقم المرجع.\n"
+                + _footer(lang)
+            )
+        else:
+            out = (
+                "We could not find any booking linked to this information.\n"
+                "Please check the number and try again, or enter your booking reference.\n"
+                + _footer(lang)
+            )
+        _set_bot(sess, out)
+        return EngineResult(out, sess, [])
+
+    # ✅ CANCEL LOOKUP (explicit not-found; no fallback)
+    if sess.get("state") == STATE_CANCEL_LOOKUP:
+        if low in {"0"}:
+            sess["state"] = STATE_MENU
+            sess["last_step"] = STATE_MENU
+            out = _main_menu(lang)
+            _set_bot(sess, out)
+            return EngineResult(out, sess, [])
+
+        if low == "99":
+            sess["state"] = STATE_ESCALATION
+            sess["last_step"] = STATE_ESCALATION
+            sess["escalation_flag"] = True
+            out = ("تم تحويلكم إلى موظف الاستقبال ✅" if lang == "ar" else "Connecting you to Reception ✅")
+            _set_bot(sess, out)
+            return EngineResult(out, sess, [{"type": "ESCALATE", "reason": "cancel_help"}])
+
+        ref_or_mobile = raw.strip()
+        is_ref = _looks_like_reference(ref_or_mobile)
+        is_mobile = _valid_mobile(ref_or_mobile)
+
+        if not (is_ref or is_mobile):
+            msg = ("المدخل غير صحيح. أدخل رقم المرجع أو رقم الجوال."
+                   if lang == "ar"
+                   else "Invalid input. Enter your reference or your mobile number.")
+            out = _soft_invalid(sess, lang, msg) + _footer(lang)
+            _set_bot(sess, out)
+            return EngineResult(out, sess, [])
+
+        if lang == "ar":
+            out = (
+                "لم نعثر على موعد مرتبط بهذه البيانات لإلغائه.\n"
+                "يرجى التأكد من الرقم والمحاولة مرة أخرى أو إدخال رقم المرجع.\n"
+                + _footer(lang)
+            )
+        else:
+            out = (
+                "We could not find any appointment linked to this information to cancel.\n"
+                "Please check the number and try again, or enter your reference.\n"
+                + _footer(lang)
+            )
+        _set_bot(sess, out)
+        return EngineResult(out, sess, [])
+
+    # BOOKING FLOWS
     if sess.get("state") == STATE_BOOK_DEPT:
         idx = _to_int(raw, -1) - 1 if _is_digit_choice(raw) else -1
         dept_key = None
@@ -828,21 +985,51 @@ def handle_turn(
         sess["mistakes"] = 0
         sess["state"] = STATE_BOOK_PATIENT
         sess["last_step"] = STATE_BOOK_PATIENT
-        out = _patient_prompt(lang)
+        out = _patient_prompt_full(lang)
         _set_bot(sess, out)
         return EngineResult(out, sess, [])
 
+    # ✅ PATIENT COLLECTION (multi-turn)
     if sess.get("state") == STATE_BOOK_PATIENT:
-        name, mobile, pid = _extract_name_mobile_id(message_text)
-        sess["patient_name"] = name
-        sess["patient_mobile"] = mobile
-        sess["patient_id"] = pid
+        pending = sess.get("pending_patient") or {"name": None, "mobile": None, "pid": None}
+        if not isinstance(pending, dict):
+            pending = {"name": None, "mobile": None, "pid": None}
 
-        if not sess.get("patient_name") or not sess.get("patient_mobile"):
-            msg = ("فضلاً أرسل الاسم الكامل ورقم الجوال." if lang == "ar" else "Please send full name and mobile number.")
-            out = _soft_invalid(sess, lang, msg) + "\n\n" + _patient_prompt(lang)
+        name, mobile, pid = _extract_name_mobile_id(message_text)
+
+        # merge into pending
+        if name and not pending.get("name"):
+            pending["name"] = name
+        if mobile and not pending.get("mobile"):
+            pending["mobile"] = mobile
+        if pid and not pending.get("pid"):
+            pending["pid"] = pid
+
+        sess["pending_patient"] = pending
+
+        # If we only got name, ask for mobile only
+        if pending.get("name") and not pending.get("mobile"):
+            out = _patient_ask_mobile_only(lang)
             _set_bot(sess, out)
             return EngineResult(out, sess, [])
+
+        # If we only got mobile, ask for name only
+        if pending.get("mobile") and not pending.get("name"):
+            out = _patient_ask_name_only(lang)
+            _set_bot(sess, out)
+            return EngineResult(out, sess, [])
+
+        # Validate both
+        if not pending.get("name") or not _valid_mobile(pending.get("mobile")):
+            msg = ("فضلاً أرسل الاسم الكامل ورقم جوال صحيح." if lang == "ar" else "Please send full name and a valid mobile number.")
+            out = _soft_invalid(sess, lang, msg) + "\n\n" + _patient_prompt_full(lang)
+            _set_bot(sess, out)
+            return EngineResult(out, sess, [])
+
+        # Commit into session fields
+        sess["patient_name"] = pending.get("name")
+        sess["patient_mobile"] = pending.get("mobile")
+        sess["patient_id"] = pending.get("pid")
 
         sess["mistakes"] = 0
         sess["appt_ref"] = sess.get("appt_ref") or _make_reference("SSH")
@@ -876,7 +1063,7 @@ def handle_turn(
                     "يرجى الحضور قبل الموعد بـ 15 دقيقة.\n\n"
                     f"{CLINIC_TIMINGS_AR}\n"
                     f"🚑 الطوارئ: {EMERGENCY_NUMBER}\n"
-                    "للتواصل مع الاستقبال: 9 (أو 99)\n\n"
+                    "للتواصل مع الاستقبال: 99\n\n"
                     "للعودة للقائمة الرئيسية اكتب 0."
                 )
             else:
@@ -887,7 +1074,7 @@ def handle_turn(
                     "Please arrive 15 minutes early.\n\n"
                     f"{CLINIC_TIMINGS_EN}\n"
                     f"🚑 Emergency: {EMERGENCY_NUMBER}\n"
-                    "Reception: 9 (or 99)\n\n"
+                    "Reception: 99\n\n"
                     "Reply 0 for the main menu."
                 )
 
@@ -935,7 +1122,6 @@ def handle_turn(
         _set_bot(sess, out)
         return EngineResult(out, sess, [])
 
-    # Fallback
     sess["state"] = STATE_MENU
     sess["last_step"] = STATE_MENU
     out = _main_menu(lang)
