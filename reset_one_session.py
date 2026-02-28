@@ -1,48 +1,379 @@
-# reset_one_session.py
-# Tenant-aware reset for WhatsApp testing (fixes stuck menu/greeting issues)
+# api_server.py (Railway-safe, tenant-aware, WhatsApp Cloud webhook)
 #
-# Usage (PowerShell):
-#   py .\reset_one_session.py 918287920585 supportpilot_demo
-# If tenant not provided, uses WA_DEFAULT_CLIENT or "default".
+# Goals:
+# - ACK fast with {"ok": True} to avoid Meta retry storms
+# - Only process real user TEXT messages (ignore statuses/receipts/verification payloads)
+# - Tenant-aware dedupe (Postgres) to prevent looping
+# - Run engine inline (stable on Railway)
+#
+# NOTE:
+# - Meta "Send test message" is sent by Meta console, not your webhook.
 
 import os
 import sys
 import asyncio
+from typing import Any, Dict, Optional
+
+import requests
 from sqlalchemy import text
+from fastapi import FastAPI, Request, Query, HTTPException
+from fastapi.responses import PlainTextResponse, JSONResponse
+
 from database import AsyncSessionLocal
+from core.wa_dedupe_store_pg import ensure_wa_dedupe_table, claim_message_once
+from core.session_store_pg import ensure_sessions_table
+from core.appointment_schema import ensure_appointment_requests_table
+from whatsapp_controller import handle_message
 
-def _tenant_from_args() -> str:
-    if len(sys.argv) >= 3 and sys.argv[2].strip():
-        return sys.argv[2].strip()
-    env_t = (os.getenv("WA_DEFAULT_CLIENT", "") or "").strip()
-    return env_t or "default"
 
-def _user_from_args() -> str:
-    if len(sys.argv) >= 2 and sys.argv[1].strip():
-        return sys.argv[1].strip()
-    raise SystemExit("Usage: py reset_one_session.py <user_id> [tenant_id]")
+# ----------------------------
+# Windows async fix (must be early)
+# ----------------------------
+if sys.platform.startswith("win"):
+    asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
 
-async def main():
-    user_id = _user_from_args()
-    tenant_id = _tenant_from_args()
+
+# ----------------------------
+# Env
+# ----------------------------
+WA_ACCESS_TOKEN = (os.getenv("WA_ACCESS_TOKEN", "") or "").strip()
+WA_PHONE_NUMBER_ID = (os.getenv("WA_PHONE_NUMBER_ID", "") or "").strip()
+WA_VERIFY_TOKEN = (os.getenv("WA_VERIFY_TOKEN", "") or "").strip()
+
+WA_DEFAULT_CLIENT = (os.getenv("WA_DEFAULT_CLIENT", "supportpilot_demo") or "").strip()
+TENANT_ID = WA_DEFAULT_CLIENT  # alias to make intent clear
+
+
+# ----------------------------
+# WhatsApp sender (Meta Cloud API)
+# ----------------------------
+def wa_send_text(to_wa_id: str, text_: str) -> Dict[str, Any]:
+    """
+    Sends a WhatsApp text message via Meta Graph API (Cloud API).
+    """
+    if not WA_ACCESS_TOKEN or not WA_PHONE_NUMBER_ID:
+        raise RuntimeError("Missing WA_ACCESS_TOKEN or WA_PHONE_NUMBER_ID")
+
+    body = (text_ or "").strip()
+    if not body:
+        return {"ok": False, "note": "empty_body"}
+
+    url = f"https://graph.facebook.com/v20.0/{WA_PHONE_NUMBER_ID}/messages"
+    headers = {"Authorization": f"Bearer {WA_ACCESS_TOKEN}", "Content-Type": "application/json"}
+    payload = {
+        "messaging_product": "whatsapp",
+        "to": to_wa_id,
+        "type": "text",
+        "text": {"body": body[:4000]},  # safety limit
+    }
+
+    r = requests.post(url, headers=headers, json=payload, timeout=30)
+    try:
+        j = r.json()
+    except Exception:
+        j = {"status_code": r.status_code, "text": r.text}
+
+    if r.status_code >= 400:
+        # keep it visible in logs without crashing webhook
+        raise RuntimeError(f"WhatsApp send failed: {r.status_code} {j}")
+
+    return j
+
+
+# ----------------------------
+# App
+# ----------------------------
+app = FastAPI(title="SupportPilot", version="0.1.0")
+
+
+@app.api_route("/", methods=["GET", "HEAD"])
+async def root():
+    return {"ok": True, "service": "SupportPilot"}
+
+
+@app.api_route("/health", methods=["GET", "HEAD"])
+async def health():
+    return {"ok": True}
+
+
+@app.api_route("//health", methods=["GET", "HEAD"])
+async def health2():
+    return {"ok": True}
+
+
+@app.on_event("startup")
+async def _startup():
+    print(
+        "[startup] env:",
+        "has_token=",
+        bool(WA_ACCESS_TOKEN),
+        "has_phone_id=",
+        bool(WA_PHONE_NUMBER_ID),
+        "has_verify_token=",
+        bool(WA_VERIFY_TOKEN),
+        "tenant=",
+        WA_DEFAULT_CLIENT,
+    )
 
     async with AsyncSessionLocal() as db:
-        # ✅ Correct table used by controller: sessions (tenant_id, user_id)
-        await db.execute(
-            text("DELETE FROM sessions WHERE tenant_id=:t AND user_id=:u"),
-            {"t": tenant_id, "u": user_id},
-        )
+        await ensure_wa_dedupe_table(db)
+        await ensure_sessions_table(db)
+        await ensure_appointment_requests_table(db)
 
-        # ✅ Optional: clear dedupe rows so Meta retries don't confuse testing
-        # (Only if your wa_processed_messages stores wa_from=user_id; if not, it's harmless)
-        await db.execute(
-            text("DELETE FROM wa_processed_messages WHERE tenant_id=:t AND wa_from=:u"),
-            {"t": tenant_id, "u": user_id},
-        )
+    print("[startup] tables ensured")
 
+
+# ----------------------------
+# WhatsApp webhook verify (GET)
+# ----------------------------
+@app.get("/whatsapp/webhook")
+async def whatsapp_verify(
+    hub_mode: str = Query(default="", alias="hub.mode"),
+    hub_verify_token: str = Query(default="", alias="hub.verify_token"),
+    hub_challenge: str = Query(default="", alias="hub.challenge"),
+):
+    if hub_mode == "subscribe" and hub_verify_token == WA_VERIFY_TOKEN:
+        return PlainTextResponse(content=hub_challenge or "")
+    raise HTTPException(status_code=403, detail="Verification failed")
+
+
+# ----------------------------
+# WhatsApp webhook (POST)
+# ----------------------------
+def _extract_text_messages(body: Dict[str, Any]) -> list[Dict[str, str]]:
+    """
+    Returns a list of normalized user text messages:
+      [{"msg_id": "...", "from_wa": "...", "text": "..."}]
+
+    Strictly ignores:
+    - statuses (delivery/read receipts)
+    - non-text messages
+    - malformed payloads
+    """
+    out: list[Dict[str, str]] = []
+
+    entries = body.get("entry") or []
+    if not isinstance(entries, list):
+        return out
+
+    for entry in entries:
+        changes = (entry or {}).get("changes") or []
+        if not isinstance(changes, list):
+            continue
+
+        for ch in changes:
+            value = (ch or {}).get("value") or {}
+            if not isinstance(value, dict):
+                continue
+
+            messages = value.get("messages") or []
+            if not isinstance(messages, list) or not messages:
+                continue  # statuses, receipts, etc.
+
+            for msg in messages:
+                if not isinstance(msg, dict):
+                    continue
+
+                msg_id = (msg.get("id") or "").strip()
+                from_wa = (msg.get("from") or "").strip()
+                msg_type = (msg.get("type") or "").strip().lower()
+
+                if not from_wa or msg_type != "text":
+                    continue
+
+                text_in = ((msg.get("text") or {}).get("body") or "").strip()
+                if not text_in:
+                    continue
+
+                out.append({"msg_id": msg_id, "from_wa": from_wa, "text": text_in})
+
+    return out
+
+
+@app.post("/whatsapp/webhook")
+async def whatsapp_webhook(request: Request):
+    # Always ACK ok=True on failures to avoid Meta retry storms
+    try:
+        body = await request.json()
+    except Exception as e:
+        print("[webhook] bad json:", repr(e))
+        return JSONResponse({"ok": True})
+
+    try:
+        messages = _extract_text_messages(body)
+        if not messages:
+            return JSONResponse({"ok": True})
+
+        for m in messages:
+            msg_id = m["msg_id"]
+            from_wa = m["from_wa"]
+            text_in = m["text"]
+
+            print(f"[webhook] incoming from={from_wa} msg_id={msg_id} text={text_in!r}")
+
+            # ----------------------------
+            # Dedupe gate (tenant-safe)
+            # ----------------------------
+            if msg_id:
+                async with AsyncSessionLocal() as db:
+                    claimed = await claim_message_once(
+                        db,
+                        tenant_id=TENANT_ID,
+                        msg_id=msg_id,
+                        wa_from=from_wa,
+                        phone_number_id=WA_PHONE_NUMBER_ID,
+                    )
+                if not claimed:
+                    print(f"[webhook] duplicate msg ignored msg_id={msg_id}")
+                    continue
+
+            # ----------------------------
+            # Run engine inline
+            # ----------------------------
+            reply_text: str = ""
+            meta: Dict[str, Any] = {}
+
+            try:
+                async with AsyncSessionLocal() as db:
+                    reply_text, meta = await handle_message(
+                        db=db,
+                        user_id=from_wa,
+                        message_text=text_in,
+                        tenant_id=TENANT_ID,
+                    )
+            except Exception as e:
+                print("[engine] error:", repr(e))
+                continue  # still ACK ok=True
+            print(f"[audit] user={from_wa} state={meta.get('state')} handoff={meta.get('handoff_active')}")
+
+            reply_clean = (reply_text or "").strip()
+            print(f"[engine] meta={meta} reply_len={len(reply_clean)}")
+
+            # ----------------------------
+            # Send reply if any
+            # (Controller may return "" intentionally in sticky handoff)
+            # ----------------------------
+            if reply_clean:
+                try:
+                    resp = wa_send_text(from_wa, reply_clean)
+                    print("[wa_send] ok:", resp)
+                except Exception as e:
+                    print("[wa_send] error:", repr(e))
+
+        return JSONResponse({"ok": True})
+
+    except Exception as e:
+        print("[webhook] error:", repr(e))
+        return JSONResponse({"ok": True})
+
+
+# ----------------------------
+# Reception endpoints (demo UI)
+# ----------------------------
+@app.get("/reception/requests")
+async def reception_list_requests(
+    tenant_id: str = Query(...),
+    status: Optional[str] = Query(None),
+    limit: int = Query(50, ge=1, le=200),
+    offset: int = Query(0, ge=0),
+):
+    tenant = (tenant_id or "").strip()
+    if not tenant:
+        raise HTTPException(status_code=400, detail="tenant_id required")
+
+    where = "WHERE tenant_id = :tenant_id"
+    params: Dict[str, Any] = {"tenant_id": tenant, "limit": limit, "offset": offset}
+
+    if status:
+        where += " AND status = :status"
+        params["status"] = status.strip().upper()
+
+    q = f"""
+    SELECT
+      tenant_id, request_id, channel, user_id,
+      status, intent,
+      dept_key, dept_label,
+      doctor_key, doctor_label,
+      appt_date, appt_time,
+      patient_name, patient_mobile, patient_id,
+      notes, receptionist_note,
+      created_at, updated_at
+    FROM appointment_requests
+    {where}
+    ORDER BY created_at DESC
+    LIMIT :limit OFFSET :offset
+    """
+
+    async with AsyncSessionLocal() as db:
+        res = await db.execute(text(q), params)
+        rows = res.mappings().all()
+
+    return {"ok": True, "count": len(rows), "items": [dict(r) for r in rows]}
+
+
+@app.post("/reception/requests/{request_id}/status")
+async def reception_set_status(
+    request_id: str,
+    tenant_id: str = Query(...),
+    new_status: str = Query(...),
+):
+    tenant = (tenant_id or "").strip()
+    if not tenant:
+        raise HTTPException(status_code=400, detail="tenant_id required")
+
+    status = (new_status or "").strip().upper()
+    if status not in {"PENDING", "CONFIRMED", "CANCELLED", "DONE"}:
+        raise HTTPException(status_code=400, detail="Invalid new_status")
+
+    async with AsyncSessionLocal() as db:
+        res = await db.execute(
+            text(
+                """
+            UPDATE appointment_requests
+            SET status = :status, updated_at = NOW()
+            WHERE tenant_id = :tenant_id AND request_id = :request_id
+            RETURNING request_id;
+            """
+            ),
+            {"tenant_id": tenant, "request_id": request_id, "status": status},
+        )
         await db.commit()
+        ok = res.first() is not None
 
-    print(f"✅ deleted sessions row for user_id={user_id} tenant_id={tenant_id}")
+    if not ok:
+        raise HTTPException(status_code=404, detail="request not found")
 
-if __name__ == "__main__":
-    asyncio.run(main())
+    return {"ok": True, "request_id": request_id, "status": status}
+
+
+@app.post("/reception/requests/{request_id}/note")
+async def reception_set_note(
+    request_id: str,
+    tenant_id: str = Query(...),
+    note: str = Query(...),
+):
+    tenant = (tenant_id or "").strip()
+    if not tenant:
+        raise HTTPException(status_code=400, detail="tenant_id required")
+
+    note2 = (note or "").strip()[:2000]
+
+    async with AsyncSessionLocal() as db:
+        res = await db.execute(
+            text(
+                """
+            UPDATE appointment_requests
+            SET receptionist_note = :note, updated_at = NOW()
+            WHERE tenant_id = :tenant_id AND request_id = :request_id
+            RETURNING request_id;
+            """
+            ),
+            {"tenant_id": tenant, "request_id": request_id, "note": note2},
+        )
+        await db.commit()
+        ok = res.first() is not None
+
+    if not ok:
+        raise HTTPException(status_code=404, detail="request not found")
+
+    return {"ok": True, "request_id": request_id}
