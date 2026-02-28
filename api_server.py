@@ -244,6 +244,7 @@ async def whatsapp_webhook(request: Request):
             except Exception as e:
                 print("[engine] error:", repr(e))
                 continue  # still ACK ok=True
+            print(f"[audit] user={from_wa} state={meta.get('state')} handoff={meta.get('handoff_active')}")
 
             reply_clean = (reply_text or "").strip()
             print(f"[engine] meta={meta} reply_len={len(reply_clean)}")
