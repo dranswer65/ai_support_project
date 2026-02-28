@@ -1,11 +1,9 @@
 # whatsapp_controller.py — Enterprise-ready controller (Clinic SaaS)
-# Fixes:
-# ✅ Real reschedule/cancel menu flows handled in engine (see engine V4.5)
-# ✅ Emergency lock UX: "thank you/ok" does NOT trigger guard question
-# ✅ Emergency escalation reuses existing handoff ticket ref (no duplicate refs)
-# ✅ Single active mode rule: EMERGENCY overrides everything
-# ✅ Emergency message is symptom-specific (chest pain / SOB / bleeding / unconscious / severe abdominal pain)
-# ✅ Input normalization: ",1" / "،0" / Arabic digits
+# Fixes (Feb 28, 2026):
+# ✅ Reception command changed to 99 (avoid conflict with dept option 9)
+# ✅ Real handoff lock: ignore all inputs during handoff except "00" (exit) and emergency override
+# ✅ Emergency override reuses existing ticket id if already escalated
+# ✅ Greeting guard: if stuck MAIN_MENU but not greeted, force LANG_SELECT
 
 from __future__ import annotations
 
@@ -43,7 +41,7 @@ HANDOFF_STICKY_MINUTES = 30
 _AR_RE = re.compile(r"[\u0600-\u06FF]")
 _ARABIC_DIGITS = str.maketrans("٠١٢٣٤٥٦٧٨٩", "0123456789")
 
-# Emergency patterns
+# Emergency patterns (same as before)
 _CHEST_EN_RE = re.compile(r"\b(chest)\s+(pain|hurts|aching)\b", re.IGNORECASE)
 _SOB_EN_RE = re.compile(r"\b(shortness\s+of\s+breath|difficulty\s+breathing|can't\s+breathe|cannot\s+breathe)\b", re.IGNORECASE)
 _BLEED_EN_RE = re.compile(r"\b(heavy\s+bleeding|bleeding\s+heavily)\b", re.IGNORECASE)
@@ -90,13 +88,6 @@ def _parse_iso(s: Optional[str]) -> Optional[datetime]:
         return None
 
 
-def _wants_agent(text: str) -> bool:
-    t = (text or "").strip().lower()
-    if t in {"9", "99"}:
-        return True
-    return any(k in t for k in _AGENT_KEYS)
-
-
 def _handoff_active(session: Dict[str, Any]) -> bool:
     if not isinstance(session, dict):
         return False
@@ -136,14 +127,19 @@ def _extract_ticket_id(result: Any) -> Optional[str]:
     return None
 
 
+def _wants_agent(text: str) -> bool:
+    t = (text or "").strip().lower()
+    if t in {"99"}:
+        return True
+    return any(k in t for k in _AGENT_KEYS)
+
+
 def _resolve_language_for_turn(message_text: str, session: Dict[str, Any]) -> str:
     if bool(session.get("language_locked")):
         return "ar" if str(session.get("language") or "ar").startswith("ar") else "en"
-
     raw = (message_text or "").strip()
     if raw.isdigit():
         return "ar" if str(session.get("language") or "ar").startswith("ar") else "en"
-
     detected = (detect_language(message_text) or "en").strip().lower()
     return "ar" if detected.startswith("ar") else "en"
 
@@ -195,7 +191,7 @@ def _welcome_text_ar() -> str:
         "*(Please select your preferred language)*\n"
         "1️⃣ العربية\n"
         "2️⃣ English\n\n"
-        "للتحدث مع الاستقبال في أي وقت اكتب: *Agent* أو 9 (أو 99)"
+        "للتحدث مع الاستقبال في أي وقت اكتب: *Agent* أو 99"
     )
 
 
@@ -208,7 +204,7 @@ def _welcome_text_en() -> str:
         "Please select your preferred language:\n"
         "1️⃣ العربية\n"
         "2️⃣ English\n\n"
-        "To reach Reception anytime, reply: *Agent* or 9 (or 99)"
+        "To reach Reception anytime, reply: *Agent* or 99"
     )
 
 
@@ -225,7 +221,6 @@ def _emergency_protocol_message(language: str, kind: Optional[str], ticket_short
             headline = "🚨 فقدان الوعي حالة طارئة."
         elif kind == "abdomen":
             headline = "🚨 ألم البطن الشديد قد يدل على حالة خطيرة."
-
         base = (
             f"{headline}\n"
             "يرجى الاتصال فورًا على 997 أو التوجه إلى أقرب قسم طوارئ.\n"
@@ -233,7 +228,7 @@ def _emergency_protocol_message(language: str, kind: Optional[str], ticket_short
         )
         if ticket_short:
             base += f"\nرقم الطلب: #{ticket_short}"
-        base += "\nللعودة للقائمة اكتب 0"
+        base += "\nللخروج إلى القائمة الرئيسية اكتب 00"
         return base
 
     headline = "🚨 Severe symptoms can be serious."
@@ -247,7 +242,6 @@ def _emergency_protocol_message(language: str, kind: Optional[str], ticket_short
         headline = "🚨 Loss of consciousness is an emergency."
     elif kind == "abdomen":
         headline = "🚨 Severe abdominal pain can be serious."
-
     base = (
         f"{headline}\n"
         "Please call 997 immediately or go to the nearest emergency department.\n"
@@ -255,7 +249,7 @@ def _emergency_protocol_message(language: str, kind: Optional[str], ticket_short
     )
     if ticket_short:
         base += f" Ref: #{ticket_short}"
-    base += "\nReply 0 for the menu"
+    base += "\nTo exit to the main menu, reply 00"
     return base
 
 
@@ -265,17 +259,17 @@ def _emergency_guard_prompt(language: str) -> str:
             "🚨 ذكرت أعراضًا طارئة.\n"
             "هل أنت الآن بأمان وتريد المتابعة بالحجز؟\n\n"
             "1️⃣ نعم، متابعة الحجز\n"
-            "9️⃣ موظف الاستقبال\n"
+            "99️⃣ موظف الاستقبال\n"
             "🚑 للطوارئ اتصل على 997\n\n"
-            "0️⃣ القائمة الرئيسية"
+            "00️⃣ القائمة الرئيسية"
         )
     return (
         "🚨 You mentioned emergency symptoms.\n"
         "Are you safe now and want to continue booking?\n\n"
         "1️⃣ Yes, continue booking\n"
-        "9️⃣ Reception\n"
+        "99️⃣ Reception\n"
         "🚑 For emergencies call 997\n\n"
-        "0️⃣ Main Menu"
+        "00️⃣ Main Menu"
     )
 
 
@@ -284,12 +278,12 @@ def _emergency_polite_after_thanks(language: str) -> str:
         return (
             "العفو ✅\n"
             "إذا استمرت الأعراض أو ساءت، يرجى الاتصال فورًا على 997.\n"
-            "عندما تكون جاهزًا، اكتب 0 لعرض القائمة."
+            "عندما تكون جاهزًا، اكتب 00 لعرض القائمة."
         )
     return (
         "You’re welcome ✅\n"
         "If symptoms continue or worsen, please call 997 immediately.\n"
-        "When you’re ready, reply 0 for the main menu."
+        "When you’re ready, reply 00 for the main menu."
     )
 
 
@@ -310,7 +304,7 @@ async def _dispatch_ticket(
         user_id=user_id,
         current_state=session.get("state"),
         last_user_message=session.get("last_user_message"),
-        last_intent=session.get("last_intent"),
+        last_intent=session.get("intent"),
         decision_rule=decision_rule,
         decision_reason=decision_reason,
         kpi_signals=kpi_signals,
@@ -342,41 +336,34 @@ async def handle_message(
 
     session = await get_session(db, user_id=user_id, tenant_id=tenant)
     if not isinstance(session, dict):
-        session = {
-            "user_id": user_id,
-            "status": "ACTIVE",
-            "state": "LANG_SELECT",
-            "last_step": "LANG_SELECT",
-            "language": "ar",
-            "language_locked": False,
-            "text_direction": "rtl",
-            "has_greeted": False,
-            "conversation_version": 5,
-            "handoff_active": False,
-            "handoff_until": None,
-            "last_ticket_id": None,
-            "urgent_flag": False,
-            "mode": "NORMAL",  # ✅ single active mode
-            "emergency_hold_until": None,
-            "emergency_language": None,
-        }
+        session = {"user_id": user_id}
+
+    # ensure required defaults
+    session.setdefault("status", "ACTIVE")
+    session.setdefault("state", "LANG_SELECT")
+    session.setdefault("last_step", "LANG_SELECT")
+    session.setdefault("language", "ar")
+    session.setdefault("language_locked", False)
+    session.setdefault("text_direction", "rtl")
+    session.setdefault("has_greeted", False)
+    session.setdefault("handoff_active", False)
+    session.setdefault("handoff_until", None)
+    session.setdefault("last_ticket_id", None)
+    session.setdefault("urgent_flag", False)
+    session.setdefault("mode", "NORMAL")
+    session.setdefault("emergency_hold_until", None)
+    session.setdefault("emergency_language", None)
 
     cleaned = _normalize_input(message_text)
-    raw = cleaned
     session["last_user_message"] = cleaned
 
-    # ---------------------------------------------------------
-    # 0) Ensure greeting works even if session got stuck in MAIN_MENU
-    # ---------------------------------------------------------
+    # If not greeted but stuck in main menu, reset to language select
     if not bool(session.get("has_greeted")) and session.get("state") == "MAIN_MENU":
         session["state"] = "LANG_SELECT"
         session["last_step"] = "LANG_SELECT"
         session["language_locked"] = False
 
-    # ---------------------------------------------------------
-    # 1) Emergency Interceptor ALWAYS FIRST (even during handoff)
-    # Reuse existing ticket ref if already in handoff window.
-    # ---------------------------------------------------------
+    # Emergency ALWAYS first (even in handoff)
     if _is_emergency(message_text):
         kind = _emergency_kind(message_text)
         emergency_lang = _emergency_language(message_text)
@@ -385,10 +372,8 @@ async def handle_message(
         session["emergency_language"] = emergency_lang
         session["emergency_hold_until"] = (_utcnow() + timedelta(minutes=EMERGENCY_HOLD_MINUTES)).isoformat()
 
-        # ✅ If already escalated and still in handoff, reuse ticket (no duplicate refs)
-        existing_ticket = session.get("last_ticket_id") if _handoff_active(session) else None
-        ticket_id = existing_ticket
-
+        # reuse ticket if already in sticky handoff
+        ticket_id = session.get("last_ticket_id") if _handoff_active(session) else None
         if not ticket_id:
             ticket_id = await _dispatch_ticket(
                 tenant_id=tenant,
@@ -403,29 +388,14 @@ async def handle_message(
                 urgent=True,
             )
             session["last_ticket_id"] = ticket_id
-
-            # start sticky handoff
             session["handoff_active"] = True
             session["handoff_until"] = (_utcnow() + timedelta(minutes=HANDOFF_STICKY_MINUTES)).isoformat()
 
-        short_ref = _short_ref(ticket_id)
-        out = _emergency_protocol_message(emergency_lang, kind, short_ref)
-
+        out = _emergency_protocol_message(emergency_lang, kind, _short_ref(ticket_id))
         await upsert_session(db, user_id=user_id, session=session, tenant_id=tenant)
-        return out, {
-            "tenant_id": tenant,
-            "mode": "EMERGENCY",
-            "state": session.get("state"),
-            "handoff_active": True,
-            "emergency_hold": True,
-            "ticket_id": ticket_id,
-        }
+        return out, {"tenant_id": tenant, "mode": "EMERGENCY", "handoff_active": True, "ticket_id": ticket_id}
 
-    # ---------------------------------------------------------
-    # 2) Emergency hold behavior (UX polish)
-    # - "Thanks/OK" => polite + reminder (no guard prompt)
-    # - 0 or 1 or booking/menu intent => show guard prompt
-    # ---------------------------------------------------------
+    # Emergency hold UX polish
     if _emergency_hold_active(session):
         hold_lang = session.get("emergency_language") or ("ar" if str(session.get("language") or "ar").startswith("ar") else "en")
         hold_lang = "ar" if str(hold_lang).startswith("ar") else "en"
@@ -435,50 +405,44 @@ async def handle_message(
             await upsert_session(db, user_id=user_id, session=session, tenant_id=tenant)
             return out, {"tenant_id": tenant, "mode": "EMERGENCY", "emergency_hold": True}
 
-        if raw in {"0", "1", "2", "3", "4", "5", "6", "7", "8", "9", "99"}:
+        # Only prompt guard when user tries to interact (numbers/commands)
+        if cleaned in {"0", "00", "1", "2", "3", "4", "5", "6", "7", "8", "9", "99"}:
             out = _emergency_guard_prompt(hold_lang)
             await upsert_session(db, user_id=user_id, session=session, tenant_id=tenant)
             return out, {"tenant_id": tenant, "mode": "EMERGENCY", "emergency_hold": True}
 
-        # any other text -> gentle guard
         out = _emergency_guard_prompt(hold_lang)
         await upsert_session(db, user_id=user_id, session=session, tenant_id=tenant)
         return out, {"tenant_id": tenant, "mode": "EMERGENCY", "emergency_hold": True}
 
-    # ---------------------------------------------------------
-    # 3) Normal greeting (first contact)
-    # ---------------------------------------------------------
+    # Greeting
     if not bool(session.get("has_greeted")) and cleaned:
-        # If user starts with Hello/Hi/السلام, show welcome in detected language hint
         t = cleaned.lower()
         if t in {"hi", "hello", "hey"} or _looks_arabic(message_text):
             session["has_greeted"] = True
             out = _welcome_text_ar() if _looks_arabic(message_text) else _welcome_text_en()
             await upsert_session(db, user_id=user_id, session=session, tenant_id=tenant)
-            return out, {"tenant_id": tenant, "state": session.get("state"), "welcome": True}
+            return out, {"tenant_id": tenant, "welcome": True, "state": session.get("state")}
 
-    # ---------------------------------------------------------
-    # 4) Normal language resolution
-    # ---------------------------------------------------------
     language = _resolve_language_for_turn(cleaned, session)
     session["language"] = language
     session["text_direction"] = "rtl" if language == "ar" else "ltr"
     arabic_tone = select_arabic_tone(message_text) if language == "ar" else None
 
-    # ---------------------------------------------------------
-    # 5) Sticky handoff silence (non-emergency only)
-    # ---------------------------------------------------------
+    # Handoff lock (REAL): ignore everything except "00"
     if _handoff_active(session):
-        if raw == "0":
+        if cleaned == "00":
             session["handoff_active"] = False
             session["handoff_until"] = None
             session["state"] = "MAIN_MENU"
             session["last_step"] = "MAIN_MENU"
+            await upsert_session(db, user_id=user_id, session=session, tenant_id=tenant)
+            # show menu via engine for consistency
         else:
             await upsert_session(db, user_id=user_id, session=session, tenant_id=tenant)
-            return "", {"tenant_id": tenant, "state": session.get("state"), "handoff_active": True}
+            return "", {"tenant_id": tenant, "handoff_active": True, "state": session.get("state")}
 
-    # Agent override
+    # Reception override (99)
     if _wants_agent(cleaned):
         ticket_id = await _dispatch_ticket(
             tenant_id=tenant,
@@ -492,7 +456,6 @@ async def handle_message(
             decision_reason="User requested reception",
             urgent=False,
         )
-
         session["handoff_active"] = True
         session["handoff_until"] = (_utcnow() + timedelta(minutes=HANDOFF_STICKY_MINUTES)).isoformat()
         session["state"] = "ESCALATION"
@@ -501,9 +464,9 @@ async def handle_message(
 
         short_ref = _short_ref(ticket_id)
         if language == "ar":
-            reply = f"تم تحويلكم إلى موظف الاستقبال ✅ رقم الطلب: #{short_ref}\nللعودة للقائمة اكتب 0" if short_ref else "تم تحويلكم إلى موظف الاستقبال ✅\nللعودة للقائمة اكتب 0"
+            reply = f"تم تحويلكم إلى موظف الاستقبال ✅ رقم الطلب: #{short_ref}\nللخروج إلى القائمة اكتب 00" if short_ref else "تم تحويلكم إلى موظف الاستقبال ✅\nللخروج إلى القائمة اكتب 00"
         else:
-            reply = f"Connecting you to Reception ✅ Ref: #{short_ref}\nReply 0 for the menu" if short_ref else "Connecting you to Reception ✅\nReply 0 for the menu"
+            reply = f"Connecting you to Reception ✅ Ref: #{short_ref}\nTo exit to the main menu, reply 00" if short_ref else "Connecting you to Reception ✅\nTo exit to the main menu, reply 00"
 
         await upsert_session(db, user_id=user_id, session=session, tenant_id=tenant)
         return reply, {"tenant_id": tenant, "state": session.get("state"), "handoff_active": True, "ticket_id": ticket_id}
@@ -511,9 +474,7 @@ async def handle_message(
     if is_incident_mode():
         kpi_signals.append("incident_mode")
 
-    # ---------------------------------------------------------
-    # 6) Engine routing
-    # ---------------------------------------------------------
+    # Engine routing
     engine_out = run_engine(
         session=session,
         user_message=cleaned,
@@ -531,12 +492,9 @@ async def handle_message(
         "tenant_id": tenant,
         "mode": session2.get("mode", "NORMAL"),
         "state": session2.get("state"),
-        "status": session2.get("status"),
-        "last_step": session2.get("last_step"),
         "language": session2.get("language"),
         "language_locked": session2.get("language_locked"),
         "handoff_active": session2.get("handoff_active"),
         "urgent_flag": bool(session2.get("urgent_flag")),
-        "emergency_hold": bool(_emergency_hold_active(session2)),
         "ticket_id": session2.get("last_ticket_id"),
     }
