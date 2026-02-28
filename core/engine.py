@@ -1,14 +1,14 @@
-# core/engine.py — Enterprise WhatsApp Clinic Engine (V4.1)
+# core/engine.py — Enterprise WhatsApp Clinic Engine (V4.2)
 # - Arabic-first greeting + language lock + menu + booking flows
 # - 0 = show menu
 # - 9 = Reception (99 is accepted as alias)
 #
-# V4.1 Fixes:
-# ✅ Menu: remove "0 Main Menu" from main menu list
-# ✅ Reception option becomes 9 (99 accepted)
-# ✅ Name parsing: remove mobile from name if sent on same line
-# ✅ Confirmation wording: "Booking Request Summary" (not confirmed)
-# ✅ Date parsing keeps robust behavior (YYYY-MM-DD / DD-MM-YYYY and / variants)
+# V4.2 Fixes (based on your latest WhatsApp tests):
+# ✅ Session-expiry no longer resets language / language_locked (prevents “language menu again”)
+# ✅ Session-expiry returns MAIN_MENU immediately if language is locked
+# ✅ Input normalization fixes ",0" / "،0" and punctuation around numeric commands (engine-side safety)
+# ✅ Greeting detection uses cleaned text
+# ✅ Keeps V4.1 improvements: main-menu no redundant "0", reception=9, name parsing removes mobile from name, wording is “Booking Request Summary”
 
 from __future__ import annotations
 
@@ -43,7 +43,7 @@ STATE_CANCEL_CONFIRM = "CANCEL_CONFIRM"
 STATE_CLOSED = "CLOSED"
 STATE_ESCALATION = "ESCALATION"
 
-ENGINE_MARKER = "CLINIC_ENGINE_V4_1"
+ENGINE_MARKER = "CLINIC_ENGINE_V4_2"
 SESSION_EXPIRE_SECONDS = 60 * 60  # 60 min
 
 CLINIC_NAME_AR = "مستشفى شيرين التخصصي"
@@ -123,12 +123,21 @@ def _parse_iso(s: Optional[str]) -> Optional[datetime]:
         return None
 
 
+def _clean_input(text: str) -> str:
+    t = (text or "").strip()
+    # normalize common punctuation that breaks numeric commands like ",0" or "،0"
+    for ch in ["،", ",", "٫", ";", "؛", "。"]:
+        t = t.replace(ch, "")
+    t = " ".join(t.split())
+    return t
+
+
 def _norm(t: str) -> str:
-    return (t or "").strip()
+    return _clean_input(t)
 
 
 def _low(t: str) -> str:
-    return _normalize_digits((t or "").strip().lower())
+    return _normalize_digits(_clean_input(t).lower())
 
 
 def _lang(x: str) -> str:
@@ -150,10 +159,17 @@ def _to_int(t: str, default: int = -1) -> int:
 def _is_greeting(text: str) -> bool:
     tl = _low(text)
     en = {"hi", "hello", "hey", "good morning", "good evening", "good afternoon"}
-    ar = {"السلام عليكم", "السلام عليكم ورحمة الله", "السلام عليكم ورحمه الله", "مرحبا", "أهلا", "اهلا", "هلا", "صباح الخير", "مساء الخير"}
+    ar = {
+        "السلام عليكم",
+        "السلام عليكم ورحمة الله",
+        "السلام عليكم ورحمه الله",
+        "مرحبا", "أهلا", "اهلا", "هلا",
+        "صباح الخير", "مساء الخير"
+    }
     if tl in en:
         return True
-    return any(p in (text or "") for p in ar)
+    raw = _clean_input(text)  # keep Arabic shapes
+    return any(p in raw for p in ar)
 
 
 def _is_thanks(text: str) -> bool:
@@ -273,7 +289,6 @@ def _main_menu(lang: str) -> str:
 
 
 def _footer(lang: str) -> str:
-    # Footer for sub-menus
     if lang == "ar":
         return "\n\n0️⃣ القائمة الرئيسية\n9️⃣ موظف الاستقبال"
     return "\n\n0️⃣ Main Menu\n9️⃣ Reception"
@@ -359,15 +374,11 @@ def _parse_date_any(raw: str) -> Tuple[Optional[str], Optional[str]]:
       DD-MM-YYYY, DD/MM/YYYY
     Return (normalized YYYY-MM-DD, error_reason) where error_reason in {None, "format", "invalid_date"}.
     """
-    s = _normalize_digits(_norm(raw))
-    s = s.replace("/", "-")
-
+    s = _normalize_digits(_clean_input(raw)).replace("/", "-")
     ymd = re.fullmatch(r"\d{4}-\d{2}-\d{2}", s)
     dmy = re.fullmatch(r"\d{2}-\d{2}-\d{4}", s)
-
     if not (ymd or dmy):
         return None, "format"
-
     try:
         if ymd:
             dt = datetime.strptime(s, "%Y-%m-%d").date()
@@ -393,7 +404,6 @@ def _extract_name_mobile_id(raw: str) -> Tuple[Optional[str], Optional[str], Opt
 
     text = _normalize_digits(raw0)
 
-    # Find digit sequences (mobile/id)
     seqs: List[str] = []
     cur: List[str] = []
     for ch in text:
@@ -423,7 +433,6 @@ def _extract_name_mobile_id(raw: str) -> Tuple[Optional[str], Optional[str], Opt
                 pid = cand
                 break
 
-    # Name = original text with extracted mobile/pid removed
     name_candidate = text
     if mobile:
         name_candidate = name_candidate.replace(mobile, " ")
@@ -431,7 +440,6 @@ def _extract_name_mobile_id(raw: str) -> Tuple[Optional[str], Optional[str], Opt
         name_candidate = name_candidate.replace(pid, " ")
     name_candidate = re.sub(r"\s+", " ", name_candidate).strip()
 
-    # If user sent multi-line, prioritize first line after cleanup
     lines = [ln.strip() for ln in name_candidate.splitlines() if ln.strip()]
     name = lines[0] if lines else name_candidate
 
@@ -496,30 +504,51 @@ def handle_turn(
     sess = dict(session_in or default_session(user_id))
     sess["user_id"] = user_id
 
+    # Always work with cleaned input inside engine
+    raw = _norm(message_text)
+    low = _low(message_text)
+
+    # Respect existing session language; controller may already lock it
     lang = _lang(sess.get("language") or language or "ar")
     sess["language"] = lang
     sess["text_direction"] = "rtl" if lang == "ar" else "ltr"
 
-    raw = _norm(message_text)
-    low = _low(message_text)
-
     prev_last = sess.get("last_user_ts")
     sess["last_user_ts"] = _utcnow_iso()
 
+    # ----------------------------
+    # Session expiry handling (V4.2 FIX)
+    # - Expire flow fields, but DO NOT reset language/language_locked
+    # - If language is locked, go straight to MAIN_MENU (prevents language menu restart)
+    # ----------------------------
     if prev_last and _session_expired_from(prev_last) and sess.get("state") != STATE_ESCALATION:
+        locked = bool(sess.get("language_locked"))
+        keep_lang = sess.get("language") or lang
+
         _reset_flow_fields(sess)
         sess["status"] = STATUS_ABANDONED
-        sess["state"] = STATE_LANG
-        sess["last_step"] = STATE_LANG
-        sess["language_locked"] = False
+
+        sess["language"] = keep_lang
+        sess["text_direction"] = "rtl" if keep_lang == "ar" else "ltr"
+        # keep lock as-is (do NOT force False)
+        sess["language_locked"] = locked
         sess["has_greeted"] = False
         sess["mistakes"] = 0
-        out = _welcome_text()
+
+        if locked:
+            sess["state"] = STATE_MENU
+            sess["last_step"] = STATE_MENU
+            out = _main_menu(keep_lang)
+        else:
+            sess["state"] = STATE_LANG
+            sess["last_step"] = STATE_LANG
+            out = _welcome_text()
+
         _set_bot(sess, out)
         return EngineResult(out, sess, [])
 
     # 0 = show main menu (if language locked) or language selection (if not)
-    if low == "0":
+    if low in {"0", "٠"}:
         if not bool(sess.get("language_locked")):
             sess["state"] = STATE_LANG
             sess["last_step"] = STATE_LANG
@@ -537,14 +566,20 @@ def handle_turn(
         sess["state"] = STATE_ESCALATION
         sess["last_step"] = STATE_ESCALATION
         sess["escalation_flag"] = True
-        out = ("تم تحويلكم إلى موظف الاستقبال ✅ الرجاء الانتظار... (للعودة للقائمة اكتب 0)"
-               if lang == "ar" else "Connecting you to Reception ✅ Please wait... (Reply 0 for menu)")
+        out = (
+            "تم تحويلكم إلى موظف الاستقبال ✅ الرجاء الانتظار... (للعودة للقائمة اكتب 0)"
+            if lang == "ar" else
+            "Connecting you to Reception ✅ Please wait... (Reply 0 for menu)"
+        )
         _set_bot(sess, out)
         return EngineResult(out, sess, [{"type": "ESCALATE", "reason": "user_requested_reception"}])
 
     if _is_thanks(raw):
-        out = ("العفو ✅ إذا احتجت أي شيء آخر اكتب 0 لعرض القائمة."
-               if lang == "ar" else "You’re welcome ✅ If you need anything else, reply 0 for the menu.")
+        out = (
+            "العفو ✅ إذا احتجت أي شيء آخر اكتب 0 لعرض القائمة."
+            if lang == "ar" else
+            "You’re welcome ✅ If you need anything else, reply 0 for the menu."
+        )
         _set_bot(sess, out)
         return EngineResult(out, sess, [])
 
@@ -747,9 +782,9 @@ def handle_turn(
         norm_ymd, err = _parse_date_any(message_text)
         if not norm_ymd:
             if lang == "ar":
-                msg = "صيغة التاريخ غير صحيحة. مثال: 2026-02-28 أو 28-02-2026 أو 28/02/2026" if err == "format" else "التاريخ غير صالح (مثال: 29 فبراير 2026 غير موجود). يرجى إدخال تاريخ صحيح."
+                msg = "صيغة التاريخ غير صحيحة. مثال: 2026-02-28 أو 28-02-2026 أو 28/02/2026" if err == "format" else "التاريخ غير صالح. يرجى إدخال تاريخ صحيح."
             else:
-                msg = "Date format is invalid. Example: 2026-02-28 or 28-02-2026 or 28/02/2026" if err == "format" else "That date is not valid (e.g., Feb 29, 2026 does not exist). Please enter a valid date."
+                msg = "Date format is invalid. Example: 2026-02-28 or 28-02-2026 or 28/02/2026" if err == "format" else "That date is not valid. Please enter a valid date."
             out = _soft_invalid(sess, lang, msg) + "\n\n" + _date_prompt(lang)
             _set_bot(sess, out)
             return EngineResult(out, sess, [])
