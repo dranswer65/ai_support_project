@@ -1,89 +1,100 @@
+# whatsapp_webhook.py (Twilio-style webhook)
+#
+# This is NOT Meta Cloud API.
+# It receives form-data fields like From / Body / MessageSid (Twilio).
+# It replies by returning PlainTextResponse.
+#
+# Uses the SAME core engine/controller (handle_message) + Postgres sessions.
+
+import os
+from typing import Any, Dict, Optional
+
 from fastapi import FastAPI, Request
 from fastapi.responses import PlainTextResponse
-from session_manager import SessionManager
 
-app = FastAPI()
-sessions = SessionManager()
+from database import AsyncSessionLocal
+from core.wa_dedupe_store_pg import ensure_wa_dedupe_table, claim_message_once
+from core.session_store_pg import ensure_sessions_table
+from core.appointment_schema import ensure_appointment_requests_table
+from whatsapp_controller import handle_message
 
 
-def reply(message: str):
-    """
-    WhatsApp expects plain text (or TwiML if using Twilio).
-    For now, we return plain text.
-    """
-    return PlainTextResponse(message)
+app = FastAPI(title="SupportPilot-TwilioWebhook", version="0.1.0")
+
+WA_DEFAULT_CLIENT = (os.getenv("WA_DEFAULT_CLIENT", "supportpilot_demo") or "").strip()
+TENANT_ID = WA_DEFAULT_CLIENT
+
+
+def _reply(message: str) -> PlainTextResponse:
+    # Twilio can accept plain text; if you later use TwiML, change this.
+    return PlainTextResponse((message or "").strip())
+
+
+@app.on_event("startup")
+async def _startup():
+    async with AsyncSessionLocal() as db:
+        await ensure_wa_dedupe_table(db)
+        await ensure_sessions_table(db)
+        await ensure_appointment_requests_table(db)
 
 
 @app.post("/whatsapp")
 async def whatsapp_entry(request: Request):
-    payload = await request.form()
+    """
+    Twilio WhatsApp inbound webhook typically posts x-www-form-urlencoded.
+    Common fields:
+      - From: "whatsapp:+15551234567"
+      - Body: message text
+      - MessageSid: unique id
+    """
+    form = await request.form()
 
-    user_id = payload.get("From")  # WhatsApp number
-    message = (payload.get("Body") or "").strip().lower()
+    from_raw = (form.get("From") or "").strip()
+    body = (form.get("Body") or "").strip()
+    msg_sid = (form.get("MessageSid") or "").strip()
 
-    session = sessions.get(user_id)
-    state = session["state"]
+    if not from_raw:
+        return _reply("")
 
-    # -------- STATE MACHINE --------
+    # Normalize user_id (keep full string to avoid collisions; or strip "whatsapp:" if you want)
+    user_id = from_raw
 
-    if state == "START":
-        sessions.set_state(user_id, "GREETING")
-        return reply(
-            "Hi 👋 Thanks for contacting SupportPilot.\n"
-            "How can I assist you today?"
-        )
+    if not body:
+        return _reply("Please send a text message.")
 
-    elif state == "GREETING":
-        sessions.set_state(user_id, "INTENT_DETECTION")
-        return reply(
-            "Got it 👍 Could you please tell me more details so I can help you?"
-        )
-
-    elif state == "INTENT_DETECTION":
-        sessions.update_data(user_id, "intent", message)
-        sessions.set_state(user_id, "INFO_REQUIRED")
-        return reply(
-            "To assist you further, may I have your **order ID** please?"
-        )
-
-    elif state == "INFO_REQUIRED":
-        sessions.update_data(user_id, "order_id", message)
-        sessions.set_state(user_id, "ACTION_IN_PROGRESS")
-        return reply(
-            "Thank you. I’m checking this for you now. Please allow a moment ⏳"
-        )
-
-    elif state == "ACTION_IN_PROGRESS":
-        sessions.set_state(user_id, "RESOLVED")
-        return reply(
-            "Your request has been processed ✅\n"
-            "Is there anything else I can help you with?"
-        )
-
-    elif state == "RESOLVED":
-        if message in {"no", "no thanks", "nothing", "nope"}:
-            sessions.set_state(user_id, "CLOSED")
-            return reply(
-                "Thank you for contacting SupportPilot. Have a great day 😊"
+    # Optional dedupe (if MessageSid provided)
+    # Twilio MessageSid is unique; we can safely use it as msg_id.
+    if msg_sid:
+        async with AsyncSessionLocal() as db:
+            claimed = await claim_message_once(
+                db,
+                tenant_id=TENANT_ID,
+                msg_id=msg_sid,
+                wa_from=user_id,
+                phone_number_id="twilio",  # marker
             )
-        else:
-            sessions.set_state(user_id, "INTENT_DETECTION")
-            return reply(
-                "Sure — please let me know what else I can help you with."
+        if not claimed:
+            # Duplicate webhook delivery; do not respond again
+            return _reply("")
+
+    # Run the SAME engine/controller
+    reply_text: str = ""
+    meta: Dict[str, Any] = {}
+    try:
+        async with AsyncSessionLocal() as db:
+            reply_text, meta = await handle_message(
+                db=db,
+                user_id=user_id,
+                message_text=body,
+                tenant_id=TENANT_ID,
             )
+    except Exception as e:
+        print("[twilio_webhook] engine error:", repr(e))
+        return _reply("")
 
-    elif state == "ESCALATION":
-        return reply(
-            "A human support agent will assist you shortly 👩‍💻👨‍💻\n"
-            "Thank you for your patience."
-        )
+    # Controller may return "" intentionally during sticky handoff => silence
+    reply_clean = (reply_text or "").strip()
+    if not reply_clean:
+        return _reply("")
 
-    elif state == "CLOSED":
-        return reply(
-            "This conversation is closed. You’re welcome to message again anytime."
-        )
-
-    # Fallback safety net
-    return reply(
-        "I’m here to help. Please tell me how I can assist you."
-    )
+    return _reply(reply_clean[:4000])
