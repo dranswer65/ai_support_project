@@ -1,14 +1,18 @@
-# core/engine.py — Enterprise WhatsApp Clinic Engine (V4.2)
+# core/engine.py — Enterprise WhatsApp Clinic Engine (V4.3)
 # - Arabic-first greeting + language lock + menu + booking flows
 # - 0 = show menu
-# - 9 = Reception (99 is accepted as alias)
+# - 9 = Reception (99 accepted)
 #
-# V4.2 Fixes (based on your latest WhatsApp tests):
-# ✅ Session-expiry no longer resets language / language_locked (prevents “language menu again”)
+# V4.3 Fixes (based on your latest WhatsApp tests):
+# ✅ Main-menu does NOT repeat after every message:
+#    - If user types non-numeric while in MAIN_MENU, we send a short hint (not the full menu)
+#    - After 2 mistakes, we show full menu once
+# ✅ Session-expiry does NOT reset language / language_locked
 # ✅ Session-expiry returns MAIN_MENU immediately if language is locked
-# ✅ Input normalization fixes ",0" / "،0" and punctuation around numeric commands (engine-side safety)
+# ✅ Input normalization fixes ",0" / "،0" and punctuation around numeric commands
 # ✅ Greeting detection uses cleaned text
-# ✅ Keeps V4.1 improvements: main-menu no redundant "0", reception=9, name parsing removes mobile from name, wording is “Booking Request Summary”
+# ✅ Keeps V4.2 improvements: no redundant "0" inside main menu, reception=9, name parsing removes mobile from name,
+#    wording is “Booking Request Summary”
 
 from __future__ import annotations
 
@@ -43,7 +47,7 @@ STATE_CANCEL_CONFIRM = "CANCEL_CONFIRM"
 STATE_CLOSED = "CLOSED"
 STATE_ESCALATION = "ESCALATION"
 
-ENGINE_MARKER = "CLINIC_ENGINE_V4_2"
+ENGINE_MARKER = "CLINIC_ENGINE_V4_3"
 SESSION_EXPIRE_SECONDS = 60 * 60  # 60 min
 
 CLINIC_NAME_AR = "مستشفى شيرين التخصصي"
@@ -125,7 +129,6 @@ def _parse_iso(s: Optional[str]) -> Optional[datetime]:
 
 def _clean_input(text: str) -> str:
     t = (text or "").strip()
-    # normalize common punctuation that breaks numeric commands like ",0" or "،0"
     for ch in ["،", ",", "٫", ";", "؛", "。"]:
         t = t.replace(ch, "")
     t = " ".join(t.split())
@@ -168,7 +171,7 @@ def _is_greeting(text: str) -> bool:
     }
     if tl in en:
         return True
-    raw = _clean_input(text)  # keep Arabic shapes
+    raw = _clean_input(text)
     return any(p in raw for p in ar)
 
 
@@ -196,6 +199,7 @@ def default_session(user_id: str) -> Dict[str, Any]:
         "has_greeted": False,
 
         "mistakes": 0,
+        "menu_mistakes": 0,  # ✅ V4.3 anti-menu spam
         "last_user_ts": _utcnow_iso(),
         "last_bot_ts": None,
         "last_bot_message": "",
@@ -229,6 +233,7 @@ def _reset_flow_fields(sess: Dict[str, Any]) -> None:
     ]:
         sess[k] = None
     sess["mistakes"] = 0
+    sess["menu_mistakes"] = 0
 
 
 def _seconds_since(prev_iso: Optional[str]) -> Optional[float]:
@@ -260,7 +265,6 @@ def _welcome_text() -> str:
 
 
 def _main_menu(lang: str) -> str:
-    # No "0 Main Menu" inside the main menu itself
     if lang == "ar":
         return (
             "القائمة الرئيسية:\n\n"
@@ -286,6 +290,12 @@ def _main_menu(lang: str) -> str:
         "8️⃣ Contact Information\n"
         "9️⃣ Reception"
     )
+
+
+def _menu_hint(lang: str) -> str:
+    if lang == "ar":
+        return "فضلاً اختر رقمًا من القائمة (1-9)، أو اكتب 0 لعرض القائمة، أو 9 لموظف الاستقبال."
+    return "Please reply with a menu number (1–9), or reply 0 to show the menu, or 9 for Reception."
 
 
 def _footer(lang: str) -> str:
@@ -368,12 +378,6 @@ def _soft_invalid(sess: Dict[str, Any], lang: str, msg: str) -> str:
 
 
 def _parse_date_any(raw: str) -> Tuple[Optional[str], Optional[str]]:
-    """
-    Accept:
-      YYYY-MM-DD, YYYY/MM/DD
-      DD-MM-YYYY, DD/MM/YYYY
-    Return (normalized YYYY-MM-DD, error_reason) where error_reason in {None, "format", "invalid_date"}.
-    """
     s = _normalize_digits(_clean_input(raw)).replace("/", "-")
     ymd = re.fullmatch(r"\d{4}-\d{2}-\d{2}", s)
     dmy = re.fullmatch(r"\d{2}-\d{2}-\d{4}", s)
@@ -504,7 +508,6 @@ def handle_turn(
     sess = dict(session_in or default_session(user_id))
     sess["user_id"] = user_id
 
-    # Always work with cleaned input inside engine
     raw = _norm(message_text)
     low = _low(message_text)
 
@@ -516,11 +519,7 @@ def handle_turn(
     prev_last = sess.get("last_user_ts")
     sess["last_user_ts"] = _utcnow_iso()
 
-    # ----------------------------
-    # Session expiry handling (V4.2 FIX)
-    # - Expire flow fields, but DO NOT reset language/language_locked
-    # - If language is locked, go straight to MAIN_MENU (prevents language menu restart)
-    # ----------------------------
+    # Session expiry handling (keeps language & lock)
     if prev_last and _session_expired_from(prev_last) and sess.get("state") != STATE_ESCALATION:
         locked = bool(sess.get("language_locked"))
         keep_lang = sess.get("language") or lang
@@ -530,7 +529,6 @@ def handle_turn(
 
         sess["language"] = keep_lang
         sess["text_direction"] = "rtl" if keep_lang == "ar" else "ltr"
-        # keep lock as-is (do NOT force False)
         sess["language_locked"] = locked
         sess["has_greeted"] = False
         sess["mistakes"] = 0
@@ -557,6 +555,7 @@ def handle_turn(
             return EngineResult(out, sess, [])
         sess["state"] = STATE_MENU
         sess["last_step"] = STATE_MENU
+        sess["menu_mistakes"] = 0
         out = _main_menu(lang)
         _set_bot(sess, out)
         return EngineResult(out, sess, [])
@@ -566,6 +565,7 @@ def handle_turn(
         sess["state"] = STATE_ESCALATION
         sess["last_step"] = STATE_ESCALATION
         sess["escalation_flag"] = True
+        sess["menu_mistakes"] = 0
         out = (
             "تم تحويلكم إلى موظف الاستقبال ✅ الرجاء الانتظار... (للعودة للقائمة اكتب 0)"
             if lang == "ar" else
@@ -601,6 +601,7 @@ def handle_turn(
                 sess["status"] = STATUS_ACTIVE
                 sess["state"] = STATE_MENU
                 sess["last_step"] = STATE_MENU
+                sess["menu_mistakes"] = 0
                 out = _main_menu("ar")
                 _set_bot(sess, out)
                 return EngineResult(out, sess, [])
@@ -611,6 +612,7 @@ def handle_turn(
                 sess["status"] = STATUS_ACTIVE
                 sess["state"] = STATE_MENU
                 sess["last_step"] = STATE_MENU
+                sess["menu_mistakes"] = 0
                 out = _main_menu("en")
                 _set_bot(sess, out)
                 return EngineResult(out, sess, [])
@@ -625,18 +627,21 @@ def handle_turn(
         sess["status"] = STATUS_ACTIVE
         sess["state"] = STATE_MENU
         sess["last_step"] = STATE_MENU
+        sess["menu_mistakes"] = 0
         out = _main_menu(lang)
         _set_bot(sess, out)
         return EngineResult(out, sess, [])
 
-    # MAIN MENU routing
+    # MAIN MENU routing (V4.3 anti-repeat)
     if sess.get("state") == STATE_MENU:
         if not raw:
-            out = _main_menu(lang)
+            # do NOT reprint menu on empty messages; just hint
+            out = _menu_hint(lang)
             _set_bot(sess, out)
             return EngineResult(out, sess, [])
 
         if _is_digit_choice(raw):
+            sess["menu_mistakes"] = 0
             choice = _to_int(raw)
 
             if choice == 1:
@@ -711,11 +716,18 @@ def handle_turn(
             _set_bot(sess, out)
             return EngineResult(out, sess, [])
 
-        out = _main_menu(lang)
+        # Non-numeric while in menu: show hint, not full menu
+        sess["menu_mistakes"] = int(sess.get("menu_mistakes", 0)) + 1
+        if int(sess["menu_mistakes"]) >= 2:
+            sess["menu_mistakes"] = 0
+            out = _main_menu(lang)
+        else:
+            out = _menu_hint(lang)
+
         _set_bot(sess, out)
         return EngineResult(out, sess, [])
 
-    # BOOKING FLOWS
+    # BOOKING FLOWS (same as V4.2)
     if sess.get("state") == STATE_BOOK_DEPT:
         idx = _to_int(raw, -1) - 1 if _is_digit_choice(raw) else -1
         dept_key = None
@@ -923,6 +935,7 @@ def handle_turn(
         _set_bot(sess, out)
         return EngineResult(out, sess, [])
 
+    # Fallback
     sess["state"] = STATE_MENU
     sess["last_step"] = STATE_MENU
     out = _main_menu(lang)
