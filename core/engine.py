@@ -1,27 +1,4 @@
-# core/engine.py — Enterprise WhatsApp Clinic Engine (UPDATED, compatible)
-# - Arabic-first greeting + language lock + menu + booking flows
-# - 0 = show menu
-# - 9 = Reception (99 accepted)
-#
-# Fixes applied for your latest WhatsApp issues:
-# ✅ FIX 4 — Greeting Logic (engine side):
-#   If session expired OR no active state OR has_greeted=False and first message is greeting:
-#   ALWAYS show welcome message (never “choose number” as first reply).
-# ✅ Stronger “first turn” behavior:
-#   - When language is NOT locked and user types any non-digit (including "6"),
-#     respond with welcome (language selection), not menu hint.
-# ✅ Normalization:
-#   - Robust normalization of numeric commands with punctuation (",0" / "،0" / " 0 ")
-#   - Arabic digits normalization remains
-# ✅ Session expiry:
-#   - Preserves language and language_locked
-#   - If locked -> go to MAIN_MENU (not LANG_SELECT)
-# ✅ MAIN_MENU anti-repeat kept (V4.3 behavior)
-#
-# Notes:
-# - Emergency logic belongs to whatsapp_controller.py (global interceptor).
-# - Engine focuses on correct flow + greeting/menu behavior.
-
+# core/engine.py — Enterprise WhatsApp Clinic Engine (V4.3+)
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -55,7 +32,7 @@ STATE_CANCEL_CONFIRM = "CANCEL_CONFIRM"
 STATE_CLOSED = "CLOSED"
 STATE_ESCALATION = "ESCALATION"
 
-ENGINE_MARKER = "CLINIC_ENGINE_V4_4"
+ENGINE_MARKER = "CLINIC_ENGINE_V4_3"
 SESSION_EXPIRE_SECONDS = 60 * 60  # 60 min
 
 CLINIC_NAME_AR = "مستشفى شيرين التخصصي"
@@ -169,13 +146,13 @@ def _to_int(t: str, default: int = -1) -> int:
 
 def _is_greeting(text: str) -> bool:
     tl = _low(text)
-    en = {"hi", "hello", "hey", "good morning", "good evening", "good afternoon", "السلام عليكم", "assalam alaikum"}
+    en = {"hi", "hello", "hey", "good morning", "good evening", "good afternoon"}
     ar = {
         "السلام عليكم",
         "السلام عليكم ورحمة الله",
         "السلام عليكم ورحمه الله",
         "مرحبا", "أهلا", "اهلا", "هلا",
-        "صباح الخير", "مساء الخير",
+        "صباح الخير", "مساء الخير"
     }
     if tl in en:
         return True
@@ -186,6 +163,14 @@ def _is_greeting(text: str) -> bool:
 def _is_thanks(text: str) -> bool:
     tl = _low(text)
     return tl in {"thanks", "thank you", "thx", "شكرا", "شكراً", "شكرًا", "مشكور", "الله يعطيك العافية"}
+
+
+def _wants_english(raw_low: str) -> bool:
+    return raw_low in {"2", "en", "eng", "english"} or "english" in raw_low
+
+
+def _wants_arabic(raw_low: str) -> bool:
+    return raw_low in {"1", "ar", "arabic"} or ("عربي" in raw_low) or ("العربية" in raw_low)
 
 
 def _set_bot(sess: Dict[str, Any], msg: str) -> None:
@@ -207,7 +192,7 @@ def default_session(user_id: str) -> Dict[str, Any]:
         "has_greeted": False,
 
         "mistakes": 0,
-        "menu_mistakes": 0,  # anti-menu spam
+        "menu_mistakes": 0,
         "last_user_ts": _utcnow_iso(),
         "last_bot_ts": None,
         "last_bot_message": "",
@@ -507,16 +492,6 @@ def _confirmation(sess: Dict[str, Any], lang: str) -> str:
     )
 
 
-def _state_is_valid(state: Any) -> bool:
-    return state in {
-        STATE_LANG, STATE_MENU,
-        STATE_BOOK_DEPT, STATE_BOOK_DOCTOR, STATE_BOOK_DATE, STATE_BOOK_SLOT, STATE_BOOK_PATIENT, STATE_BOOK_CONFIRM,
-        STATE_RESCHEDULE_LOOKUP, STATE_RESCHEDULE_NEW_DATE, STATE_RESCHEDULE_NEW_SLOT, STATE_RESCHEDULE_CONFIRM,
-        STATE_CANCEL_LOOKUP, STATE_CANCEL_CONFIRM,
-        STATE_CLOSED, STATE_ESCALATION,
-    }
-
-
 def handle_turn(
     user_id: str,
     message_text: str,
@@ -529,16 +504,9 @@ def handle_turn(
     raw = _norm(message_text)
     low = _low(message_text)
 
-    # Respect existing session language; controller may already lock it
     lang = _lang(sess.get("language") or language or "ar")
     sess["language"] = lang
     sess["text_direction"] = "rtl" if lang == "ar" else "ltr"
-
-    # Validate state; if missing/unknown, treat as fresh session
-    if not _state_is_valid(sess.get("state")):
-        sess["state"] = STATE_LANG if not bool(sess.get("language_locked")) else STATE_MENU
-        sess["last_step"] = sess["state"]
-        sess["has_greeted"] = False
 
     prev_last = sess.get("last_user_ts")
     sess["last_user_ts"] = _utcnow_iso()
@@ -569,33 +537,36 @@ def handle_turn(
         _set_bot(sess, out)
         return EngineResult(out, sess, [])
 
-    # ✅ FIX 4 (engine-side):
-    # If language NOT locked and first meaningful user message is greeting => show welcome.
-    # Also: if not greeted yet and not locked and user sends non-digit (including "6") => show welcome.
-    if not bool(sess.get("language_locked")):
-        if _is_greeting(raw):
-            sess["state"] = STATE_LANG
-            sess["last_step"] = STATE_LANG
-            sess["has_greeted"] = True
-            out = _welcome_text()
-            _set_bot(sess, out)
-            return EngineResult(out, sess, [])
+    # ---------------------------------------------------------
+    # Language switch commands (work even when locked)
+    # ---------------------------------------------------------
+    if _wants_english(low):
+        sess["language"] = "en"
+        sess["text_direction"] = "ltr"
+        sess["language_locked"] = True
+        sess["state"] = STATE_MENU
+        sess["last_step"] = STATE_MENU
+        sess["menu_mistakes"] = 0
+        out = _main_menu("en")
+        _set_bot(sess, out)
+        return EngineResult(out, sess, [])
 
-        # If user hasn't selected language yet, ANY non-digit input should go to welcome (not menu hint).
-        if raw and (not _is_digit_choice(raw)):
-            sess["state"] = STATE_LANG
-            sess["last_step"] = STATE_LANG
-            sess["has_greeted"] = True
-            out = _welcome_text()
-            _set_bot(sess, out)
-            return EngineResult(out, sess, [])
+    if _wants_arabic(low):
+        sess["language"] = "ar"
+        sess["text_direction"] = "rtl"
+        sess["language_locked"] = True
+        sess["state"] = STATE_MENU
+        sess["last_step"] = STATE_MENU
+        sess["menu_mistakes"] = 0
+        out = _main_menu("ar")
+        _set_bot(sess, out)
+        return EngineResult(out, sess, [])
 
     # 0 = show main menu (if language locked) or language selection (if not)
     if low in {"0", "٠"}:
         if not bool(sess.get("language_locked")):
             sess["state"] = STATE_LANG
             sess["last_step"] = STATE_LANG
-            sess["has_greeted"] = True
             out = _welcome_text()
             _set_bot(sess, out)
             return EngineResult(out, sess, [])
@@ -629,6 +600,13 @@ def handle_turn(
         _set_bot(sess, out)
         return EngineResult(out, sess, [])
 
+    if _is_greeting(raw) and not bool(sess.get("language_locked")):
+        sess["state"] = STATE_LANG
+        sess["last_step"] = STATE_LANG
+        out = _welcome_text()
+        _set_bot(sess, out)
+        return EngineResult(out, sess, [])
+
     # Language selection
     if sess.get("state") == STATE_LANG or not bool(sess.get("language_locked")):
         if _is_digit_choice(raw):
@@ -637,7 +615,6 @@ def handle_turn(
                 sess["language"] = "ar"
                 sess["text_direction"] = "rtl"
                 sess["language_locked"] = True
-                sess["has_greeted"] = True
                 sess["status"] = STATUS_ACTIVE
                 sess["state"] = STATE_MENU
                 sess["last_step"] = STATE_MENU
@@ -649,7 +626,6 @@ def handle_turn(
                 sess["language"] = "en"
                 sess["text_direction"] = "ltr"
                 sess["language_locked"] = True
-                sess["has_greeted"] = True
                 sess["status"] = STATUS_ACTIVE
                 sess["state"] = STATE_MENU
                 sess["last_step"] = STATE_MENU
@@ -660,7 +636,6 @@ def handle_turn(
 
         sess["state"] = STATE_LANG
         sess["last_step"] = STATE_LANG
-        sess["has_greeted"] = True
         out = _welcome_text()
         _set_bot(sess, out)
         return EngineResult(out, sess, [])
@@ -674,8 +649,15 @@ def handle_turn(
         _set_bot(sess, out)
         return EngineResult(out, sess, [])
 
-    # MAIN MENU routing (anti-repeat)
+    # MAIN MENU routing (V4.3 anti-repeat)
     if sess.get("state") == STATE_MENU:
+        # ✅ FIX: Greeting in menu should show menu, not hint
+        if _is_greeting(raw):
+            sess["menu_mistakes"] = 0
+            out = _main_menu(lang)
+            _set_bot(sess, out)
+            return EngineResult(out, sess, [])
+
         if not raw:
             out = _menu_hint(lang)
             _set_bot(sess, out)
@@ -757,7 +739,6 @@ def handle_turn(
             _set_bot(sess, out)
             return EngineResult(out, sess, [])
 
-        # Non-numeric while in menu: show hint, not full menu
         sess["menu_mistakes"] = int(sess.get("menu_mistakes", 0)) + 1
         if int(sess["menu_mistakes"]) >= 2:
             sess["menu_mistakes"] = 0
@@ -768,7 +749,7 @@ def handle_turn(
         _set_bot(sess, out)
         return EngineResult(out, sess, [])
 
-    # BOOKING FLOWS
+    # BOOKING FLOWS (unchanged from your V4.3)
     if sess.get("state") == STATE_BOOK_DEPT:
         idx = _to_int(raw, -1) - 1 if _is_digit_choice(raw) else -1
         dept_key = None
@@ -976,7 +957,6 @@ def handle_turn(
         _set_bot(sess, out)
         return EngineResult(out, sess, [])
 
-    # Fallback
     sess["state"] = STATE_MENU
     sess["last_step"] = STATE_MENU
     out = _main_menu(lang)
