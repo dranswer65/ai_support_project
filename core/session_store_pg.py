@@ -17,7 +17,7 @@ from typing import Any, Dict, Optional
 from sqlalchemy import text, bindparam
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.dialects.postgresql import JSONB
-print("[boot] loaded core.session_store_pg")
+
 
 TABLE_NAME = "sessions"
 
