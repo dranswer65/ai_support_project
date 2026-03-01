@@ -1,9 +1,11 @@
-# whatsapp_controller.py — Enterprise-ready controller (V7)
+# whatsapp_controller.py — Enterprise-ready controller (V7.1)
 # Fixes:
 # ✅ Sticky handoff silence after 99 (including "Thank you")
 # ✅ Prevent language reset loops (don’t show language menu once locked)
 # ✅ Handle free-text symptoms (EN/AR) with triage + emergency escalation
 # ✅ Intent + Specialty detection from keyword sheets (jump-start booking)
+# ✅ Fix: "I need the dentist" no longer mis-routes to ENT (word-boundary matching for short tokens like "ent")
+# ✅ Add Dentistry specialty keywords (EN/AR)
 # ✅ Refined urinary phrases: "difficulty to urinate" => triage, NOT emergency
 # ✅ Keep Reception = 99 (not 9)
 
@@ -50,7 +52,7 @@ _ARABIC_DIGITS = str.maketrans("٠١٢٣٤٥٦٧٨٩", "0123456789")
 _INTENT_BOOK_EN = ["book", "booking", "appointment", "schedule", "reserve", "visit", "consultation", "checkup"]
 _INTENT_BOOK_AR = ["حجز", "احجز", "موعد", "أبي موعد", "ابغى موعد", "أبغى موعد", "اريد موعد", "أريد موعد", "ابي احجز", "ابغى احجز", "عايز احجز", "عاوزه احجز", "محتاج موعد"]
 
-_INTENT_DOCTOR_INFO_EN = ["doctor", "specialist", "do you have", "available doctor", "clinic", "who is the doctor", "find a doctor", "gynecologist", "pediatrician", "cardiologist", "dermatologist", "ent", "neurologist", "orthopedic"]
+_INTENT_DOCTOR_INFO_EN = ["doctor", "specialist", "do you have", "available doctor", "clinic", "who is the doctor", "find a doctor", "gynecologist", "pediatrician", "cardiologist", "dermatologist", "neurologist", "orthopedic", "dentist", "dentistry"]
 _INTENT_DOCTOR_INFO_AR = ["دكتور", "دكتورة", "أخصائي", "اخصائي", "عيادة", "هل يوجد", "عندكم", "مين الدكتور", "مين الدكتورة", "أبغى دكتور", "ابغى دكتور", "عايز دكتور", "محتاج دكتور"]
 
 _INTENT_RESCHEDULE_EN = ["reschedule", "change appointment", "modify appointment", "move appointment"]
@@ -58,6 +60,7 @@ _INTENT_RESCHEDULE_AR = ["تعديل", "تغيير موعد", "غير موعد",
 
 _INTENT_CANCEL_EN = ["cancel", "cancellation", "delete appointment"]
 _INTENT_CANCEL_AR = ["إلغاء", "الغاء", "كنسل", "ألغِ", "الغي", "ابغى الغي", "أبغى ألغي", "عايز الغي"]
+
 
 # Specialty keyword sets (focused, high-signal from your sheets)
 _SPECIALTY = {
@@ -92,6 +95,7 @@ _SPECIALTY = {
         "label_ar": "جراحة العظام",
     },
     "ent": {
+        # NOTE: "ent" is a short token. We match it using word-boundary only (see _contains_kw).
         "en": ["ent", "otolaryngologist", "ear doctor", "throat", "sinus", "tonsils", "hearing", "tinnitus"],
         "ar": ["أنف وأذن وحنجرة", "انف واذن وحنجرة", "أذن", "اذن", "حنجرة", "جيوب", "لوز", "طنين", "سمع"],
         "label_en": "ENT",
@@ -115,7 +119,15 @@ _SPECIALTY = {
         "label_en": "Physiotherapy",
         "label_ar": "العلاج الطبيعي",
     },
+    "dental": {
+        # ✅ Added: Dentistry (prevents "dentist" getting misread as "ent")
+        "en": ["dentistry", "dental", "dentist", "tooth", "teeth", "gum", "orthodontic", "braces", "root canal", "filling", "wisdom tooth"],
+        "ar": ["أسنان", "اسنان", "دكتور أسنان", "دكتور اسنان", "طبيب أسنان", "طبيب اسنان", "عيادة أسنان", "عيادة اسنان", "تقويم", "خلع", "حشو", "عصب", "ضرس"],
+        "label_en": "Dentistry",
+        "label_ar": "طب الأسنان",
+    },
 }
+
 
 # -----------------------------
 # Emergency & Symptom detection
@@ -164,6 +176,8 @@ _EMERGENCY_PHRASES_AR = [
     "تشنج", "تشنجات", "صرع",
     "نزيف شديد", "نزيف قوي", "نزيف مهبلي شديد", "ينزف بشدة",
     "ألم شديد في الصدر", "الم شديد في الصدر", "جلطة", "سكتة", "نوبة قلبية", "ثقل في الكلام", "انحراف الوجه",
+    # Egyptian/Gulf variants (helps your real test)
+    "صدري بيوجعني", "وجع في الصدر", "مش قادر اتنفس", "مش قادر أتنفس",
     # urinary retention
     "احتباس بول", "احتباس البول", "لا أستطيع التبول", "لا استطيع التبول", "ما اقدر اتبول", "انقطاع البول", "توقف البول",
     # OB
@@ -399,15 +413,37 @@ def _detect_intent(cleaned: str) -> Optional[str]:
     return None
 
 
+def _contains_kw_en(text_lower: str, kw: str) -> bool:
+    """
+    Fix for false positives like:
+      kw="ent" matching inside "dentist"
+    Strategy:
+    - If kw has spaces => substring is fine
+    - If kw is short token (<=3) or looks like acronym => word-boundary match
+    - Else => substring match
+    """
+    kw = (kw or "").strip().lower()
+    if not kw:
+        return False
+
+    if " " in kw:
+        return kw in text_lower
+
+    # short tokens / acronyms => word boundary
+    if len(kw) <= 3:
+        return re.search(rf"\b{re.escape(kw)}\b", text_lower) is not None
+
+    return kw in text_lower
+
+
 def _detect_specialty(cleaned: str) -> Optional[str]:
     t = (cleaned or "").strip().lower()
     if not t:
         return None
 
-    # Strong match: if any specialty keyword appears
     for dept_key, spec in _SPECIALTY.items():
         for kw in spec.get("en", []):
-            if kw and kw in t:
+            if kw and _contains_kw_en(t, kw):
                 return dept_key
         for kw in spec.get("ar", []):
             if kw and kw in cleaned:
@@ -493,7 +529,7 @@ async def handle_message(
             "language_locked": False,
             "text_direction": "ltr",
             "has_greeted": False,
-            "conversation_version": 7,
+            "conversation_version": 7.1,
             "escalation_flag": False,
             "urgent_flag": False,
             "handoff_active": False,
@@ -516,6 +552,7 @@ async def handle_message(
             session["handoff_until"] = None
             session["state"] = "MAIN_MENU"
             session["last_step"] = "MAIN_MENU"
+            session["language_locked"] = True  # ✅ prevent language menu loop after handoff
             await upsert_session(db, user_id=user_id, session=session, tenant_id=tenant)
 
             engine_out = run_engine(session=session, user_message="0", language=_resolve_language_for_turn("0", session))
@@ -672,25 +709,22 @@ async def handle_message(
         kpi_signals.append("incident_mode")
 
     # ---------------------------------------------------------
-    # NEW: Intent + Specialty detection (free text jump-start)
-    # - Works best when user is at main menu or language select.
-    # - Locks language and prevents language menu loop.
+    # Intent + Specialty detection (free text jump-start)
     # ---------------------------------------------------------
     intent = _detect_intent(cleaned)
     dept_key = _detect_specialty(cleaned)
 
-    # We jump ONLY for booking-related intents (safe). No jumps for cancel/reschedule here.
+    # We jump ONLY for booking-related intents (safe).
     if dept_key and intent in {"BOOK", "DOCTOR_INFO"}:
         session["language_locked"] = True
-        session["state"] = "BOOK_DOCTOR"  # jump into doctor list
+        session["state"] = "BOOK_DOCTOR"  # jump into doctor list (engine will show list when message is "")
         session["last_step"] = "BOOK_DOCTOR"
         session["intent"] = "BOOK" if intent == "BOOK" else "DOCTOR_INFO"
         _apply_specialty_to_session(session, dept_key)
 
-        # Call engine with empty message => engine now shows prompt directly (V4.4)
         engine_out = run_engine(
             session=session,
-            user_message="",
+            user_message="",  # engine will show prompt directly
             language=language,
             arabic_tone=arabic_tone,
             kpi_signals=kpi_signals,

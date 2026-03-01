@@ -1,18 +1,24 @@
-import asyncio
-from sqlalchemy import text
-from database import AsyncSessionLocal
+import os
+import psycopg
 
-async def main():
-    async with AsyncSessionLocal() as db:
-        await db.execute(
-            text("DELETE FROM sessions WHERE tenant_id=:t AND user_id=:u"),
-            {"t": "supportpilot_demo", "u": "918287920585"},
+DATABASE_URL = os.getenv("DATABASE_URL")
+
+if not DATABASE_URL:
+    raise RuntimeError("DATABASE_URL not set")
+
+# Ensure sslmode=require
+if "sslmode=" not in DATABASE_URL:
+    if "?" in DATABASE_URL:
+        DATABASE_URL += "&sslmode=require"
+    else:
+        DATABASE_URL += "?sslmode=require"
+
+with psycopg.connect(DATABASE_URL) as conn:
+    with conn.cursor() as cur:
+        cur.execute(
+            "DELETE FROM sessions WHERE tenant_id=%s AND user_id=%s",
+            ("supportpilot_demo", "918287920585"),
         )
-        await db.commit()
+    conn.commit()
 
-    print("✅ reset done")
-
-asyncio.run(main())
-
-
-
+print("✅ reset done")

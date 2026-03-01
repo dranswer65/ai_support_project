@@ -4,9 +4,9 @@
 # - 99 = Reception (9 is used by Neurology option)
 #
 # V4.4 Fixes:
-# ✅ Allows "controller jump" into booking flow states:
-#    - If state expects a choice but user_message is empty, show the prompt (no error)
-# ✅ Keeps all V4.3 behavior intact
+# ✅ 10-minute timeout for ALL in-progress flows (booking/reschedule/cancel)
+# ✅ If controller jump-starts BOOK_DOCTOR with user_message="" -> show doctor list (no "invalid" mistake)
+# ✅ If controller jump-starts BOOK_DEPT with user_message="" -> show dept list (no "invalid" mistake)
 
 from __future__ import annotations
 
@@ -42,7 +42,9 @@ STATE_CLOSED = "CLOSED"
 STATE_ESCALATION = "ESCALATION"
 
 ENGINE_MARKER = "CLINIC_ENGINE_V4_4"
-SESSION_EXPIRE_SECONDS = 60 * 60  # 60 min
+
+# ✅ 10 minutes everywhere (as you requested)
+SESSION_EXPIRE_SECONDS = 60 * 10  # 10 min
 
 CLINIC_NAME_AR = "مستشفى شيرين التخصصي"
 CLINIC_NAME_EN = "Shireen Specialist Hospital"
@@ -416,7 +418,6 @@ def _extract_name_mobile_id(raw: str) -> Tuple[Optional[str], Optional[str], Opt
 
     text = _normalize_digits(raw0)
 
-    # Find digit sequences (mobile/id)
     seqs: List[str] = []
     cur: List[str] = []
     for ch in text:
@@ -446,7 +447,6 @@ def _extract_name_mobile_id(raw: str) -> Tuple[Optional[str], Optional[str], Opt
                 pid = cand
                 break
 
-    # Name = original text with extracted mobile/pid removed
     name_candidate = text
     if mobile:
         name_candidate = name_candidate.replace(mobile, " ")
@@ -456,7 +456,6 @@ def _extract_name_mobile_id(raw: str) -> Tuple[Optional[str], Optional[str], Opt
     lines = [ln.strip() for ln in name_candidate.splitlines() if ln.strip()]
     name = lines[0] if lines else name_candidate
 
-    # If user wrote ONLY digits, treat it as mobile only
     only_digits = re.fullmatch(r"\+?\d{8,15}", _clean_input(text).replace(" ", ""))
     if only_digits:
         return None, text.strip(), None
@@ -562,7 +561,6 @@ def handle_turn(
     raw = _norm(message_text)
     low = _low(message_text)
 
-    # Respect existing session language; controller may already lock it
     lang = _lang(sess.get("language") or language or "ar")
     sess["language"] = lang
     sess["text_direction"] = "rtl" if lang == "ar" else "ltr"
@@ -570,7 +568,7 @@ def handle_turn(
     prev_last = sess.get("last_user_ts")
     sess["last_user_ts"] = _utcnow_iso()
 
-    # Session expiry handling (keep language/lock)
+    # ✅ 10-min session/flow expiry handling (keep language/lock)
     if prev_last and _session_expired_from(prev_last) and sess.get("state") != STATE_ESCALATION:
         locked = bool(sess.get("language_locked"))
         keep_lang = sess.get("language") or lang
@@ -586,7 +584,8 @@ def handle_turn(
         if locked:
             sess["state"] = STATE_MENU
             sess["last_step"] = STATE_MENU
-            out = _main_menu(keep_lang)
+            out = ("⏳ انتهت مهلة العملية بسبب عدم الرد (10 دقائق).\n\n" if keep_lang == "ar" else "⏳ Flow expired due to inactivity (10 minutes).\n\n")
+            out += _main_menu(keep_lang)
         else:
             if _looks_like_symptom(message_text):
                 sess["state"] = STATE_MENU
@@ -596,6 +595,7 @@ def handle_turn(
                 sess["state"] = STATE_LANG
                 sess["last_step"] = STATE_LANG
                 out = _welcome_text_en()
+
         _set_bot(sess, out)
         return EngineResult(out, sess, [])
 
@@ -775,7 +775,7 @@ def handle_turn(
         _set_bot(sess, out)
         return EngineResult(out, sess, [])
 
-    # ✅ RESCHEDULE LOOKUP
+    # ✅ RESCHEDULE LOOKUP (explicit not-found; no fallback)
     if sess.get("state") == STATE_RESCHEDULE_LOOKUP:
         if low in {"0"}:
             sess["state"] = STATE_MENU
@@ -819,7 +819,7 @@ def handle_turn(
         _set_bot(sess, out)
         return EngineResult(out, sess, [])
 
-    # ✅ CANCEL LOOKUP
+    # ✅ CANCEL LOOKUP (explicit not-found; no fallback)
     if sess.get("state") == STATE_CANCEL_LOOKUP:
         if low in {"0"}:
             sess["state"] = STATE_MENU
@@ -865,6 +865,7 @@ def handle_turn(
 
     # BOOKING FLOWS
     if sess.get("state") == STATE_BOOK_DEPT:
+        # ✅ If controller jump-starts into this state with empty message -> show prompt
         if not raw:
             out = _dept_prompt(lang)
             _set_bot(sess, out)
@@ -900,6 +901,7 @@ def handle_turn(
         return EngineResult(out, sess, [])
 
     if sess.get("state") == STATE_BOOK_DOCTOR:
+        # ✅ If controller jump-starts BOOK_DOCTOR with user_message="" -> show doctor list
         if not raw:
             out = _doctor_prompt(lang, sess.get("dept_key") or "")
             _set_bot(sess, out)
@@ -937,11 +939,6 @@ def handle_turn(
         return EngineResult(out, sess, [])
 
     if sess.get("state") == STATE_BOOK_DATE:
-        if not raw:
-            out = _date_prompt(lang)
-            _set_bot(sess, out)
-            return EngineResult(out, sess, [])
-
         norm_ymd, err = _parse_date_any(message_text)
         if not norm_ymd:
             if lang == "ar":
@@ -968,11 +965,6 @@ def handle_turn(
         return EngineResult(out, sess, [])
 
     if sess.get("state") == STATE_BOOK_SLOT:
-        if not raw:
-            out = _slot_prompt(lang, sess.get("date") or "")
-            _set_bot(sess, out)
-            return EngineResult(out, sess, [])
-
         idx = _to_int(raw, -1) - 1 if _is_digit_choice(raw) else -1
         if not (0 <= idx < len(SLOTS)):
             msg = ("يرجى اختيار رقم وقت صحيح." if lang == "ar" else "Please choose a valid slot number.")
@@ -989,11 +981,6 @@ def handle_turn(
         return EngineResult(out, sess, [])
 
     if sess.get("state") == STATE_BOOK_PATIENT:
-        if not raw:
-            out = _patient_prompt_full(lang)
-            _set_bot(sess, out)
-            return EngineResult(out, sess, [])
-
         pending = sess.get("pending_patient") or {"name": None, "mobile": None, "pid": None}
         if not isinstance(pending, dict):
             pending = {"name": None, "mobile": None, "pid": None}
@@ -1038,11 +1025,6 @@ def handle_turn(
         return EngineResult(out, sess, [])
 
     if sess.get("state") == STATE_BOOK_CONFIRM:
-        if not raw:
-            out = _confirmation(sess, lang)
-            _set_bot(sess, out)
-            return EngineResult(out, sess, [])
-
         if not _is_digit_choice(raw):
             msg = ("يرجى اختيار 1 أو 2 أو 3." if lang == "ar" else "Please choose 1, 2, or 3.")
             out = _soft_invalid(sess, lang, msg) + "\n\n" + _confirmation(sess, lang)

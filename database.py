@@ -1,21 +1,6 @@
-# database.py
-# Railway + Postgres (asyncpg) — Windows-safe + SSL fix for self-signed chain
-#
-# Fixes:
-# ✅ Forces SQLAlchemy to use asyncpg driver
-# ✅ Removes libpq-only params (sslmode, sslrootcert, etc.)
-# ✅ Sets asyncpg SSL context to avoid: SSLCertVerificationError (self-signed chain)
-# ✅ Windows selector event loop policy (stable)
-#
-# Notes:
-# - For DEV/local: this disables certificate verification (still encrypted).
-# - For PROD/verified SSL: see the "PROD SSL" section below.
-
 from __future__ import annotations
 
 import os
-import sys
-import asyncio
 import ssl
 from typing import AsyncGenerator
 from urllib.parse import urlparse, urlunparse, parse_qsl, urlencode
@@ -27,10 +12,6 @@ from sqlalchemy.pool import NullPool
 # Load .env early
 load_dotenv(override=True)
 
-# Windows fix: ensure Selector policy (helps many libs)
-if sys.platform.startswith("win"):
-    asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
-
 
 def _force_asyncpg_url(raw_url: str) -> tuple[str, dict]:
     """
@@ -40,8 +21,7 @@ def _force_asyncpg_url(raw_url: str) -> tuple[str, dict]:
       postgresql+psycopg://...       -> postgresql+asyncpg://...
       postgresql+asyncpg://...       -> keep
 
-    Also removes libpq-only params like sslmode/sslrootcert/etc.
-    We DO NOT pass sslmode to asyncpg.
+    Removes libpq-only params like sslmode/sslrootcert/etc.
     """
     raw_url = (raw_url or "").strip()
     if not raw_url:
@@ -63,63 +43,84 @@ def _force_asyncpg_url(raw_url: str) -> tuple[str, dict]:
     u = urlparse(raw_url)
     q = dict(parse_qsl(u.query, keep_blank_values=True))
 
-    # Remove libpq-only params (asyncpg doesn't accept them)
-    q.pop("sslmode", None)
+    # Keep sslmode as a hint, but remove from query (asyncpg doesn't accept sslmode)
+    sslmode_hint = (q.pop("sslmode", "") or "").strip().lower()
+
+    # Remove other libpq-only params
     q.pop("sslrootcert", None)
     q.pop("sslcert", None)
     q.pop("sslkey", None)
 
     normalized = u._replace(query=urlencode(q))
-    return urlunparse(normalized), {}
+    return urlunparse(normalized), {"sslmode_hint": sslmode_hint}
 
 
-def _make_dev_ssl_context() -> ssl.SSLContext:
+def _env_flag(name: str, default: str = "0") -> bool:
+    v = (os.getenv(name, default) or "").strip().lower()
+    return v in ("1", "true", "yes", "on", "require", "required")
+
+
+def _env_off(name: str, default: str = "0") -> bool:
+    v = (os.getenv(name, default) or "").strip().lower()
+    return v in ("1", "true", "yes", "on", "off", "disable", "disabled", "0", "false", "no")
+
+
+def _build_ssl_context() -> ssl.SSLContext | None:
     """
-    DEV-friendly SSL context:
-    - Encrypted TLS
-    - No cert verification (fixes self-signed chain errors on Windows)
+    Railway proxy requires TLS. On Windows dev you can disable verification safely (still encrypted)
+    by setting:
+      DB_SSL_VERIFY=0
+
+    Controls:
+      DB_SSL=require   -> force TLS
+      DB_SSL=off       -> no TLS (NOT recommended for Railway)
+      DB_SSL_VERIFY=1  -> verify cert chain (secure)
+      DB_SSL_VERIFY=0  -> do NOT verify (fixes Railway proxy self-signed chain on Windows)
     """
-    ctx = ssl.create_default_context()
+    db_ssl = (os.getenv("DB_SSL", "require") or "").strip().lower()
+    verify_raw = (os.getenv("DB_SSL_VERIFY", "1") or "").strip().lower()
+
+    # Allow turning TLS off explicitly (not recommended for Railway)
+    if db_ssl in ("0", "false", "no", "off", "disable", "disabled"):
+        return None
+
+    verify_ssl = verify_raw not in ("0", "false", "no", "off")
+
+    if verify_ssl:
+        # Verify using system trust store (or certifi if you install it)
+        ctx = ssl.create_default_context()
+        try:
+            import certifi  # pip install certifi
+            ctx.load_verify_locations(cafile=certifi.where())
+        except Exception:
+            pass
+        ctx.check_hostname = True
+        ctx.verify_mode = ssl.CERT_REQUIRED
+        return ctx
+
+    # ✅ DEV FIX: encrypted but unverified (prevents CERTIFICATE_VERIFY_FAILED)
+    ctx = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
     ctx.check_hostname = False
     ctx.verify_mode = ssl.CERT_NONE
     return ctx
 
 
-# ----------------------------
-# Database URL
-# ----------------------------
 DATABASE_URL_RAW = os.getenv("DATABASE_URL", "")
-DATABASE_URL, _ = _force_asyncpg_url(DATABASE_URL_RAW)
+DATABASE_URL, hints = _force_asyncpg_url(DATABASE_URL_RAW)
 
-# ----------------------------
-# SSL handling
-# ----------------------------
-# Optional overrides:
-# - DB_SSL=require  -> force SSL (default)
-# - DB_SSL=disable  -> no SSL (NOT recommended, may fail on Railway)
-# - DB_SSL=verify   -> require verification using DB_SSL_CA_FILE (production)
-DB_SSL = (os.getenv("DB_SSL", "require") or "").strip().lower()
-DB_SSL_CA_FILE = (os.getenv("DB_SSL_CA_FILE", "") or "").strip()
+sslmode_hint = (hints.get("sslmode_hint") or "").strip().lower()
+
+# Build SSL context
+ssl_ctx = _build_ssl_context()
 
 connect_args: dict = {}
-
-if DB_SSL in ("0", "false", "off", "disable", "disabled", "no"):
-    # Not recommended for Railway, but allowed for local non-ssl DBs.
-    connect_args = {}
-elif DB_SSL in ("verify", "verify-full", "verify_ca", "verify-ca"):
-    # PROD SSL (verified):
-    # Provide a CA bundle path in DB_SSL_CA_FILE (e.g., railway-ca.pem)
-    if not DB_SSL_CA_FILE:
-        raise RuntimeError("DB_SSL=verify requires DB_SSL_CA_FILE to point to a CA PEM file")
-    ssl_ctx = ssl.create_default_context(cafile=DB_SSL_CA_FILE)
+if ssl_ctx is not None:
     connect_args["ssl"] = ssl_ctx
 else:
-    # Default: require SSL but skip verification (DEV-friendly)
-    connect_args["ssl"] = _make_dev_ssl_context()
+    # If ssl_ctx is None, we only proceed without ssl if user explicitly disabled it.
+    # Railway usually needs SSL, so leaving ssl None may fail if remote requires TLS.
+    pass
 
-# ----------------------------
-# Engine + Session
-# ----------------------------
 engine = create_async_engine(
     DATABASE_URL,
     echo=False,
