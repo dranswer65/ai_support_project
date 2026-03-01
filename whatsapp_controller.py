@@ -1,151 +1,741 @@
-# whatsapp_controller.py
-# GCC Hospital WhatsApp Controller
-# FINAL STABLE VERSION
+# whatsapp_controller.py — Enterprise-ready controller (V7)
+# Fixes:
+# ✅ Sticky handoff silence after 99 (including "Thank you")
+# ✅ Prevent language reset loops (don’t show language menu once locked)
+# ✅ Handle free-text symptoms (EN/AR) with triage + emergency escalation
+# ✅ Intent + Specialty detection from keyword sheets (jump-start booking)
+# ✅ Refined urinary phrases: "difficulty to urinate" => triage, NOT emergency
+# ✅ Keep Reception = 99 (not 9)
 
 from __future__ import annotations
 
-from typing import Dict, Any, Tuple, Optional
+import os
+import re
+from typing import Any, Dict, Optional, Tuple, List
+from datetime import datetime, timezone, timedelta
+
+import anyio
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from language.language_detector import detect_language
+from language.arabic_tone_engine import select_arabic_tone
+
 from core.engine import run_engine
-from core.session_store_pg import (
-    get_session,
-    upsert_session,
-)
+from core.session_store_pg import get_session, upsert_session
 
-# =========================================================
-# CONFIG
-# =========================================================
+from incident.incident_state import is_incident_mode
 
-DEFAULT_TENANT = "default"
+from escalation_router import route_escalation
+from handoff_builder import build_handoff_payload
+from vendor_orchestrator import dispatch_ticket
 
 
-# =========================================================
-# HELPERS
-# =========================================================
+WA_DEFAULT_CLIENT = (os.getenv("WA_DEFAULT_CLIENT", "supportpilot_demo") or "").strip()
 
-def _norm(text: str) -> str:
-    return (text or "").strip()
+_AGENT_KEYS = [
+    "agent", "reception", "human", "representative", "help", "support",
+    "موظف", "الاستقبال", "استقبال", "إنسان", "موظف الاستقبال", "موظف استقبال"
+]
 
+EMERGENCY_HOLD_MINUTES = 30
+HANDOFF_STICKY_MINUTES = 30
 
-def _is_return_to_menu(text: str) -> bool:
-    t = text.strip().lower()
-    return t in ["0", "menu", "القائمة"]
-
-
-def _is_thanks(text: str) -> bool:
-    t = text.lower()
-
-    thanks_words = [
-        "thanks",
-        "thank you",
-        "thx",
-        "appreciate",
-        "شكرا",
-        "شكراً",
-        "مشكور",
-        "يعطيك العافية",
-        "جزاك الله خير",
-    ]
-
-    return any(w in t for w in thanks_words)
+_AR_RE = re.compile(r"[\u0600-\u06FF]")
+_ARABIC_DIGITS = str.maketrans("٠١٢٣٤٥٦٧٨٩", "0123456789")
 
 
-# =========================================================
-# MAIN HANDLER
-# =========================================================
+# -----------------------------
+# Intent + Specialty (keywords)
+# -----------------------------
+_INTENT_BOOK_EN = ["book", "booking", "appointment", "schedule", "reserve", "visit", "consultation", "checkup"]
+_INTENT_BOOK_AR = ["حجز", "احجز", "موعد", "أبي موعد", "ابغى موعد", "أبغى موعد", "اريد موعد", "أريد موعد", "ابي احجز", "ابغى احجز", "عايز احجز", "عاوزه احجز", "محتاج موعد"]
+
+_INTENT_DOCTOR_INFO_EN = ["doctor", "specialist", "do you have", "available doctor", "clinic", "who is the doctor", "find a doctor", "gynecologist", "pediatrician", "cardiologist", "dermatologist", "ent", "neurologist", "orthopedic"]
+_INTENT_DOCTOR_INFO_AR = ["دكتور", "دكتورة", "أخصائي", "اخصائي", "عيادة", "هل يوجد", "عندكم", "مين الدكتور", "مين الدكتورة", "أبغى دكتور", "ابغى دكتور", "عايز دكتور", "محتاج دكتور"]
+
+_INTENT_RESCHEDULE_EN = ["reschedule", "change appointment", "modify appointment", "move appointment"]
+_INTENT_RESCHEDULE_AR = ["تعديل", "تغيير موعد", "غير موعد", "ابغى اغير", "أبغى أغير", "عايز اغير", "تعديل موعد"]
+
+_INTENT_CANCEL_EN = ["cancel", "cancellation", "delete appointment"]
+_INTENT_CANCEL_AR = ["إلغاء", "الغاء", "كنسل", "ألغِ", "الغي", "ابغى الغي", "أبغى ألغي", "عايز الغي"]
+
+# Specialty keyword sets (focused, high-signal from your sheets)
+_SPECIALTY = {
+    "general": {
+        "en": ["general medicine", "internal medicine", "internist", "general doctor", "general physician", "primary care", "adult medicine"],
+        "ar": ["باطنية", "باطنه", "طب عام", "طبيب عام", "دكتور عام", "دكتور باطنة", "طبيب باطنة", "دكتور باطنيه"],
+        "label_en": "General Medicine",
+        "label_ar": "الطب العام",
+    },
+    "peds": {
+        "en": ["pediatrics", "pediatrician", "child doctor", "kids doctor", "children clinic", "newborn"],
+        "ar": ["أطفال", "اطفال", "دكتور أطفال", "طبيب أطفال", "عيادة أطفال", "حديثي الولادة", "مواليد"],
+        "label_en": "Pediatrics",
+        "label_ar": "طب الأطفال",
+    },
+    "gyn": {
+        "en": ["ob-gyn", "obgyn", "gynecologist", "women clinic", "pregnancy", "antenatal", "prenatal", "maternity", "ivf", "icsi", "pap smear", "cervical screening"],
+        "ar": ["نساء وولادة", "نساء", "ولادة", "عيادة نسائية", "دكتورة نساء", "متابعة حمل", "حمل", "سونار حمل", "تكيس", "تكيس المبايض", "لولب", "منع الحمل", "تنظيم الأسرة"],
+        "label_en": "Obstetrics & Gynecology",
+        "label_ar": "أمراض النساء والتوليد",
+    },
+    "cardio": {
+        "en": ["cardiology", "cardiologist", "heart doctor", "ecg", "ekg", "echocardiogram", "stress test", "holter", "palpitations"],
+        "ar": ["قلب", "دكتور قلب", "طبيب قلب", "أخصائي قلب", "تخطيط", "رسم قلب", "ايكو", "إيكو", "هولتر", "خفقان"],
+        "label_en": "Cardiology",
+        "label_ar": "أمراض القلب",
+    },
+    "ortho": {
+        "en": ["orthopedics", "orthopedic", "bone doctor", "joint specialist", "knee pain", "back pain", "slipped disc", "herniated disc", "sciatica"],
+        "ar": ["عظام", "دكتور عظام", "طبيب عظام", "أخصائي عظام", "غضروف", "عرق النسا", "ألم ركبة", "ألم ظهر"],
+        "label_en": "Orthopedics",
+        "label_ar": "جراحة العظام",
+    },
+    "ent": {
+        "en": ["ent", "otolaryngologist", "ear doctor", "throat", "sinus", "tonsils", "hearing", "tinnitus"],
+        "ar": ["أنف وأذن وحنجرة", "انف واذن وحنجرة", "أذن", "اذن", "حنجرة", "جيوب", "لوز", "طنين", "سمع"],
+        "label_en": "ENT",
+        "label_ar": "الأنف والأذن والحنجرة",
+    },
+    "derm": {
+        "en": ["dermatology", "dermatologist", "skin doctor", "acne", "eczema", "rash", "psoriasis", "hair loss"],
+        "ar": ["جلدية", "دكتور جلدية", "طبيب جلد", "حب الشباب", "أكزيما", "اكزيما", "طفح", "صدفية", "تساقط شعر"],
+        "label_en": "Dermatology",
+        "label_ar": "الأمراض الجلدية",
+    },
+    "neuro": {
+        "en": ["neurology", "neurologist", "migraine", "headache", "tingling", "numbness", "eeg", "seizure follow-up"],
+        "ar": ["مخ وأعصاب", "مخ واعصاب", "أعصاب", "اعصاب", "صداع نصفي", "تنميل", "تشنجات", "تخطيط مخ"],
+        "label_en": "Neurology",
+        "label_ar": "الأعصاب",
+    },
+    "physio": {
+        "en": ["physiotherapy", "physio", "rehab", "rehabilitation"],
+        "ar": ["علاج طبيعي", "العلاج الطبيعي", "تأهيل", "جلسات علاج طبيعي"],
+        "label_en": "Physiotherapy",
+        "label_ar": "العلاج الطبيعي",
+    },
+}
+
+# -----------------------------
+# Emergency & Symptom detection
+# -----------------------------
+_EMERGENCY_PHRASES_EN = [
+    "severe chest pain",
+    "crushing chest pain",
+    "difficulty breathing",
+    "shortness of breath",
+    "can't breathe",
+    "cannot breathe",
+    "unable to breathe",
+    "not able to breathe",
+    "unconscious",
+    "not responding",
+    "passed out",
+    "fainted",
+    "seizure",
+    "seizures",
+    "heavy bleeding",
+    "bleeding heavily",
+    "heart attack",
+    "stroke",
+    "slurred speech",
+    "face drooping",
+    "one side weakness",
+    "overdose",
+    # urinary retention (high risk ONLY when "cannot / no urine")
+    "urinary retention",
+    "unable to urinate",
+    "can't urinate",
+    "cannot urinate",
+    "cannot pee",
+    "can't pee",
+    "no urine",
+    # OB critical
+    "bleeding during pregnancy",
+    "heavy vaginal bleeding",
+    "severe abdominal pain in pregnancy",
+    "my baby is not moving",
+]
+
+_EMERGENCY_PHRASES_AR = [
+    "ضيق تنفس", "صعوبة تنفس", "اختناق", "لا أستطيع التنفس", "لا استطيع التنفس",
+    "فقدت الوعي", "فقدان الوعي", "اغمى عليه", "أغمي عليه", "إغماء",
+    "تشنج", "تشنجات", "صرع",
+    "نزيف شديد", "نزيف قوي", "نزيف مهبلي شديد", "ينزف بشدة",
+    "ألم شديد في الصدر", "الم شديد في الصدر", "جلطة", "سكتة", "نوبة قلبية", "ثقل في الكلام", "انحراف الوجه",
+    # urinary retention
+    "احتباس بول", "احتباس البول", "لا أستطيع التبول", "لا استطيع التبول", "ما اقدر اتبول", "انقطاع البول", "توقف البول",
+    # OB
+    "نزيف أثناء الحمل", "ألم شديد مع الحمل", "قلة حركة الجنين", "البيبي مش بيتحرك",
+]
+
+# broader symptom guard (non-emergency)
+_SYMPTOM_KEYS = [
+    # EN
+    "pain", "hurt", "fever", "vomit", "kidney", "urinate", "urination", "pee", "burning",
+    "breath", "breathing", "dizzy", "retention", "rash", "itch", "discharge",
+    # AR
+    "ألم", "الم", "حمى", "حرارة", "قيء", "كلى", "كلية", "تبول", "بول", "حرقان", "دوخة",
+    "تنفس", "ضيق", "احتباس", "طفح", "حكة", "افرازات", "إفرازات",
+]
+
+# urinary "difficulty to urinate" should be triage not emergency
+_URINARY_TRIAGE_ONLY_EN = [
+    "difficulty urinating",
+    "difficulty to urinate",
+    "painful urination",
+    "burning urination",
+    "burning when urinating",
+]
+_URINARY_TRIAGE_ONLY_AR = [
+    "صعوبة التبول",
+    "حرقان بول",
+    "حرقان عند التبول",
+    "ألم عند التبول",
+]
+
+
+def _utcnow() -> datetime:
+    return datetime.now(timezone.utc)
+
+
+def _looks_arabic(text: str) -> bool:
+    return bool(_AR_RE.search(text or ""))
+
+
+def _normalize_input(text: str) -> str:
+    t = (text or "").strip()
+    for ch in ["،", ",", "٫", ";", "؛", "。"]:
+        t = t.replace(ch, "")
+    t = t.translate(_ARABIC_DIGITS)
+    t = re.sub(r"\s+", " ", t).strip()
+    return t
+
+
+def _norm_tenant(tenant_id: Optional[str]) -> str:
+    t = (tenant_id or WA_DEFAULT_CLIENT or "default").strip()
+    return t or "default"
+
+
+def _parse_iso(s: Optional[str]) -> Optional[datetime]:
+    if not s:
+        return None
+    try:
+        return datetime.fromisoformat(str(s).replace("Z", "+00:00"))
+    except Exception:
+        return None
+
+
+def _handoff_active(session: Dict[str, Any]) -> bool:
+    if not isinstance(session, dict):
+        return False
+    if not bool(session.get("handoff_active")):
+        return False
+    until = _parse_iso(session.get("handoff_until")) if isinstance(session.get("handoff_until"), str) else None
+    if until and _utcnow() <= until:
+        return True
+    session["handoff_active"] = False
+    session["handoff_until"] = None
+    return False
+
+
+def _emergency_hold_active(session: Dict[str, Any]) -> bool:
+    until = _parse_iso(session.get("emergency_hold_until")) if isinstance(session.get("emergency_hold_until"), str) else None
+    if until and _utcnow() <= until:
+        return True
+    session["emergency_hold_until"] = None
+    return False
+
+
+def _short_ref(ticket_id: Optional[str]) -> Optional[str]:
+    if not ticket_id or not isinstance(ticket_id, str):
+        return None
+    head = ticket_id.split("-")[0].upper()
+    return head[:8] if head else None
+
+
+def _extract_ticket_id(result: Any) -> Optional[str]:
+    if not isinstance(result, dict):
+        return None
+    if result.get("ticket_id"):
+        return result.get("ticket_id")
+    inner = result.get("result")
+    if isinstance(inner, dict):
+        return inner.get("ticket_id") or inner.get("id")
+    return None
+
+
+def _wants_agent(text: str) -> bool:
+    t = (text or "").strip().lower()
+    if t in {"99"}:
+        return True
+    if t == "9":
+        return False
+    return any(k in t for k in _AGENT_KEYS)
+
+
+def _resolve_language_for_turn(message_text: str, session: Dict[str, Any]) -> str:
+    if bool(session.get("language_locked")):
+        return "ar" if str(session.get("language") or "ar").startswith("ar") else "en"
+
+    raw = (message_text or "").strip()
+    if raw.isdigit():
+        return "en"
+
+    detected = (detect_language(message_text) or "en").strip().lower()
+    return "ar" if detected.startswith("ar") else "en"
+
+
+def _is_emergency(text: str) -> bool:
+    t = (text or "").strip().lower()
+    if not t:
+        return False
+
+    # Avoid misfiring on "difficulty to urinate" (triage-only)
+    if any(k in t for k in _URINARY_TRIAGE_ONLY_EN):
+        return False
+    if any(k in (text or "") for k in _URINARY_TRIAGE_ONLY_AR):
+        return False
+
+    if any(k in t for k in _EMERGENCY_PHRASES_EN):
+        return True
+    if any(k in (text or "") for k in _EMERGENCY_PHRASES_AR):
+        return True
+    return False
+
+
+def _looks_like_symptom(text: str) -> bool:
+    t = (text or "").strip().lower()
+    if not t:
+        return False
+    if any(k in t for k in _SYMPTOM_KEYS):
+        return True
+    raw = text or ""
+    return any(k in raw for k in _SYMPTOM_KEYS if any(ch in k for ch in "أبتثجحخدذرزسشصضطظعغفقكلمنهوي"))
+
+
+def _emergency_language(message_text: str, session: Dict[str, Any]) -> str:
+    if bool(session.get("language_locked")):
+        return "ar" if str(session.get("language") or "ar").startswith("ar") else "en"
+    if _looks_arabic(message_text):
+        return "ar"
+    detected = (detect_language(message_text) or "en").strip().lower()
+    return "ar" if detected.startswith("ar") else "en"
+
+
+def _emergency_protocol_message(language: str, ticket_short: Optional[str]) -> str:
+    if language == "ar":
+        base = (
+            "🚨 قد تكون هذه حالة طارئة.\n"
+            "يرجى الاتصال فورًا على 997 أو التوجه إلى أقرب قسم طوارئ.\n"
+            "تم تمرير طلبكم إلى فريق الاستقبال الآن للمساعدة."
+        )
+        if ticket_short:
+            base += f"\nرقم الطلب: #{ticket_short}"
+        base += "\nللعودة للقائمة اكتب 0"
+        return base
+
+    base = (
+        "🚨 Severe symptoms can be serious.\n"
+        "Please call 997 immediately or go to the nearest emergency department.\n"
+        "✅ Your request was forwarded to Reception."
+    )
+    if ticket_short:
+        base += f" Ref: #{ticket_short}"
+    base += "\nReply 0 for the menu"
+    return base
+
+
+def _symptom_triage_message(language: str) -> str:
+    if language == "ar":
+        return (
+            "⚠️ فهمت.\n"
+            "إذا كان لديك ألم شديد، حرارة عالية، نزيف شديد، أو عدم القدرة على التنفس/التبول — اتصل على 997 فورًا.\n"
+            "للمساعدة السريعة يمكنني تحويلك لموظف الاستقبال: 99.\n\n"
+            "إن كان الهدف حجز موعد، اكتب 0 ثم اختر (1) حجز موعد."
+        )
+    return (
+        "⚠️ Understood.\n"
+        "If you have severe pain, high fever, heavy bleeding, or you cannot breathe/pass urine, please call 997 immediately.\n"
+        "For fast help, I can connect you to Reception: 99.\n\n"
+        "If you want to book an appointment, reply 0 then choose (1) Book Appointment."
+    )
+
+
+def _emergency_guard_prompt(language: str) -> str:
+    if language == "ar":
+        return (
+            "⚠️ ذكرت أعراضًا قد تحتاج رعاية عاجلة.\n"
+            "هل أنت الآن بأمان وتريد المتابعة بالحجز؟\n\n"
+            "1️⃣ نعم، متابعة الحجز\n"
+            "99️⃣ موظف الاستقبال\n"
+            "🚑 للطوارئ اتصل على 997\n\n"
+            "0️⃣ القائمة الرئيسية"
+        )
+    return (
+        "⚠️ You mentioned symptoms that may need urgent care.\n"
+        "Are you safe now and want to continue booking?\n\n"
+        "1️⃣ Yes, continue booking\n"
+        "99️⃣ Reception\n"
+        "🚑 For emergencies call 997\n\n"
+        "0️⃣ Main Menu"
+    )
+
+
+def _detect_intent(cleaned: str) -> Optional[str]:
+    t = (cleaned or "").strip().lower()
+    if not t:
+        return None
+
+    if any(k in t for k in _INTENT_RESCHEDULE_EN) or any(k in cleaned for k in _INTENT_RESCHEDULE_AR):
+        return "RESCHEDULE"
+    if any(k in t for k in _INTENT_CANCEL_EN) or any(k in cleaned for k in _INTENT_CANCEL_AR):
+        return "CANCEL"
+    if any(k in t for k in _INTENT_BOOK_EN) or any(k in cleaned for k in _INTENT_BOOK_AR):
+        return "BOOK"
+    if any(k in t for k in _INTENT_DOCTOR_INFO_EN) or any(k in cleaned for k in _INTENT_DOCTOR_INFO_AR):
+        return "DOCTOR_INFO"
+    return None
+
+
+def _detect_specialty(cleaned: str) -> Optional[str]:
+    t = (cleaned or "").strip().lower()
+    if not t:
+        return None
+
+    # Strong match: if any specialty keyword appears
+    for dept_key, spec in _SPECIALTY.items():
+        for kw in spec.get("en", []):
+            if kw and kw in t:
+                return dept_key
+        for kw in spec.get("ar", []):
+            if kw and kw in cleaned:
+                return dept_key
+    return None
+
+
+def _apply_specialty_to_session(session: Dict[str, Any], dept_key: str) -> None:
+    spec = _SPECIALTY.get(dept_key) or {}
+    lang = "ar" if str(session.get("language") or "en").startswith("ar") else "en"
+    session["dept_key"] = dept_key
+    session["dept_label"] = spec.get("label_ar") if lang == "ar" else spec.get("label_en")
+
+
+async def _escalate_to_human(
+    *,
+    tenant_id: str,
+    user_id: str,
+    session: Dict[str, Any],
+    language: str,
+    text_direction: str,
+    arabic_tone: Optional[str],
+    kpi_signals: List[str],
+    decision_rule: str,
+    decision_reason: str,
+    urgent: bool = False,
+) -> Tuple[Optional[str], Dict[str, Any]]:
+    payload = build_handoff_payload(
+        user_id=user_id,
+        current_state=session.get("state"),
+        last_user_message=session.get("last_user_message"),
+        last_intent=session.get("last_intent"),
+        decision_rule=decision_rule,
+        decision_reason=decision_reason,
+        kpi_signals=kpi_signals,
+    )
+    payload.setdefault("meta", {})
+    payload["meta"]["tenant_id"] = tenant_id
+    payload["meta"]["language"] = language
+    payload["meta"]["text_direction"] = text_direction
+    payload["meta"]["urgent"] = bool(urgent)
+
+    ticket_id = None
+    try:
+        routing = route_escalation(payload)
+        result = await anyio.to_thread.run_sync(dispatch_ticket, payload, routing)
+        ticket_id = _extract_ticket_id(result)
+    except Exception:
+        ticket_id = None
+
+    session["handoff_active"] = True
+    session["handoff_until"] = (_utcnow() + timedelta(minutes=HANDOFF_STICKY_MINUTES)).isoformat()
+    session["state"] = "ESCALATION"
+    session["last_step"] = "ESCALATION"
+    session["escalation_flag"] = True
+    if urgent:
+        session["urgent_flag"] = True
+    if ticket_id:
+        session["last_ticket_id"] = ticket_id
+
+    return ticket_id, {"ticket_id": ticket_id, "urgent": urgent}
+
 
 async def handle_message(
-    db: AsyncSession,
     *,
-    tenant_id: Optional[str],
+    db: AsyncSession,
     user_id: str,
     message_text: str,
+    tenant_id: Optional[str] = None,
+    kpi_signals=None,
 ) -> Tuple[str, Dict[str, Any]]:
+    tenant = _norm_tenant(tenant_id)
+    kpi_signals = list(kpi_signals or [])
 
-    tenant = tenant_id or DEFAULT_TENANT
-    incoming = _norm(message_text)
+    session = await get_session(db, user_id=user_id, tenant_id=tenant)
+    if not isinstance(session, dict) or not session:
+        session = {
+            "user_id": user_id,
+            "status": "ACTIVE",
+            "state": "LANG_SELECT",
+            "last_step": "LANG_SELECT",
+            "language": "en",
+            "language_locked": False,
+            "text_direction": "ltr",
+            "has_greeted": False,
+            "conversation_version": 7,
+            "escalation_flag": False,
+            "urgent_flag": False,
+            "handoff_active": False,
+            "handoff_until": None,
+            "last_ticket_id": None,
+            "emergency_hold_until": None,
+            "emergency_language": None,
+        }
 
-    # -----------------------------------------------------
-    # Load Session
-    # -----------------------------------------------------
-    session = await get_session(
-        db,
-        user_id=user_id,
-        tenant_id=tenant,
-    ) or {}
+    cleaned = _normalize_input(message_text)
+    raw = cleaned
+    session["last_user_message"] = cleaned
 
-    # -----------------------------------------------------
-    # HUMAN HANDOFF MODE
-    # -----------------------------------------------------
-    if session.get("handoff_active"):
-
-        # allow return to menu
-        if _is_return_to_menu(incoming):
+    # ---------------------------------------------------------
+    # Sticky handoff silence
+    # ---------------------------------------------------------
+    if _handoff_active(session):
+        if raw == "0":
             session["handoff_active"] = False
+            session["handoff_until"] = None
+            session["state"] = "MAIN_MENU"
+            session["last_step"] = "MAIN_MENU"
+            await upsert_session(db, user_id=user_id, session=session, tenant_id=tenant)
 
+            engine_out = run_engine(session=session, user_message="0", language=_resolve_language_for_turn("0", session))
+            reply_text = (engine_out.get("reply_text") or "").strip()
+            session2 = engine_out.get("session") if isinstance(engine_out.get("session"), dict) else session
+            await upsert_session(db, user_id=user_id, session=session2, tenant_id=tenant)
+            return reply_text, {"tenant_id": tenant, "state": session2.get("state"), "handoff_active": False}
         else:
-            # silence while human handles
-            if _is_thanks(incoming):
-                lang = session.get("language", "en")
+            await upsert_session(db, user_id=user_id, session=session, tenant_id=tenant)
+            return "", {"tenant_id": tenant, "state": session.get("state"), "handoff_active": True}
 
-                reply = (
-                    "You're welcome ✅ Reception will assist you shortly."
-                    if lang == "en"
-                    else "العفو ✅ سيقوم موظف الاستقبال بمساعدتك قريباً."
-                )
+    # ---------------------------------------------------------
+    # Emergency hold guard
+    # ---------------------------------------------------------
+    if _emergency_hold_active(session):
+        hold_lang = session.get("emergency_language") or ("ar" if str(session.get("language") or "en").startswith("ar") else "en")
+        hold_lang = "ar" if str(hold_lang).startswith("ar") else "en"
 
-                await upsert_session(
-                    db,
-                    user_id=user_id,
-                    tenant_id=tenant,
-                    session=session,
-                )
+        if raw == "0":
+            out = _emergency_guard_prompt(hold_lang)
+            await upsert_session(db, user_id=user_id, session=session, tenant_id=tenant)
+            return out, {"tenant_id": tenant, "state": session.get("state"), "emergency_hold": True}
 
-                return reply, {"handoff": True}
+        if raw == "99" or _wants_agent(raw):
+            kpi_signals.append("emergency_guard_reception")
+            ticket_id, extra = await _escalate_to_human(
+                tenant_id=tenant,
+                user_id=user_id,
+                session=session,
+                language=hold_lang,
+                text_direction=("rtl" if hold_lang == "ar" else "ltr"),
+                arabic_tone=select_arabic_tone(cleaned) if hold_lang == "ar" else None,
+                kpi_signals=kpi_signals,
+                decision_rule="controller_emergency_guard_reception",
+                decision_reason="Emergency hold: user requested reception",
+                urgent=True,
+            )
+            await upsert_session(db, user_id=user_id, session=session, tenant_id=tenant)
 
-            return "", {"handoff": True}
+            short_ref = _short_ref(ticket_id)
+            if hold_lang == "ar":
+                msg = f"تم تحويلكم إلى موظف الاستقبال ✅ رقم الطلب: #{short_ref}\nللعودة للقائمة اكتب 0" if short_ref else "تم تحويلكم إلى موظف الاستقبال ✅\nللعودة للقائمة اكتب 0"
+            else:
+                msg = f"Connecting you to Reception ✅ Ref: #{short_ref}\nReply 0 for the menu" if short_ref else "Connecting you to Reception ✅\nReply 0 for the menu"
 
-    # -----------------------------------------------------
-    # RUN AI ENGINE
-    # -----------------------------------------------------
-    result = run_engine(
-        message_text=incoming,
-        session=session,
-    )
+            meta = {"tenant_id": tenant, "state": session.get("state"), "handoff_active": True, "urgent": True, "emergency_hold": True}
+            meta.update(extra)
+            return msg, meta
 
-    reply_text = result.reply_text
-    session = result.session
-    actions = result.actions or {}
+        if raw == "1":
+            sess_lang = "ar" if str(session.get("language") or "en").startswith("ar") else "en"
+            session["emergency_hold_until"] = None
+            session["emergency_language"] = None
+            session["language"] = sess_lang
+            session["language_locked"] = True
+            session["text_direction"] = "rtl" if sess_lang == "ar" else "ltr"
+            session["state"] = "MAIN_MENU"
+            session["last_step"] = "MAIN_MENU"
 
-    # -----------------------------------------------------
-    # ESCALATION ACTION
-    # -----------------------------------------------------
-    if actions.get("handoff"):
+            engine_out = run_engine(session=session, user_message="0", language=sess_lang)
+            reply_text = (engine_out.get("reply_text") or "").strip()
+            session2 = engine_out.get("session") if isinstance(engine_out.get("session"), dict) else session
+            await upsert_session(db, user_id=user_id, session=session2, tenant_id=tenant)
+            return reply_text, {"tenant_id": tenant, "state": session2.get("state"), "emergency_hold": False}
 
-        session["handoff_active"] = True
+        out = _emergency_guard_prompt(hold_lang)
+        await upsert_session(db, user_id=user_id, session=session, tenant_id=tenant)
+        return out, {"tenant_id": tenant, "state": session.get("state"), "emergency_hold": True}
 
-        ref = actions.get("ref", "RX" + user_id[-4:])
+    # ---------------------------------------------------------
+    # Emergency override (before language/menu)
+    # ---------------------------------------------------------
+    if _is_emergency(cleaned):
+        emergency_lang = _emergency_language(cleaned, session)
+        session["emergency_language"] = emergency_lang
+        session["language"] = emergency_lang
+        session["language_locked"] = True
+        session["text_direction"] = "rtl" if emergency_lang == "ar" else "ltr"
 
-        lang = session.get("language", "en")
+        session["urgent_flag"] = True
+        session["emergency_hold_until"] = (_utcnow() + timedelta(minutes=EMERGENCY_HOLD_MINUTES)).isoformat()
+        kpi_signals.append("emergency_detected")
 
-        reply_text = (
-            f"Connecting you to Reception ✅ Ref: #{ref}\n"
-            "Reply 0 for menu"
-            if lang == "en"
-            else
-            f"تم تحويلك لموظف الاستقبال ✅ رقم الطلب #{ref}\n"
-            "اكتب 0 للعودة للقائمة"
+        ticket_id, extra = await _escalate_to_human(
+            tenant_id=tenant,
+            user_id=user_id,
+            session=session,
+            language=emergency_lang,
+            text_direction=session.get("text_direction", "ltr"),
+            arabic_tone=select_arabic_tone(cleaned) if emergency_lang == "ar" else None,
+            kpi_signals=kpi_signals,
+            decision_rule="controller_emergency_override",
+            decision_reason="Emergency phrases detected",
+            urgent=True,
         )
 
-    # -----------------------------------------------------
-    # SAVE SESSION
-    # -----------------------------------------------------
-    await upsert_session(
-        db,
-        user_id=user_id,
-        tenant_id=tenant,
+        short_ref = _short_ref(ticket_id)
+        out = _emergency_protocol_message(emergency_lang, short_ref)
+
+        await upsert_session(db, user_id=user_id, session=session, tenant_id=tenant)
+        meta = {"tenant_id": tenant, "state": session.get("state"), "handoff_active": True, "urgent": True, "emergency_hold": True, "emergency_language": emergency_lang}
+        meta.update(extra)
+        return out, meta
+
+    # ---------------------------------------------------------
+    # Symptom triage (non-emergency)
+    # ---------------------------------------------------------
+    if _looks_like_symptom(cleaned):
+        triage_lang = _emergency_language(cleaned, session)
+        session["language"] = triage_lang
+        session["language_locked"] = True
+        session["text_direction"] = "rtl" if triage_lang == "ar" else "ltr"
+        session["state"] = "MAIN_MENU"
+        session["last_step"] = "MAIN_MENU"
+        out = _symptom_triage_message(triage_lang)
+        await upsert_session(db, user_id=user_id, session=session, tenant_id=tenant)
+        return out, {"tenant_id": tenant, "state": session.get("state"), "symptom_triage": True, "language": triage_lang}
+
+    # ---------------------------------------------------------
+    # Normal language resolution
+    # ---------------------------------------------------------
+    language = _resolve_language_for_turn(cleaned, session)
+    session["language"] = language
+    session["text_direction"] = "rtl" if language == "ar" else "ltr"
+    arabic_tone = select_arabic_tone(cleaned) if language == "ar" else None
+
+    # Agent override (99)
+    if raw == "99" or _wants_agent(cleaned):
+        ticket_id, extra = await _escalate_to_human(
+            tenant_id=tenant,
+            user_id=user_id,
+            session=session,
+            language=language,
+            text_direction=session.get("text_direction", "ltr"),
+            arabic_tone=arabic_tone,
+            kpi_signals=kpi_signals,
+            decision_rule="controller_agent_override",
+            decision_reason="User requested reception",
+            urgent=False,
+        )
+        short_ref = _short_ref(ticket_id)
+
+        if language == "ar":
+            reply = f"تم تحويلكم إلى موظف الاستقبال ✅ رقم الطلب: #{short_ref}\nللعودة للقائمة اكتب 0" if short_ref else "تم تحويلكم إلى موظف الاستقبال ✅\nللعودة للقائمة اكتب 0"
+        else:
+            reply = f"Connecting you to Reception ✅ Ref: #{short_ref}\nReply 0 for the menu" if short_ref else "Connecting you to Reception ✅\nReply 0 for the menu"
+
+        await upsert_session(db, user_id=user_id, session=session, tenant_id=tenant)
+        meta = {"tenant_id": tenant, "state": session.get("state"), "handoff_active": True}
+        meta.update(extra)
+        return reply, meta
+
+    if is_incident_mode():
+        kpi_signals.append("incident_mode")
+
+    # ---------------------------------------------------------
+    # NEW: Intent + Specialty detection (free text jump-start)
+    # - Works best when user is at main menu or language select.
+    # - Locks language and prevents language menu loop.
+    # ---------------------------------------------------------
+    intent = _detect_intent(cleaned)
+    dept_key = _detect_specialty(cleaned)
+
+    # We jump ONLY for booking-related intents (safe). No jumps for cancel/reschedule here.
+    if dept_key and intent in {"BOOK", "DOCTOR_INFO"}:
+        session["language_locked"] = True
+        session["state"] = "BOOK_DOCTOR"  # jump into doctor list
+        session["last_step"] = "BOOK_DOCTOR"
+        session["intent"] = "BOOK" if intent == "BOOK" else "DOCTOR_INFO"
+        _apply_specialty_to_session(session, dept_key)
+
+        # Call engine with empty message => engine now shows prompt directly (V4.4)
+        engine_out = run_engine(
+            session=session,
+            user_message="",
+            language=language,
+            arabic_tone=arabic_tone,
+            kpi_signals=kpi_signals,
+        )
+        reply_text = (engine_out.get("reply_text") or "").strip()
+        session2 = engine_out.get("session") if isinstance(engine_out.get("session"), dict) else session
+        await upsert_session(db, user_id=user_id, session=session2, tenant_id=tenant)
+
+        return reply_text, {
+            "tenant_id": tenant,
+            "state": session2.get("state"),
+            "status": session2.get("status"),
+            "last_step": session2.get("last_step"),
+            "language": session2.get("language"),
+            "language_locked": session2.get("language_locked"),
+            "handoff_active": session2.get("handoff_active"),
+            "jump_intent": intent,
+            "jump_dept": dept_key,
+        }
+
+    # ---------------------------------------------------------
+    # Default: Engine routing (menu + transactional flows)
+    # ---------------------------------------------------------
+    engine_out = run_engine(
         session=session,
+        user_message=cleaned,
+        language=language,
+        arabic_tone=arabic_tone,
+        kpi_signals=kpi_signals,
     )
 
-    return reply_text, actions
+    reply_text = (engine_out.get("reply_text") or "").strip()
+    session2 = engine_out.get("session") if isinstance(engine_out.get("session"), dict) else session
+
+    await upsert_session(db, user_id=user_id, session=session2, tenant_id=tenant)
+
+    return reply_text, {
+        "tenant_id": tenant,
+        "state": session2.get("state"),
+        "status": session2.get("status"),
+        "last_step": session2.get("last_step"),
+        "language": session2.get("language"),
+        "language_locked": session2.get("language_locked"),
+        "handoff_active": session2.get("handoff_active"),
+        "urgent_flag": bool(session2.get("urgent_flag")),
+        "emergency_hold": bool(_emergency_hold_active(session2)),
+        "emergency_language": session2.get("emergency_language"),
+    }
