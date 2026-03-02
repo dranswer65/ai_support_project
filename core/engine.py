@@ -8,10 +8,12 @@
 # ✅ Auto-language lock only when obvious (Arabic letters / English letters)
 # ✅ Auto intent + dept routing kept
 # ✅ Confirm expiry (5 minutes) kept
+# ✅ Dept typo auto-fix: "21" -> "12" (reverse digits) during specialty selection
 #
 # NOTE:
 # - Booking/reschedule/cancel "search" is demo-safe: it does NOT query DB here.
-# - True emergency detection should remain in whatsapp_controller.py (tiered triage). Engine keeps only a light symptom guard.
+# - True emergency detection should remain in whatsapp_controller.py (tiered triage).
+#   Engine keeps only a light symptom guard.
 
 from __future__ import annotations
 
@@ -71,7 +73,6 @@ DEPTS = [
     {"key": "dental", "en": "Dentistry", "ar": "طب الأسنان"},
     {"key": "neuro", "en": "Neurology", "ar": "الأعصاب"},  # ✅ 9 stays Neurology
     {"key": "physio", "en": "Physiotherapy", "ar": "العلاج الطبيعي"},
-
     # ✅ Added for sellable experience
     {"key": "ophthal", "en": "Ophthalmology (Eye)", "ar": "طب العيون"},
     {"key": "uro", "en": "Urology", "ar": "المسالك البولية"},
@@ -90,8 +91,8 @@ DOCTORS_BY_DEPT_KEY = {
     "cardio": [{"key": "dr_nasser", "en": "Dr. Nasser", "ar": "د. ناصر"}],
     "dental": [{"key": "dr_laila", "en": "Dr. Laila", "ar": "د. ليلى"}],
     "neuro": [{"key": "dr_omar", "en": "Dr. Omar", "ar": "د. عمر"}],
-    "physio": [{"key": "dr_rana", "en": "Dr. Rana", "ar": "د. رنا"}],
-
+    "physio": [{"key": "dr_rana", "en": "Dr. Rana", "ar": "د. رنا"},
+               ],
     # ✅ Demo-safe placeholders (update to real roster later)
     "ophthal": [{"key": "dr_nour", "en": "Dr. Nour", "ar": "د. نور"}],
     "uro": [{"key": "dr_yousef", "en": "Dr. Yousef", "ar": "د. يوسف"}],
@@ -332,6 +333,48 @@ def _main_menu(lang: str) -> str:
         "7️⃣ Location & Directions\n"
         "8️⃣ Contact Information\n"
         "99️⃣ Reception"
+    )
+
+
+def _greeting_menu_ar() -> str:
+    return (
+        f"مرحبًا بكم في *{CLINIC_NAME_AR}* 🏥\n"
+        "نرحب بكم في خدمة المساعد الافتراضي لحجز المواعيد والاستفسارات العامة.\n\n"
+        "⚠️ تنبيه هام:\n"
+        "إذا كنت تعاني من أعراض طارئة مثل ألم شديد في الصدر، صعوبة في التنفس، نزيف حاد أو فقدان مفاجئ للوعي، "
+        f"يرجى الاتصال فورًا على {EMERGENCY_NUMBER} أو مراجعة قسم الطوارئ.\n"
+        "هذه الخدمة مخصصة للمواعيد والاستفسارات غير الطارئة فقط.\n\n"
+        "كيف يمكنني مساعدتك اليوم؟\n\n"
+        "1️⃣ حجز موعد\n"
+        "2️⃣ تعديل موعد\n"
+        "3️⃣ إلغاء موعد\n"
+        "4️⃣ البحث عن طبيب\n"
+        "5️⃣ مواعيد العمل\n"
+        "6️⃣ التأمينات المعتمدة\n"
+        "7️⃣ الموقع والاتجاهات\n"
+        "8️⃣ معلومات التواصل\n"
+        "99️⃣ التحدث مع موظف الاستقبال"
+    )
+
+
+def _greeting_menu_en() -> str:
+    return (
+        f"Welcome to *{CLINIC_NAME_EN}* 🏥\n"
+        "The official virtual assistant for appointments and general inquiries.\n\n"
+        "⚠️ Important Notice:\n"
+        "If you are experiencing a medical emergency such as severe chest pain, difficulty breathing, heavy bleeding, "
+        "or loss of consciousness, please call 997 immediately or proceed to the nearest Emergency Department.\n"
+        "This service is intended for non-emergency appointments and inquiries only.\n\n"
+        "How may I assist you today?\n\n"
+        "1️⃣ Book an Appointment\n"
+        "2️⃣ Reschedule Appointment\n"
+        "3️⃣ Cancel Appointment\n"
+        "4️⃣ Find a Doctor\n"
+        "5️⃣ Hospital Timings\n"
+        "6️⃣ Accepted Insurance\n"
+        "7️⃣ Location & Directions\n"
+        "8️⃣ Contact Information\n"
+        "99️⃣ Speak to Reception"
     )
 
 
@@ -716,6 +759,27 @@ def handle_turn(
     sess["language"] = lang
     sess["text_direction"] = "rtl" if lang == "ar" else "ltr"
 
+    # ---------------------------------------------------------
+    # Enterprise rule: ALWAYS greet first (never start with menu only)
+    # - First assistant message must include hospital name + emergency notice + options.
+    # - We intentionally do NOT “jump” into booking/info on the very first reply.
+    # ---------------------------------------------------------
+    if not bool(sess.get("has_greeted")):
+        guessed = _detect_language_from_text(message_text)
+        if guessed in {"ar", "en"}:
+            sess["language_locked"] = True
+            sess["language"] = guessed
+            sess["text_direction"] = "rtl" if guessed == "ar" else "ltr"
+            lang = guessed
+
+        sess["state"] = STATE_MENU
+        sess["last_step"] = STATE_MENU
+        sess["has_greeted"] = True
+
+        out = _greeting_menu_ar() if lang == "ar" else _greeting_menu_en()
+        _set_bot(sess, out)
+        return EngineResult(out, sess, [])
+
     prev_last = sess.get("last_user_ts")
     sess["last_user_ts"] = _utcnow_iso()
 
@@ -774,8 +838,8 @@ def handle_turn(
         sess["escalation_flag"] = True
         out = (
             "تم تحويلكم إلى موظف الاستقبال ✅ الرجاء الانتظار... (للعودة للقائمة اكتب 0)"
-            if lang == "ar" else
-            "Connecting you to Reception ✅ Please wait... (Reply 0 for menu)"
+            if lang == "ar"
+            else "Connecting you to Reception ✅ Please wait... (Reply 0 for menu)"
         )
         _set_bot(sess, out)
         return EngineResult(out, sess, [{"type": "ESCALATE", "reason": "user_requested_reception"}])
@@ -783,14 +847,14 @@ def handle_turn(
     if _is_thanks(raw):
         out = (
             "العفو ✅ إذا احتجت أي شيء آخر اكتب 0 لعرض القائمة."
-            if lang == "ar" else
-            "You’re welcome ✅ If you need anything else, reply 0 for the menu."
+            if lang == "ar"
+            else "You’re welcome ✅ If you need anything else, reply 0 for the menu."
         )
         _set_bot(sess, out)
         return EngineResult(out, sess, [])
 
     # ----------------------------
-    # Auto language lock + direct intent + specialty routing (first message)
+    # Auto language lock + direct intent + specialty routing (first message after greeting)
     # ----------------------------
     if not bool(sess.get("language_locked")):
         guessed_lang = _detect_language_from_text(message_text)
@@ -1020,8 +1084,8 @@ def handle_turn(
                 sess["escalation_flag"] = True
                 out = (
                     "تم تحويلكم إلى موظف الاستقبال ✅ الرجاء الانتظار... (للعودة للقائمة اكتب 0)"
-                    if lang == "ar" else
-                    "Connecting you to Reception ✅ Please wait... (Reply 0 for menu)"
+                    if lang == "ar"
+                    else "Connecting you to Reception ✅ Please wait... (Reply 0 for menu)"
                 )
                 _set_bot(sess, out)
                 return EngineResult(out, sess, [{"type": "ESCALATE", "reason": "user_requested_reception"}])
@@ -1138,14 +1202,28 @@ def handle_turn(
 
     # BOOKING FLOWS
     if sess.get("state") == STATE_BOOK_DEPT:
-        idx = _to_int(raw, -1) - 1 if _is_digit_choice(raw) else -1
         dept_key = None
         dept_label = None
 
-        if 0 <= idx < len(DEPTS):
-            dept_key = DEPTS[idx]["key"]
-            dept_label = DEPTS[idx]["ar"] if lang == "ar" else DEPTS[idx]["en"]
-        else:
+        # 1) Numeric choice
+        if _is_digit_choice(raw):
+            choice = _to_int(raw, -1)
+
+            # ✅ Auto-correct reversed two-digit input: 21 -> 12 (only if reversed is valid)
+            if not (1 <= choice <= len(DEPTS)):
+                s = _low(raw)
+                if s.isdigit() and len(s) == 2:
+                    rev = int(s[::-1])
+                    if 1 <= rev <= len(DEPTS):
+                        choice = rev
+
+            idx = choice - 1
+            if 0 <= idx < len(DEPTS):
+                dept_key = DEPTS[idx]["key"]
+                dept_label = DEPTS[idx]["ar"] if lang == "ar" else DEPTS[idx]["en"]
+
+        # 2) Free-text specialty
+        if not dept_key:
             k2 = _detect_dept_key(message_text)
             if k2:
                 dept_key = k2
@@ -1204,14 +1282,14 @@ def handle_turn(
             if lang == "ar":
                 msg = (
                     "صيغة التاريخ غير صحيحة. مثال: 2026-02-28 أو 28-02-2026 أو 28/02/2026"
-                    if err == "format" else
-                    "التاريخ غير صالح. يرجى إدخال تاريخ صحيح."
+                    if err == "format"
+                    else "التاريخ غير صالح. يرجى إدخال تاريخ صحيح."
                 )
             else:
                 msg = (
                     "Date format is invalid. Example: 2026-02-28 or 28-02-2026 or 28/02/2026"
-                    if err == "format" else
-                    "That date is not valid. Please enter a valid date."
+                    if err == "format"
+                    else "That date is not valid. Please enter a valid date."
                 )
             out = _soft_invalid(sess, lang, msg) + "\n\n" + _date_prompt(lang)
             _set_bot(sess, out)
@@ -1304,8 +1382,8 @@ def handle_turn(
             sess["confirm_expires_at"] = None
             msg = (
                 "⏳ انتهت صلاحية ملخص الحجز. حفاظًا على الدقة، يرجى اختيار الوقت مرة أخرى."
-                if lang == "ar" else
-                "⏳ This booking summary has expired. To ensure accuracy, please select the time slot again."
+                if lang == "ar"
+                else "⏳ This booking summary has expired. To ensure accuracy, please select the time slot again."
             )
             sess["state"] = STATE_BOOK_SLOT
             sess["last_step"] = STATE_BOOK_SLOT
