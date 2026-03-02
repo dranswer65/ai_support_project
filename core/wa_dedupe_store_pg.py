@@ -39,6 +39,7 @@ async def claim_message_once(
     phone_number_id: str | None = None,
 ) -> bool:
     tenant = _norm_tenant(tenant_id)
+
     if not msg_id:
         return True
 

@@ -48,7 +48,6 @@ async def get_session(
         """),
         {"tenant_id": tenant, "user_id": user_id},
     )
-
     row = res.first()
     if not row:
         return None
@@ -57,7 +56,7 @@ async def get_session(
     if isinstance(val, dict):
         return val
 
-    # fallback (rare)
+    # rare fallback
     try:
         import json
         if isinstance(val, (str, bytes)):

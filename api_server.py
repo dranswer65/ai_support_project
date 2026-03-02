@@ -1,10 +1,4 @@
 # api_server.py — Railway-safe, tenant-aware, WhatsApp Cloud webhook
-#
-# Goals:
-# - ACK fast with {"ok": True} to avoid Meta retry storms
-# - Only process real user TEXT messages (ignore statuses/receipts/verification payloads)
-# - Tenant-aware dedupe (Postgres) to prevent looping
-# - Run engine inline (stable on Railway)
 
 # ============================================================
 # 🔴 CRITICAL: Windows async fix MUST be first import
@@ -14,7 +8,6 @@ import asyncio
 
 if sys.platform.startswith("win"):
     asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
-
 # ============================================================
 
 import os
@@ -132,7 +125,7 @@ def _extract_text_messages(body: Dict[str, Any]) -> list[Dict[str, str]]:
                 continue
 
             messages = value.get("messages") or []
-            if not isinstance(messages, list):
+            if not isinstance(messages, list) or not messages:
                 continue
 
             for msg in messages:
@@ -157,7 +150,6 @@ def _extract_text_messages(body: Dict[str, Any]) -> list[Dict[str, str]]:
 
 @app.post("/whatsapp/webhook")
 async def whatsapp_webhook(request: Request):
-    # Always ACK ok=True even on errors (to avoid Meta retry storms)
     try:
         body = await request.json()
     except Exception:
@@ -174,7 +166,7 @@ async def whatsapp_webhook(request: Request):
 
         print(f"[webhook] incoming from={from_wa} msg_id={msg_id} text={text_in!r}")
 
-        # Dedupe gate
+        # dedupe
         if msg_id:
             async with AsyncSessionLocal() as db:
                 claimed = await claim_message_once(
@@ -188,7 +180,7 @@ async def whatsapp_webhook(request: Request):
                 print(f"[webhook] duplicate ignored msg_id={msg_id}")
                 continue
 
-        # Run controller/engine
+        # run engine
         try:
             async with AsyncSessionLocal() as db:
                 reply_text, meta = await handle_message(
@@ -210,13 +202,16 @@ async def whatsapp_webhook(request: Request):
 
     return JSONResponse({"ok": True})
 
+
+# ----------------------------
+# TEMP ADMIN: reset sessions (remove after use)
+# ----------------------------
 @app.get("/admin/reset-sessions")
-async def reset_sessions():
+async def admin_reset_sessions():
     async with AsyncSessionLocal() as db:
         await db.execute(
             text("DELETE FROM sessions WHERE tenant_id = :tenant_id"),
             {"tenant_id": TENANT_ID},
         )
         await db.commit()
-
-    return {"ok": True, "message": f"sessions cleared for tenant={TENANT_ID}"}
+    return {"ok": True, "tenant_id": TENANT_ID, "cleared": "sessions"}
