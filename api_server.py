@@ -97,6 +97,18 @@ async def _startup():
     print("[startup] tables ensured")
 
 
+@app.get("/admin/reset-sessions")
+async def admin_reset_sessions():
+    tenant = TENANT_ID
+    async with AsyncSessionLocal() as db:
+        await db.execute(
+            text("DELETE FROM sessions WHERE tenant_id = :tenant_id"),
+            {"tenant_id": tenant},
+        )
+        await db.commit()
+    return {"ok": True, "tenant": tenant, "deleted": "sessions"}
+
+
 @app.get("/whatsapp/webhook")
 async def whatsapp_verify(
     hub_mode: str = Query(default="", alias="hub.mode"),
