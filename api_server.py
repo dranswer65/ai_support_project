@@ -11,11 +11,11 @@ if sys.platform.startswith("win"):
 # ============================================================
 
 import os
-from typing import Any, Dict, Optional
+from typing import Any, Dict
 
 import requests
 from sqlalchemy import text
-from fastapi import FastAPI, Request, Query, HTTPException
+from fastapi import FastAPI, Request, Query, HTTPException, Header
 from fastapi.responses import PlainTextResponse, JSONResponse
 
 from database import AsyncSessionLocal
@@ -24,13 +24,14 @@ from core.session_store_pg import ensure_sessions_table
 from core.appointment_schema import ensure_appointment_requests_table
 from whatsapp_controller import handle_message
 
-
 WA_ACCESS_TOKEN = (os.getenv("WA_ACCESS_TOKEN", "") or "").strip()
 WA_PHONE_NUMBER_ID = (os.getenv("WA_PHONE_NUMBER_ID", "") or "").strip()
 WA_VERIFY_TOKEN = (os.getenv("WA_VERIFY_TOKEN", "") or "").strip()
 
 WA_DEFAULT_CLIENT = (os.getenv("WA_DEFAULT_CLIENT", "supportpilot_demo") or "").strip()
 TENANT_ID = WA_DEFAULT_CLIENT
+
+ADMIN_TOKEN = (os.getenv("ADMIN_TOKEN", "") or "").strip()
 
 
 def wa_send_text(to_wa_id: str, text_: str) -> Dict[str, Any]:
@@ -42,7 +43,10 @@ def wa_send_text(to_wa_id: str, text_: str) -> Dict[str, Any]:
         return {"ok": False, "note": "empty_body"}
 
     url = f"https://graph.facebook.com/v20.0/{WA_PHONE_NUMBER_ID}/messages"
-    headers = {"Authorization": f"Bearer {WA_ACCESS_TOKEN}", "Content-Type": "application/json"}
+    headers = {
+        "Authorization": f"Bearer {WA_ACCESS_TOKEN}",
+        "Content-Type": "application/json",
+    }
     payload = {
         "messaging_product": "whatsapp",
         "to": to_wa_id,
@@ -87,6 +91,8 @@ async def _startup():
         bool(WA_VERIFY_TOKEN),
         "tenant=",
         WA_DEFAULT_CLIENT,
+        "has_admin_token=",
+        bool(ADMIN_TOKEN),
     )
 
     async with AsyncSessionLocal() as db:
@@ -97,8 +103,24 @@ async def _startup():
     print("[startup] tables ensured")
 
 
+# ✅ Admin reset (local/Railway) — protected by ADMIN_TOKEN
+# Call via:
+#   Invoke-RestMethod http://127.0.0.1:8010/admin/reset-sessions -Headers @{ "X-Admin-Token" = "change-me-now" }
+# Or browser:
+#   http://127.0.0.1:8010/admin/reset-sessions?token=change-me-now
 @app.get("/admin/reset-sessions")
-async def admin_reset_sessions():
+async def admin_reset_sessions(
+    token: str = "",
+    x_admin_token: str = Header(default="", alias="X-Admin-Token"),
+):
+    expected = (os.getenv("ADMIN_TOKEN", "") or "").strip()  # read current env at runtime
+    received = (x_admin_token or token or "").strip()
+
+    print(f"[admin] reset-sessions expected_set={bool(expected)} received_len={len(received)}")
+
+    if not expected or received != expected:
+        raise HTTPException(status_code=403, detail="Forbidden")
+
     tenant = TENANT_ID
     async with AsyncSessionLocal() as db:
         await db.execute(
@@ -106,6 +128,7 @@ async def admin_reset_sessions():
             {"tenant_id": tenant},
         )
         await db.commit()
+
     return {"ok": True, "tenant": tenant, "deleted": "sessions"}
 
 
@@ -195,7 +218,7 @@ async def whatsapp_webhook(request: Request):
         # run engine
         try:
             async with AsyncSessionLocal() as db:
-                reply_text, meta = await handle_message(
+                reply_text, _meta = await handle_message(
                     db=db,
                     user_id=from_wa,
                     message_text=text_in,
@@ -213,17 +236,3 @@ async def whatsapp_webhook(request: Request):
                 print("[wa_send] error:", repr(e))
 
     return JSONResponse({"ok": True})
-
-
-# ----------------------------
-# TEMP ADMIN: reset sessions (remove after use)
-# ----------------------------
-@app.get("/admin/reset-sessions")
-async def admin_reset_sessions():
-    async with AsyncSessionLocal() as db:
-        await db.execute(
-            text("DELETE FROM sessions WHERE tenant_id = :tenant_id"),
-            {"tenant_id": TENANT_ID},
-        )
-        await db.commit()
-    return {"ok": True, "tenant_id": TENANT_ID, "cleared": "sessions"}

@@ -5,6 +5,8 @@ import os
 import sys
 import ssl
 import asyncio
+from dotenv import load_dotenv
+load_dotenv()
 
 import certifi
 from sqlalchemy import text

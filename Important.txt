@@ -3,6 +3,8 @@ python -m uvicorn whatsapp_bot:app --port 9000
 ngrok http 9000
 py -m uvicorn api_server:app --port 8010
 
+.\.venv\Scripts\Activate.ps1
+.\.venv\Scripts\python.exe run_dev.py
 
 DASHBOARD: 
 cd C:\Users\Shireen\OneDrive\Desktop\ai_support_project
@@ -16,16 +18,23 @@ py -m uvicorn api_server:app --port 8010
 
 py .\reset_one_session.py 918287920585 supportpilot_demo
 py reset_session.py
+.\.venv\Scripts\python.exe reset_session.py
 To generate new key and update api_key.json: python generate_key.py
 git add . && git commit -m "update" && git push origin main
 git add .
 git commit -m "update whatsapp_controller.py engine.py"                   
-
+git commit -m "update api_server.py"                   
 git push
 
 EAA7LZAZA438uoBQwtErBBK58wZA8Vu0II8GVySRGhueFBnYg6mpqtznGJSUbPlBKueZCDdHyh3zaWUtzjWgrPOvlNLWcOIYxiqhJyVuqPTUSYZC92EDPlbyzDZBfXAwG9LpcUF6YZCn91TsfHZCcQi6NeUZBCmDUb2aZCvbZBmbK7XLNFOyW7XHBpQaonrnP7xDmcbk0QZDZD
 
 $env:DATABASE_URL="postgresql://postgres:UnkCkslRoTjBZNIvlYHFIzyJulzuidKj@HOST:PORT/railway?sslmode=require"
+$env:DATABASE_URL="postgresql://postgres:UnkCkslRoTjBZNIvlYHFIzyJulzuidKj@containers-xxxx.railway.app:6543/railway?sslmode=require"
+$env:DATABASE_URL="postgresql://postgres:UnkCkslRoTjBZNIvlYHFIzyJulzuidKj@containers-xxxx.railway.app:6543/railway"
+DATABASE_URL=postgresql+psycopg://postgres:UnkCkslRoTjBZNIvlYHFIzyJulzuidKj@shuttle.proxy.rlwy.net:46770/railway?sslmode=require
+
+
+py reset_session.py
 📈 Next (Day 39+ Options)
 
 Choose next focus:
