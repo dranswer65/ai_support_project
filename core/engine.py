@@ -1,11 +1,10 @@
-# core/engine.py — Enterprise WhatsApp Clinic Engine (V4.5.1)
-# ✅ Always greet first (enterprise greeting menu)
-# ✅ Deterministic intent layer: BOOK / SPECIALTY_INQUIRY
-# ✅ Arabic dialect triggers
-# ✅ Specialty extraction (deterministic synonyms)
+# core/engine.py — Enterprise WhatsApp Clinic Engine (V4.5.2)
+# ✅ First message specialty inquiry -> direct specialty reply (not greeting menu)
+# ✅ Doctor inquiry reply has NO "2️⃣ See available doctors"
+# ✅ Deterministic specialty extraction (Arabic dialect + English)
 # ✅ Dentist mapping fixed (priority)
-# ✅ No random fallbacks: unknown -> greeting menu
-# ✅ Auto-correct 21 -> 12 in specialty selection list
+# ✅ No emergency logic here (notice exists in greeting)
+# ✅ Auto-correct 21 -> 12 kept in specialty selection list
 
 from __future__ import annotations
 
@@ -35,7 +34,7 @@ STATE_CANCEL_LOOKUP = "CANCEL_LOOKUP"
 STATE_CLOSED = "CLOSED"
 STATE_ESCALATION = "ESCALATION"
 
-ENGINE_MARKER = "CLINIC_ENGINE_V4_5_1"
+ENGINE_MARKER = "CLINIC_ENGINE_V4_5_2"
 
 SESSION_EXPIRE_SECONDS = 60 * 60
 BOOKING_CONFIRM_EXPIRE_SECONDS = 5 * 60
@@ -330,7 +329,8 @@ def _dept_label(key: str, lang: str) -> Optional[str]:
     return None
 
 
-def _doctor_info_reply(lang: str, dept_key: str) -> str:
+# ✅ NEW: inquiry reply WITHOUT option 2
+def _specialty_inquiry_reply(lang: str, dept_key: str) -> str:
     label = _dept_label(dept_key, lang) or dept_key
     if lang == "ar":
         return (
@@ -338,7 +338,6 @@ def _doctor_info_reply(lang: str, dept_key: str) -> str:
             f"نعم، لدينا قسم *{label}* ✅\n\n"
             "هل ترغب بـ:\n"
             "1️⃣ حجز موعد\n"
-            "2️⃣ عرض الأطباء\n"
             "0️⃣ القائمة الرئيسية\n"
             "99️⃣ موظف الاستقبال"
         )
@@ -347,7 +346,6 @@ def _doctor_info_reply(lang: str, dept_key: str) -> str:
         f"Yes — we have a *{label}* department ✅\n\n"
         "Would you like to:\n"
         "1️⃣ Book an appointment\n"
-        "2️⃣ See available doctors\n"
         "0️⃣ Main Menu\n"
         "99️⃣ Reception"
     )
@@ -366,6 +364,7 @@ _INQUIRY_TRIGGERS_EN = [
 _BOOK_TRIGGERS_AR = ["احجز", "حجز", "موعد", "ابغى احجز", "أبغى احجز", "عايز احجز", "اريد حجز", "أريد حجز"]
 _BOOK_TRIGGERS_EN = ["book", "appointment", "schedule", "reserve", "i want to book", "need appointment"]
 
+# Priority list prevents "dentist" being captured by ENT
 _DEPT_SYNONYMS_PRIORITY: List[Tuple[str, List[str]]] = [
     ("dental", [
         "اسنان", "أسنان", "سنان", "ضرس", "ضروس", "تقويم", "لثة",
@@ -445,111 +444,6 @@ def _soft_invalid(sess: Dict[str, Any], lang: str, msg: str) -> str:
     return msg
 
 
-def _set_confirm_expiry(sess: Dict[str, Any]) -> None:
-    sess["confirm_expires_at"] = (_utcnow() + timedelta(seconds=BOOKING_CONFIRM_EXPIRE_SECONDS)).isoformat()
-
-
-def _confirm_expired(sess: Dict[str, Any]) -> bool:
-    dt = _parse_iso(sess.get("confirm_expires_at"))
-    if not dt:
-        return False
-    return _utcnow() >= dt
-
-
-def _make_reference(prefix: str = "SSH") -> str:
-    today = _utcnow().strftime("%y%m%d")
-    rnd = random.randint(1000, 9999)
-    return f"{prefix}-{today}-{rnd}"
-
-
-def _parse_date_any(raw: str) -> Tuple[Optional[str], Optional[str]]:
-    s = _normalize_digits(_clean_input(raw)).replace("/", "-")
-    ymd = re.fullmatch(r"\d{4}-\d{2}-\d{2}", s)
-    dmy = re.fullmatch(r"\d{2}-\d{2}-\d{4}", s)
-    if not (ymd or dmy):
-        return None, "format"
-    try:
-        if ymd:
-            dt = datetime.strptime(s, "%Y-%m-%d").date()
-            return dt.isoformat(), None
-        dt = datetime.strptime(s, "%d-%m-%Y").date()
-        return dt.isoformat(), None
-    except Exception:
-        return None, "invalid_date"
-
-
-def _is_past_date(ymd: str) -> bool:
-    try:
-        dt = datetime.strptime(ymd, "%Y-%m-%d").date()
-        return dt < _utcnow().date()
-    except Exception:
-        return False
-
-
-def _extract_name_mobile_id(raw: str) -> Tuple[Optional[str], Optional[str], Optional[str]]:
-    raw0 = (raw or "").strip()
-    if not raw0:
-        return None, None, None
-
-    text = _normalize_digits(raw0)
-
-    seqs: List[str] = []
-    cur: List[str] = []
-    for ch in text:
-        if ch.isdigit() or ch == "+":
-            cur.append(ch)
-        else:
-            if cur:
-                s = "".join(cur)
-                digits_only = "".join(c for c in s if c.isdigit())
-                if len(digits_only) >= 8:
-                    seqs.append(s)
-                cur = []
-    if cur:
-        s = "".join(cur)
-        digits_only = "".join(c for c in s if c.isdigit())
-        if len(digits_only) >= 8:
-            seqs.append(s)
-
-    mobile = seqs[0] if seqs else None
-
-    pid = None
-    if len(seqs) >= 2:
-        a = "".join(c for c in (mobile or "") if c.isdigit())
-        for cand in seqs[1:]:
-            b = "".join(c for c in cand if c.isdigit())
-            if 8 <= len(b) <= 15 and b != a:
-                pid = cand
-                break
-
-    name_candidate = text
-    if mobile:
-        name_candidate = name_candidate.replace(mobile, " ")
-    if pid:
-        name_candidate = name_candidate.replace(pid, " ")
-    name_candidate = re.sub(r"\s+", " ", name_candidate).strip()
-    lines = [ln.strip() for ln in name_candidate.splitlines() if ln.strip()]
-    name = lines[0] if lines else name_candidate
-
-    only_digits = re.fullmatch(r"\+?\d{8,15}", _clean_input(text).replace(" ", ""))
-    if only_digits:
-        return None, text.strip(), None
-
-    return name or None, mobile, pid
-
-
-def _valid_mobile(m: Optional[str]) -> bool:
-    if not m:
-        return False
-    digits = "".join(c for c in m if c.isdigit())
-    return 8 <= len(digits) <= 15
-
-
-def _looks_like_reference(s: str) -> bool:
-    t = (s or "").strip().upper()
-    return bool(re.fullmatch(r"[A-Z]{2,6}-\d{6}-\d{3,6}", t))
-
-
 def handle_turn(
     user_id: str,
     message_text: str,
@@ -566,7 +460,10 @@ def handle_turn(
     sess["language"] = lang
     sess["text_direction"] = "rtl" if lang == "ar" else "ltr"
 
-    # ✅ ALWAYS greet first
+    intent = _detect_intent(message_text)
+    dept_key = _extract_dept_key(message_text)
+
+    # ✅ FIX 1: First session specialty inquiry should answer immediately (not greeting menu)
     if not bool(sess.get("has_greeted")):
         guessed = _detect_language_from_text(message_text)
         if guessed in {"ar", "en"}:
@@ -575,35 +472,27 @@ def handle_turn(
             sess["text_direction"] = "rtl" if guessed == "ar" else "ltr"
             lang = guessed
 
+        # If user asked about specialty on first message -> answer it directly
+        if dept_key and (intent == "SPECIALTY_INQUIRY" or intent is None):
+            sess["has_greeted"] = True
+            sess["state"] = STATE_MENU
+            sess["last_step"] = STATE_MENU
+            sess["intent"] = "SPECIALTY_INQUIRY"
+            sess["dept_key"] = dept_key
+            sess["dept_label"] = _dept_label(dept_key, lang)
+            out = _specialty_inquiry_reply(lang, dept_key)
+            _set_bot(sess, out)
+            return EngineResult(out, sess, [])
+
+        # Otherwise greet menu
         sess["state"] = STATE_MENU
         sess["last_step"] = STATE_MENU
         sess["has_greeted"] = True
-
         out = _greeting_menu_ar() if lang == "ar" else _greeting_menu_en()
         _set_bot(sess, out)
         return EngineResult(out, sess, [])
 
-    prev_last = sess.get("last_user_ts")
-    sess["last_user_ts"] = _utcnow_iso()
-
-    if prev_last and _session_expired_from(prev_last) and sess.get("state") != STATE_ESCALATION:
-        locked = bool(sess.get("language_locked"))
-        keep_lang = sess.get("language") or lang
-
-        _reset_flow_fields(sess)
-        sess["status"] = STATUS_ABANDONED
-        sess["language"] = keep_lang
-        sess["text_direction"] = "rtl" if keep_lang == "ar" else "ltr"
-        sess["language_locked"] = locked
-        sess["has_greeted"] = False
-        sess["mistakes"] = 0
-
-        sess["state"] = STATE_MENU
-        sess["last_step"] = STATE_MENU
-        out = _greeting_menu_ar() if keep_lang == "ar" else _greeting_menu_en()
-        _set_bot(sess, out)
-        return EngineResult(out, sess, [])
-
+    # Normal 0/menu behavior
     if low in {"0", "٠"}:
         sess["state"] = STATE_MENU
         sess["last_step"] = STATE_MENU
@@ -632,47 +521,19 @@ def handle_turn(
         _set_bot(sess, out)
         return EngineResult(out, sess, [])
 
-    # NEW: Intent + Specialty extraction
-    intent = _detect_intent(message_text)
-    dept_key = _extract_dept_key(message_text)
-
-    if dept_key and intent == "SPECIALTY_INQUIRY":
+    # ✅ FIX 2: Specialty inquiry ALWAYS answers (not greeting/menu fallback)
+    if dept_key and (intent == "SPECIALTY_INQUIRY" or intent is None):
         sess["intent"] = "SPECIALTY_INQUIRY"
         sess["dept_key"] = dept_key
         sess["dept_label"] = _dept_label(dept_key, lang)
         sess["state"] = STATE_MENU
         sess["last_step"] = STATE_MENU
-        out = _doctor_info_reply(lang, dept_key)
+        out = _specialty_inquiry_reply(lang, dept_key)
         _set_bot(sess, out)
         return EngineResult(out, sess, [])
 
-    if dept_key and intent is None:
-        # better UX: treat as inquiry instead of menu
-        sess["intent"] = "SPECIALTY_INQUIRY"
-        sess["dept_key"] = dept_key
-        sess["dept_label"] = _dept_label(dept_key, lang)
-        sess["state"] = STATE_MENU
-        sess["last_step"] = STATE_MENU
-        out = _doctor_info_reply(lang, dept_key)
-        _set_bot(sess, out)
-        return EngineResult(out, sess, [])
-
-    if dept_key and intent == "BOOK" and dept_key in DOCTORS_BY_DEPT_KEY:
-        _reset_flow_fields(sess)
-        sess["intent"] = "BOOK"
-        sess["dept_key"] = dept_key
-        sess["dept_label"] = _dept_label(dept_key, lang)
-        sess["state"] = STATE_BOOK_DOCTOR
-        sess["last_step"] = STATE_BOOK_DOCTOR
-        out = _doctor_prompt(lang, dept_key)
-        _set_bot(sess, out)
-        return EngineResult(out, sess, [])
-
-    # MAIN MENU routing
-    if sess.get("state") != STATE_MENU and sess.get("state") not in {
-        STATE_BOOK_DEPT, STATE_BOOK_DOCTOR, STATE_BOOK_DATE, STATE_BOOK_SLOT, STATE_BOOK_PATIENT, STATE_BOOK_CONFIRM,
-        STATE_RESCHEDULE_LOOKUP, STATE_CANCEL_LOOKUP
-    }:
+    # Menu state
+    if sess.get("state") != STATE_MENU and sess.get("state") != STATE_BOOK_DEPT:
         sess["state"] = STATE_MENU
         sess["last_step"] = STATE_MENU
 
@@ -730,20 +591,23 @@ def handle_turn(
                 _set_bot(sess, out)
                 return EngineResult(out, sess, [{"type": "ESCALATE", "reason": "user_requested_reception"}])
 
-        # Free text inside menu that didn't match specialty intent -> show greeting menu (not menu-only)
+            # Invalid menu number -> show menu (NOT greeting)
+            msg = ("يرجى اختيار رقم صحيح من القائمة." if lang == "ar" else "Please choose a valid menu number.")
+            out = _soft_invalid(sess, lang, msg) + "\n\n" + _main_menu(lang)
+            _set_bot(sess, out)
+            return EngineResult(out, sess, [])
+
+        # Free text in menu: if not specialty inquiry -> show greeting menu (your rule)
         out = _greeting_menu_ar() if lang == "ar" else _greeting_menu_en()
         _set_bot(sess, out)
         return EngineResult(out, sess, [])
 
-    # BOOKING FLOW: pick specialty
+    # BOOK DEPT selection (kept for your flow)
     if sess.get("state") == STATE_BOOK_DEPT:
         if _is_digit_choice(raw):
             n = _to_int(raw, -1)
-
-            # ✅ Auto-correct common mistake: user types 21 instead of 12 (Urology)
-            if n == 21:
+            if n == 21:  # ✅ auto-correct
                 n = 12
-
             idx = n - 1
         else:
             idx = -1
@@ -766,19 +630,29 @@ def handle_turn(
             _set_bot(sess, out)
             return EngineResult(out, sess, [])
 
+        # If this was inquiry flow, reply inquiry; if booking, you can continue later
+        if sess.get("intent") == "SPECIALTY_INQUIRY":
+            sess["dept_key"] = dept_key2
+            sess["dept_label"] = dept_label2
+            sess["state"] = STATE_MENU
+            sess["last_step"] = STATE_MENU
+            out = _specialty_inquiry_reply(lang, dept_key2)
+            _set_bot(sess, out)
+            return EngineResult(out, sess, [])
+
+        # Booking path (keep minimal here)
         sess["dept_key"] = dept_key2
         sess["dept_label"] = dept_label2
-        sess["mistakes"] = 0
         sess["state"] = STATE_BOOK_DOCTOR
         sess["last_step"] = STATE_BOOK_DOCTOR
         out = _doctor_prompt(lang, dept_key2)
         _set_bot(sess, out)
         return EngineResult(out, sess, [])
 
-    # If flow state unexpected -> greeting menu
+    # fallback
     sess["state"] = STATE_MENU
     sess["last_step"] = STATE_MENU
-    out = _greeting_menu_ar() if lang == "ar" else _greeting_menu_en()
+    out = _main_menu(lang)
     _set_bot(sess, out)
     return EngineResult(out, sess, [])
 

@@ -1,13 +1,15 @@
-# whatsapp_controller.py — Enterprise-ready controller (V6.2)
+# whatsapp_controller.py — Enterprise-ready controller (V6.3)
 # Fixes:
 # ✅ Sticky handoff silence after 99 (including "Thank you")
 # ✅ Prevent language reset loops (don’t show language menu once locked)
 # ✅ Keep Reception = 99 (not 9)
 # ✅ Store last_intent for better handoff payloads
+# ✅ NEW: Deterministic language resolution (AR chars -> ar, EN chars -> en)
+# ✅ NEW: Upsert new session immediately to prevent duplicate webhook race (double reply AR+EN)
 #
-# IMPORTANT CHANGE (per your request):
+# IMPORTANT:
 # ✅ NO emergency detection / NO symptom triage / NO emergency escalation.
-# Any message goes to engine. Emergency notice is already inside engine greeting.
+# Emergency notice is already inside engine greeting.
 
 from __future__ import annotations
 
@@ -42,6 +44,7 @@ _AGENT_KEYS = [
 HANDOFF_STICKY_MINUTES = 30
 
 _AR_RE = re.compile(r"[\u0600-\u06FF]")
+_EN_RE = re.compile(r"[A-Za-z]")
 _ARABIC_DIGITS = str.maketrans("٠١٢٣٤٥٦٧٨٩", "0123456789")
 
 
@@ -51,6 +54,10 @@ def _utcnow() -> datetime:
 
 def _looks_arabic(text: str) -> bool:
     return bool(_AR_RE.search(text or ""))
+
+
+def _looks_english(text: str) -> bool:
+    return bool(_EN_RE.search(text or ""))
 
 
 def _normalize_input(text: str) -> str:
@@ -118,8 +125,15 @@ def _wants_agent(text: str) -> bool:
 
 
 def _resolve_language_for_turn(message_text: str, session: Dict[str, Any]) -> str:
+    # If locked, never change
     if bool(session.get("language_locked")):
         return "ar" if str(session.get("language") or "ar").startswith("ar") else "en"
+
+    # Deterministic: Arabic chars -> ar, English chars -> en
+    if _looks_arabic(message_text):
+        return "ar"
+    if _looks_english(message_text):
+        return "en"
 
     raw = (message_text or "").strip()
     if raw.isdigit():
@@ -142,10 +156,6 @@ async def _escalate_to_human(
     decision_reason: str,
     urgent: bool = False,
 ) -> Tuple[Optional[str], Dict[str, Any]]:
-    """
-    Used ONLY when user explicitly requests reception/agent (99).
-    (Emergency escalations removed per your request.)
-    """
     payload = build_handoff_payload(
         user_id=user_id,
         current_state=session.get("state"),
@@ -193,8 +203,13 @@ async def handle_message(
     tenant = _norm_tenant(tenant_id)
     kpi_signals = list(kpi_signals or [])
 
+    cleaned = _normalize_input(message_text)
+    raw = cleaned
+
     session = await get_session(db, user_id=user_id, tenant_id=tenant)
-    if not isinstance(session, dict) or not session:
+    is_new_session = not isinstance(session, dict) or not session
+
+    if is_new_session:
         session = {
             "user_id": user_id,
             "status": "ACTIVE",
@@ -212,24 +227,19 @@ async def handle_message(
             "last_ticket_id": None,
             "last_intent": None,
         }
+        # ✅ Prevent duplicate webhook race: persist immediately
+        await upsert_session(db, user_id=user_id, session=session, tenant_id=tenant)
 
-    cleaned = _normalize_input(message_text)
-    raw = cleaned
     session["last_user_message"] = cleaned
-
-    # ✅ Keep last_intent synced (must be at top, before any branching)
     session["last_intent"] = session.get("intent") or session.get("last_intent")
 
-    # ---------------------------------------------------------
-    # Sticky handoff silence (MUST be early)
-    # ---------------------------------------------------------
+    # Sticky handoff silence
     if _handoff_active(session):
         if raw == "0":
             session["handoff_active"] = False
             session["handoff_until"] = None
             session["state"] = "MAIN_MENU"
             session["last_step"] = "MAIN_MENU"
-
             await upsert_session(db, user_id=user_id, session=session, tenant_id=tenant)
 
             engine_out = run_engine(
@@ -237,28 +247,23 @@ async def handle_message(
                 user_message="0",
                 language=_resolve_language_for_turn("0", session),
             )
-
             reply_text = (engine_out.get("reply_text") or "").strip()
             session2 = engine_out.get("session") if isinstance(engine_out.get("session"), dict) else session
             session2["last_intent"] = session2.get("intent") or session2.get("last_intent")
-
             await upsert_session(db, user_id=user_id, session=session2, tenant_id=tenant)
+
             return reply_text, {"tenant_id": tenant, "state": session2.get("state"), "handoff_active": False}
 
         await upsert_session(db, user_id=user_id, session=session, tenant_id=tenant)
         return "", {"tenant_id": tenant, "state": session.get("state"), "handoff_active": True}
 
-    # ---------------------------------------------------------
-    # Normal language resolution
-    # ---------------------------------------------------------
+    # Normal language resolution (deterministic)
     language = _resolve_language_for_turn(cleaned, session)
     session["language"] = language
     session["text_direction"] = "rtl" if language == "ar" else "ltr"
     arabic_tone = select_arabic_tone(cleaned) if language == "ar" else None
 
-    # ---------------------------------------------------------
-    # Agent override (99) — ONLY escalation we keep
-    # ---------------------------------------------------------
+    # Agent override only
     if raw == "99" or _wants_agent(cleaned):
         ticket_id, extra = await _escalate_to_human(
             tenant_id=tenant,
@@ -272,7 +277,6 @@ async def handle_message(
             decision_reason="User requested reception",
             urgent=False,
         )
-
         short_ref = _short_ref(ticket_id)
         if language == "ar":
             reply = (
@@ -295,9 +299,7 @@ async def handle_message(
     if is_incident_mode():
         kpi_signals.append("incident_mode")
 
-    # ---------------------------------------------------------
-    # Engine routing (ALL messages go to engine)
-    # ---------------------------------------------------------
+    # Engine routing (one call only)
     engine_out = run_engine(
         session=session,
         user_message=cleaned,
@@ -308,10 +310,7 @@ async def handle_message(
 
     reply_text = (engine_out.get("reply_text") or "").strip()
     session2 = engine_out.get("session") if isinstance(engine_out.get("session"), dict) else session
-
-    # ✅ Persist last_intent
     session2["last_intent"] = session2.get("intent") or session2.get("last_intent")
-
     await upsert_session(db, user_id=user_id, session=session2, tenant_id=tenant)
 
     return reply_text, {
