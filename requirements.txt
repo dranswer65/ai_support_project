@@ -89,3 +89,5 @@ uvicorn==0.40.0
 watchdog==6.0.0
 wrapt==2.0.1
 yarl==1.22.0
+asyncpg
+SQLAlchemy>=2.0

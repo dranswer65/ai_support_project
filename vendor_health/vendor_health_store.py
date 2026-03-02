@@ -1,64 +1,99 @@
 # vendor_health/vendor_health_store.py
 # -----------------------------------
-# Day 42C — Vendor Health Store
+# Day 42C — Vendor Health Store (Hardened, in-memory)
 # -----------------------------------
 
-from datetime import datetime, timedelta
+from __future__ import annotations
 
-# Simple in-memory store
-_VENDOR_HEALTH = {
-    "zendesk": {
-        "healthy": True,
-        "failures": 0,
-        "disabled_until": None,
-    },
-    "freshdesk": {
-        "healthy": True,
-        "failures": 0,
-        "disabled_until": None,
-    },
+from datetime import datetime, timedelta
+from typing import Dict, Any, Optional
+
+
+def _utcnow() -> datetime:
+    # naive UTC is fine for this use-case (consistent with your original code)
+    return datetime.utcnow()
+
+
+def _norm_vendor(vendor: str) -> str:
+    return (vendor or "").strip().lower()
+
+
+# Simple in-memory store (demo-safe; replace with DB later if needed)
+_VENDOR_HEALTH: Dict[str, Dict[str, Any]] = {
+    "zendesk": {"healthy": True, "failures": 0, "disabled_until": None},
+    "freshdesk": {"healthy": True, "failures": 0, "disabled_until": None},
 }
 
 FAILURE_THRESHOLD = 3          # failures before disabling
 DISABLE_DURATION_MIN = 10      # cooldown window
 
 
-def is_vendor_healthy(vendor: str) -> bool:
-    record = _VENDOR_HEALTH.get(vendor)
+def _get_record(vendor: str) -> Optional[Dict[str, Any]]:
+    v = _norm_vendor(vendor)
+    if not v:
+        return None
+    rec = _VENDOR_HEALTH.get(v)
+    if rec is None:
+        # unknown vendor is treated as unhealthy
+        return None
+    return rec
 
+
+def is_vendor_healthy(vendor: str) -> bool:
+    record = _get_record(vendor)
     if not record:
         return False
 
-    if record["disabled_until"]:
-        if datetime.utcnow() < record["disabled_until"]:
-            return False
-        else:
-            # Auto-recover
+    try:
+        disabled_until = record.get("disabled_until")
+        if disabled_until:
+            if _utcnow() < disabled_until:
+                return False
+            # Auto-recover after cooldown
             record["disabled_until"] = None
             record["failures"] = 0
             record["healthy"] = True
 
-    return record["healthy"]
+        return bool(record.get("healthy"))
+    except Exception:
+        # Fail-closed if store record is malformed
+        return False
 
 
-def record_failure(vendor: str):
-    record = _VENDOR_HEALTH[vendor]
-    record["failures"] += 1
+def record_failure(vendor: str) -> None:
+    record = _get_record(vendor)
+    if not record:
+        return
 
-    if record["failures"] >= FAILURE_THRESHOLD:
-        record["healthy"] = False
-        record["disabled_until"] = datetime.utcnow() + timedelta(
-            minutes=DISABLE_DURATION_MIN
-        )
+    try:
+        record["failures"] = int(record.get("failures", 0)) + 1
 
-
-def record_success(vendor: str):
-    record = _VENDOR_HEALTH[vendor]
-    record["failures"] = 0
-    record["healthy"] = True
-    record["disabled_until"] = None
+        if record["failures"] >= FAILURE_THRESHOLD:
+            record["healthy"] = False
+            record["disabled_until"] = _utcnow() + timedelta(minutes=DISABLE_DURATION_MIN)
+    except Exception:
+        return
 
 
-def snapshot():
-    """For debugging / admin dashboards later"""
-    return _VENDOR_HEALTH
+def record_success(vendor: str) -> None:
+    record = _get_record(vendor)
+    if not record:
+        return
+
+    try:
+        record["failures"] = 0
+        record["healthy"] = True
+        record["disabled_until"] = None
+    except Exception:
+        return
+
+
+def snapshot() -> Dict[str, Dict[str, Any]]:
+    """
+    For debugging / admin dashboards later.
+    Returns a copy so external callers can't mutate internal state.
+    """
+    out: Dict[str, Dict[str, Any]] = {}
+    for k, v in _VENDOR_HEALTH.items():
+        out[k] = dict(v)
+    return out
