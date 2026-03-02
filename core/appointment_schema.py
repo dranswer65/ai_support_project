@@ -1,5 +1,9 @@
+# core/appointment_schema.py
+from __future__ import annotations
+
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
+
 
 async def ensure_appointment_requests_table(db: AsyncSession) -> None:
     await db.execute(text("""

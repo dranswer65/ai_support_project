@@ -14,17 +14,18 @@ supportpilot_secret_123
 cd C:\projects\ai_support_project01
 py -m uvicorn api_server:app --port 8010
 
-
-
+py .\reset_one_session.py 918287920585 supportpilot_demo
+py reset_session.py
 To generate new key and update api_key.json: python generate_key.py
 git add . && git commit -m "update" && git push origin main
 git add .
-git commit -m "update engine.py"      
+git commit -m "update whatsapp_controller.py engine.py"                   
+
 git push
 
 EAA7LZAZA438uoBQwtErBBK58wZA8Vu0II8GVySRGhueFBnYg6mpqtznGJSUbPlBKueZCDdHyh3zaWUtzjWgrPOvlNLWcOIYxiqhJyVuqPTUSYZC92EDPlbyzDZBfXAwG9LpcUF6YZCn91TsfHZCcQi6NeUZBCmDUb2aZCvbZBmbK7XLNFOyW7XHBpQaonrnP7xDmcbk0QZDZD
 
-
+$env:DATABASE_URL="postgresql://postgres:UnkCkslRoTjBZNIvlYHFIzyJulzuidKj@HOST:PORT/railway?sslmode=require"
 📈 Next (Day 39+ Options)
 
 Choose next focus:

@@ -1,17 +1,23 @@
-# api_server.py (Railway-safe, tenant-aware, WhatsApp Cloud webhook)
+# api_server.py — Railway-safe, tenant-aware, WhatsApp Cloud webhook
 #
 # Goals:
 # - ACK fast with {"ok": True} to avoid Meta retry storms
 # - Only process real user TEXT messages (ignore statuses/receipts/verification payloads)
 # - Tenant-aware dedupe (Postgres) to prevent looping
 # - Run engine inline (stable on Railway)
-#
-# NOTE:
-# - Meta "Send test message" is sent by Meta console, not your webhook.
 
-import os
+# ============================================================
+# 🔴 CRITICAL: Windows async fix MUST be first import
+# ============================================================
 import sys
 import asyncio
+
+if sys.platform.startswith("win"):
+    asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
+
+# ============================================================
+
+import os
 from typing import Any, Dict, Optional
 
 import requests
@@ -26,31 +32,15 @@ from core.appointment_schema import ensure_appointment_requests_table
 from whatsapp_controller import handle_message
 
 
-# ----------------------------
-# Windows async fix (must be early)
-# ----------------------------
-if sys.platform.startswith("win"):
-    asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
-
-
-# ----------------------------
-# Env
-# ----------------------------
 WA_ACCESS_TOKEN = (os.getenv("WA_ACCESS_TOKEN", "") or "").strip()
 WA_PHONE_NUMBER_ID = (os.getenv("WA_PHONE_NUMBER_ID", "") or "").strip()
 WA_VERIFY_TOKEN = (os.getenv("WA_VERIFY_TOKEN", "") or "").strip()
 
 WA_DEFAULT_CLIENT = (os.getenv("WA_DEFAULT_CLIENT", "supportpilot_demo") or "").strip()
-TENANT_ID = WA_DEFAULT_CLIENT  # alias to make intent clear
+TENANT_ID = WA_DEFAULT_CLIENT
 
 
-# ----------------------------
-# WhatsApp sender (Meta Cloud API)
-# ----------------------------
 def wa_send_text(to_wa_id: str, text_: str) -> Dict[str, Any]:
-    """
-    Sends a WhatsApp text message via Meta Graph API (Cloud API).
-    """
     if not WA_ACCESS_TOKEN or not WA_PHONE_NUMBER_ID:
         raise RuntimeError("Missing WA_ACCESS_TOKEN or WA_PHONE_NUMBER_ID")
 
@@ -64,7 +54,7 @@ def wa_send_text(to_wa_id: str, text_: str) -> Dict[str, Any]:
         "messaging_product": "whatsapp",
         "to": to_wa_id,
         "type": "text",
-        "text": {"body": body[:4000]},  # safety limit
+        "text": {"body": body[:4000]},
     }
 
     r = requests.post(url, headers=headers, json=payload, timeout=30)
@@ -74,15 +64,11 @@ def wa_send_text(to_wa_id: str, text_: str) -> Dict[str, Any]:
         j = {"status_code": r.status_code, "text": r.text}
 
     if r.status_code >= 400:
-        # keep it visible in logs without crashing webhook
         raise RuntimeError(f"WhatsApp send failed: {r.status_code} {j}")
 
     return j
 
 
-# ----------------------------
-# App
-# ----------------------------
 app = FastAPI(title="SupportPilot", version="0.1.0")
 
 
@@ -93,11 +79,6 @@ async def root():
 
 @app.api_route("/health", methods=["GET", "HEAD"])
 async def health():
-    return {"ok": True}
-
-
-@app.api_route("//health", methods=["GET", "HEAD"])
-async def health2():
     return {"ok": True}
 
 
@@ -123,9 +104,6 @@ async def _startup():
     print("[startup] tables ensured")
 
 
-# ----------------------------
-# WhatsApp webhook verify (GET)
-# ----------------------------
 @app.get("/whatsapp/webhook")
 async def whatsapp_verify(
     hub_mode: str = Query(default="", alias="hub.mode"),
@@ -137,21 +115,8 @@ async def whatsapp_verify(
     raise HTTPException(status_code=403, detail="Verification failed")
 
 
-# ----------------------------
-# WhatsApp webhook (POST)
-# ----------------------------
 def _extract_text_messages(body: Dict[str, Any]) -> list[Dict[str, str]]:
-    """
-    Returns a list of normalized user text messages:
-      [{"msg_id": "...", "from_wa": "...", "text": "..."}]
-
-    Strictly ignores:
-    - statuses (delivery/read receipts)
-    - non-text messages
-    - malformed payloads
-    """
     out: list[Dict[str, str]] = []
-
     entries = body.get("entry") or []
     if not isinstance(entries, list):
         return out
@@ -167,8 +132,8 @@ def _extract_text_messages(body: Dict[str, Any]) -> list[Dict[str, str]]:
                 continue
 
             messages = value.get("messages") or []
-            if not isinstance(messages, list) or not messages:
-                continue  # statuses, receipts, etc.
+            if not isinstance(messages, list):
+                continue
 
             for msg in messages:
                 if not isinstance(msg, dict):
@@ -192,188 +157,66 @@ def _extract_text_messages(body: Dict[str, Any]) -> list[Dict[str, str]]:
 
 @app.post("/whatsapp/webhook")
 async def whatsapp_webhook(request: Request):
-    # Always ACK ok=True on failures to avoid Meta retry storms
+    # Always ACK ok=True even on errors (to avoid Meta retry storms)
     try:
         body = await request.json()
-    except Exception as e:
-        print("[webhook] bad json:", repr(e))
+    except Exception:
         return JSONResponse({"ok": True})
 
-    try:
-        messages = _extract_text_messages(body)
-        if not messages:
-            return JSONResponse({"ok": True})
+    messages = _extract_text_messages(body)
+    if not messages:
+        return JSONResponse({"ok": True})
 
-        for m in messages:
-            msg_id = m["msg_id"]
-            from_wa = m["from_wa"]
-            text_in = m["text"]
+    for m in messages:
+        msg_id = m["msg_id"]
+        from_wa = m["from_wa"]
+        text_in = m["text"]
 
-            print(f"[webhook] incoming from={from_wa} msg_id={msg_id} text={text_in!r}")
+        print(f"[webhook] incoming from={from_wa} msg_id={msg_id} text={text_in!r}")
 
-            # ----------------------------
-            # Dedupe gate (tenant-safe)
-            # ----------------------------
-            if msg_id:
-                async with AsyncSessionLocal() as db:
-                    claimed = await claim_message_once(
-                        db,
-                        tenant_id=TENANT_ID,
-                        msg_id=msg_id,
-                        wa_from=from_wa,
-                        phone_number_id=WA_PHONE_NUMBER_ID,
-                    )
-                if not claimed:
-                    print(f"[webhook] duplicate msg ignored msg_id={msg_id}")
-                    continue
+        # Dedupe gate
+        if msg_id:
+            async with AsyncSessionLocal() as db:
+                claimed = await claim_message_once(
+                    db,
+                    tenant_id=TENANT_ID,
+                    msg_id=msg_id,
+                    wa_from=from_wa,
+                    phone_number_id=WA_PHONE_NUMBER_ID,
+                )
+            if not claimed:
+                print(f"[webhook] duplicate ignored msg_id={msg_id}")
+                continue
 
-            # ----------------------------
-            # Run engine inline
-            # ----------------------------
-            reply_text: str = ""
-            meta: Dict[str, Any] = {}
+        # Run controller/engine
+        try:
+            async with AsyncSessionLocal() as db:
+                reply_text, meta = await handle_message(
+                    db=db,
+                    user_id=from_wa,
+                    message_text=text_in,
+                    tenant_id=TENANT_ID,
+                )
+        except Exception as e:
+            print("[engine] error:", repr(e))
+            continue
 
+        reply_clean = (reply_text or "").strip()
+        if reply_clean:
             try:
-                async with AsyncSessionLocal() as db:
-                    reply_text, meta = await handle_message(
-                        db=db,
-                        user_id=from_wa,
-                        message_text=text_in,
-                        tenant_id=TENANT_ID,
-                    )
+                wa_send_text(from_wa, reply_clean)
             except Exception as e:
-                print("[engine] error:", repr(e))
-                continue  # still ACK ok=True
-            print(f"[audit] user={from_wa} state={meta.get('state')} handoff={meta.get('handoff_active')}")
+                print("[wa_send] error:", repr(e))
 
-            reply_clean = (reply_text or "").strip()
-            print(f"[engine] meta={meta} reply_len={len(reply_clean)}")
+    return JSONResponse({"ok": True})
 
-            # ----------------------------
-            # Send reply if any
-            # (Controller may return "" intentionally in sticky handoff)
-            # ----------------------------
-            if reply_clean:
-                try:
-                    resp = wa_send_text(from_wa, reply_clean)
-                    print("[wa_send] ok:", resp)
-                except Exception as e:
-                    print("[wa_send] error:", repr(e))
-
-        return JSONResponse({"ok": True})
-
-    except Exception as e:
-        print("[webhook] error:", repr(e))
-        return JSONResponse({"ok": True})
-
-
-# ----------------------------
-# Reception endpoints (demo UI)
-# ----------------------------
-@app.get("/reception/requests")
-async def reception_list_requests(
-    tenant_id: str = Query(...),
-    status: Optional[str] = Query(None),
-    limit: int = Query(50, ge=1, le=200),
-    offset: int = Query(0, ge=0),
-):
-    tenant = (tenant_id or "").strip()
-    if not tenant:
-        raise HTTPException(status_code=400, detail="tenant_id required")
-
-    where = "WHERE tenant_id = :tenant_id"
-    params: Dict[str, Any] = {"tenant_id": tenant, "limit": limit, "offset": offset}
-
-    if status:
-        where += " AND status = :status"
-        params["status"] = status.strip().upper()
-
-    q = f"""
-    SELECT
-      tenant_id, request_id, channel, user_id,
-      status, intent,
-      dept_key, dept_label,
-      doctor_key, doctor_label,
-      appt_date, appt_time,
-      patient_name, patient_mobile, patient_id,
-      notes, receptionist_note,
-      created_at, updated_at
-    FROM appointment_requests
-    {where}
-    ORDER BY created_at DESC
-    LIMIT :limit OFFSET :offset
-    """
-
+@app.get("/admin/reset-sessions")
+async def reset_sessions():
     async with AsyncSessionLocal() as db:
-        res = await db.execute(text(q), params)
-        rows = res.mappings().all()
-
-    return {"ok": True, "count": len(rows), "items": [dict(r) for r in rows]}
-
-
-@app.post("/reception/requests/{request_id}/status")
-async def reception_set_status(
-    request_id: str,
-    tenant_id: str = Query(...),
-    new_status: str = Query(...),
-):
-    tenant = (tenant_id or "").strip()
-    if not tenant:
-        raise HTTPException(status_code=400, detail="tenant_id required")
-
-    status = (new_status or "").strip().upper()
-    if status not in {"PENDING", "CONFIRMED", "CANCELLED", "DONE"}:
-        raise HTTPException(status_code=400, detail="Invalid new_status")
-
-    async with AsyncSessionLocal() as db:
-        res = await db.execute(
-            text(
-                """
-            UPDATE appointment_requests
-            SET status = :status, updated_at = NOW()
-            WHERE tenant_id = :tenant_id AND request_id = :request_id
-            RETURNING request_id;
-            """
-            ),
-            {"tenant_id": tenant, "request_id": request_id, "status": status},
+        await db.execute(
+            text("DELETE FROM sessions WHERE tenant_id = :tenant_id"),
+            {"tenant_id": TENANT_ID},
         )
         await db.commit()
-        ok = res.first() is not None
 
-    if not ok:
-        raise HTTPException(status_code=404, detail="request not found")
-
-    return {"ok": True, "request_id": request_id, "status": status}
-
-
-@app.post("/reception/requests/{request_id}/note")
-async def reception_set_note(
-    request_id: str,
-    tenant_id: str = Query(...),
-    note: str = Query(...),
-):
-    tenant = (tenant_id or "").strip()
-    if not tenant:
-        raise HTTPException(status_code=400, detail="tenant_id required")
-
-    note2 = (note or "").strip()[:2000]
-
-    async with AsyncSessionLocal() as db:
-        res = await db.execute(
-            text(
-                """
-            UPDATE appointment_requests
-            SET receptionist_note = :note, updated_at = NOW()
-            WHERE tenant_id = :tenant_id AND request_id = :request_id
-            RETURNING request_id;
-            """
-            ),
-            {"tenant_id": tenant, "request_id": request_id, "note": note2},
-        )
-        await db.commit()
-        ok = res.first() is not None
-
-    if not ok:
-        raise HTTPException(status_code=404, detail="request not found")
-
-    return {"ok": True, "request_id": request_id}
+    return {"ok": True, "message": f"sessions cleared for tenant={TENANT_ID}"}
