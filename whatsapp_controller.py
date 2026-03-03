@@ -231,6 +231,9 @@ async def handle_message(
         await upsert_session(db, user_id=user_id, session=session, tenant_id=tenant)
 
     session["last_user_message"] = cleaned
+    # schedule 10-min reminder on every inbound message (one-time reminder)
+    session["reminder_due_at"] = (datetime.now(timezone.utc) + timedelta(minutes=10)).isoformat()
+    session["reminder_sent"] = False
     session["last_intent"] = session.get("intent") or session.get("last_intent")
 
     # Sticky handoff silence

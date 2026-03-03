@@ -1,16 +1,18 @@
-# core/engine.py — Enterprise WhatsApp Clinic Engine (V4.4.2)
+# core/engine.py — Enterprise WhatsApp Clinic Engine (V4.4.3)
 # - Arabic-first greeting + language auto-lock + intent + specialty inquiry + booking flows
 # - 0 = show menu
 # - 99 = Reception (9 is Neurology option)
 #
-# V4.4.2 Fixes:
-# ✅ Slot list simplified to 3 ranges (PM/AM blocks)
-# ✅ Inactivity nudge message on session expiry + menu
-# ✅ Ophthalmology (eye doctor) mapping fixed (eye/ophthalmic/optometry keywords)
-# ✅ Specialty inquiry reply is deterministic + single-language + NO "See available doctors"
-# ✅ First message can answer Specialty Inquiry / Book+Specialty (not forced greeting-only)
-# ✅ Auto-correct 21 -> 12 kept for specialty list
+# V4.4.3 Fixes:
+# ✅ Inactivity reminder logic (one-time after 10 minutes) *NOTE: proactive sending needs worker; see note below*
+# ✅ Specialty menu: accept "01" as "10" (Physiotherapy)
+# ✅ Stronger specialty keyword dictionary + safer matching (prevents Eye->ENT misclass)
+# ✅ Arabic dialect: "أبغي احجز" + kidney terms (الكلي/الكلى/كلى/كلية/الكليه) -> Urology
+# ✅ Ophthalmology priority matching (Eye doctor never becomes ENT)
+# ✅ Slot list stays 3 ranges (PM/AM blocks)
+# ✅ Specialty inquiry reply deterministic + single-language + NO "See available doctors"
 # ✅ Full booking flow: Doctor -> Date -> Slot -> Patient details -> Confirm -> Reception request
+# ✅ Auto-correct 21 -> 12 kept for specialty list
 
 from __future__ import annotations
 
@@ -45,13 +47,16 @@ STATE_CANCEL_CONFIRM = "CANCEL_CONFIRM"
 STATE_CLOSED = "CLOSED"
 STATE_ESCALATION = "ESCALATION"
 
-ENGINE_MARKER = "CLINIC_ENGINE_V4_4_2"
+ENGINE_MARKER = "CLINIC_ENGINE_V4_4_3"
 
 # Session lifetime (overall)
 SESSION_EXPIRE_SECONDS = 60 * 60  # 60 min
 
 # Booking UX expiry (important for WhatsApp)
 BOOKING_CONFIRM_EXPIRE_SECONDS = 5 * 60  # 5 minutes
+
+# Inactivity reminder (one-time)
+INACTIVITY_REMINDER_SECONDS = 10 * 60  # 10 minutes
 
 CLINIC_NAME_AR = "مستشفى شيرين التخصصي"
 CLINIC_NAME_EN = "Shireen Specialist Hospital"
@@ -202,6 +207,7 @@ def _set_bot(sess: Dict[str, Any], msg: str) -> None:
 
 
 def default_session(user_id: str) -> Dict[str, Any]:
+    now = _utcnow()
     return {
         "engine": ENGINE_MARKER,
         "user_id": user_id,
@@ -217,7 +223,7 @@ def default_session(user_id: str) -> Dict[str, Any]:
 
         # tracking
         "mistakes": 0,
-        "last_user_ts": _utcnow_iso(),
+        "last_user_ts": now.isoformat(),
         "last_bot_ts": None,
         "last_bot_message": "",
 
@@ -244,6 +250,11 @@ def default_session(user_id: str) -> Dict[str, Any]:
 
         # booking expiry
         "confirm_expires_at": None,
+
+        # inactivity reminder (one-time)
+        # NOTE: proactive sending requires a worker; engine stores due/sent flags.
+        "reminder_due_at": (now + timedelta(seconds=INACTIVITY_REMINDER_SECONDS)).isoformat(),
+        "reminder_sent": False,
     }
 
 
@@ -274,6 +285,13 @@ def _session_expired_from(prev_iso: Optional[str]) -> bool:
     if sec is None:
         return False
     return sec >= SESSION_EXPIRE_SECONDS
+
+
+def _inactivity_due(prev_iso: Optional[str]) -> bool:
+    sec = _seconds_since(prev_iso)
+    if sec is None:
+        return False
+    return sec >= INACTIVITY_REMINDER_SECONDS
 
 
 def _welcome_text_ar() -> str:
@@ -657,18 +675,49 @@ def _confirmation(sess: Dict[str, Any], lang: str) -> str:
 # ----------------------------
 # Language + intent + specialty quick detectors
 # ----------------------------
-_BOOK_AR = ["احجز", "حجز", "موعد", "ابغى احجز", "أبغى احجز", "عايز احجز", "اريد حجز", "أريد حجز", "نبغي نحجز", "نبغى نحجز"]
+_BOOK_AR = [
+    "احجز", "حجز", "موعد",
+    "ابغى احجز", "أبغى احجز",
+    "ابغي احجز", "أبغي احجز",  # ✅ added
+    "عايز احجز", "اريد حجز", "أريد حجز",
+    "نبغي نحجز", "نبغى نحجز"
+]
 _BOOK_EN = ["book", "appointment", "schedule", "reserve", "i want to book", "need appointment"]
 
 _INQUIRY_AR = [
     "هل عندكم", "عندكم", "موجود", "متوفر", "مداوم", "دوام",
     "استفسر", "استفسار", "أستفسر", "استفسر عن", "أستفسر عن",
-    "ابي", "أبي", "ابغى", "أبغى", "عايز", "نبغي", "نبغى",
+    "ابي", "أبي", "ابغى", "أبغى", "ابغي", "أبغي", "عايز", "نبغي", "نبغى",
     "اخصائي", "دكتور", "دكتورة", "طبيب", "أخصائي",
 ]
 _INQUIRY_EN = ["do you have", "is there", "available", "enquire", "inquire", "i want to enquire", "doctor available", "specialist"]
 
+_OPHTHAL_EN = [
+    "eye doctor", "eye specialist", "ophthalmologist", "ophthalmology", "ophthalmic",
+    "vision", "eye pain", "blurry vision", "eye infection", "eye check",
+    "optometry", "optometrist", "retina", "glaucoma", "cataract",
+]
+_ENT_EN = [
+    "ear", "nose", "throat", "sinus", "tonsils", "hearing",
+    "otolaryngology", "otolaryngologist", "ent",
+]
+
 _DEPT_SYNONYMS: Dict[str, List[str]] = {
+    "ophthal": [
+        "عيون", "عين", "النظر", "نظر", "شبكية", "مياه بيضاء", "مياه زرقاء",
+        "قرنية", "رمد",
+        *_OPHTHAL_EN,
+    ],
+    "ent": [
+        "انف", "أذن", "اذن", "حنجرة", "لوز",
+        *_ENT_EN,
+    ],
+    "uro": [
+        "مسالك", "المسالك", "بول", "تبول", "بروستات",
+        "كلى", "الكلى", "كلية", "الكليه", "الكلي",  # ✅ kidney dialect -> Urology
+        "urology", "urologist", "urinate", "urination", "prostate", "uti",
+        "kidney", "kidneys", "renal",
+    ],
     "general": [
         "باطنة", "الباطنة", "باطنه", "الباطنه", "الباطنيه", "باطنيه",
         "internal medicine", "internist", "general medicine", "physician", "medicine",
@@ -676,26 +725,12 @@ _DEPT_SYNONYMS: Dict[str, List[str]] = {
     "peds": ["اطفال", "الأطفال", "طفل", "عيال", "pediatric", "pediatrics", "kids", "child", "paediatrician", "paediatric"],
     "cardio": ["قلب", "القلب", "نبض", "cardio", "cardiology", "heart", "palpitation"],
     "derm": ["جلدية", "جلديه", "حساسية", "حبوب", "اكزيما", "derm", "dermatology", "skin", "rash", "eczema", "acne"],
-    "ent": [
-        "انف", "أذن", "اذن", "حنجرة", "لوز",
-        "sinus", "ent", "ear", "throat", "tonsil",
-        "otolaryngology", "otolaryngologist",
-    ],
     "neuro": ["اعصاب", "الأعصاب", "العصبيه", "العصبية", "صداع", "دوخة", "neuro", "neurology", "migraine", "dizziness", "headache"],
     "dental": ["اسنان", "أسنان", "ضرس", "لثة", "تقويم", "tooth", "dental", "dentist", "toothache"],
     "gyn": ["نساء", "نسائي", "حمل", "ولادة", "دورة", "gyn", "obgyn", "pregnancy", "period"],
     "ortho": ["عظام", "عضم", "ركبة", "ظهر", "كسور", "ortho", "orthopedic", "bone", "knee", "back"],
     "physio": ["علاج طبيعي", "فيزيو", "physio", "physiotherapy", "rehab"],
-    "ophthal": [
-        "عيون", "عين", "النظر", "نظر", "شبكية", "مياه بيضاء", "مياه زرقاء",
-        "قرنية", "رمد",
-        "eye", "eye doctor", "eye specialist",
-        "ophthalmology", "ophthalmologist", "ophthalmic",
-        "optometry", "optometrist", "vision", "retina", "glaucoma", "cataract",
-    ],
-    "uro": ["مسالك", "المسالك", "بول", "تبول", "بروستات", "urology", "urologist", "urinate", "urination", "prostate", "uti"],
 }
-
 
 def _detect_language_from_text(text: str) -> Optional[str]:
     t = text or ""
@@ -705,21 +740,53 @@ def _detect_language_from_text(text: str) -> Optional[str]:
         return "en"
     return None
 
+def _contains_token_safe(text_low: str, token_low: str) -> bool:
+    """
+    Prevent partial matches for short EN tokens like 'ear' inside 'heart'/'year'.
+    - If token is short (<=4) and ASCII letters: use word-boundary.
+    - Else: substring match.
+    """
+    if not token_low:
+        return False
+
+    # Rough ASCII check (tokens are already lower)
+    is_ascii = True
+    for c in token_low:
+        if not (("a" <= c <= "z") or ("0" <= c <= "9") or c in {" ", "-"}):
+            is_ascii = False
+            break
+
+    if is_ascii:
+        core = token_low.replace("-", " ").strip()
+        if len(core) <= 4:
+            pattern = r"(^|[^a-z0-9])" + re.escape(core) + r"([^a-z0-9]|$)"
+            return re.search(pattern, text_low) is not None
+
+    return token_low in text_low
 
 def _detect_dept_key(text: str) -> Optional[str]:
     t = _low(text)
+
+    # ✅ Priority: Ophthalmology first (prevents Eye->ENT)
+    for w in _DEPT_SYNONYMS.get("ophthal", []):
+        wl = _low(w)
+        if _contains_token_safe(t, wl):
+            return "ophthal"
+
+    # Then everything else
     for key, words in _DEPT_SYNONYMS.items():
+        if key == "ophthal":
+            continue
         for w in words:
-            if _low(w) in t:
+            wl = _low(w)
+            if _contains_token_safe(t, wl):
                 return key
     return None
-
 
 def _detect_intent(text: str) -> Optional[str]:
     t = _low(text)
     if any(k in t for k in _BOOK_AR) or any(k in t for k in _BOOK_EN):
         return "BOOK"
-    # specialty inquiry
     if (any(k in t for k in _INQUIRY_AR) or any(k in t for k in _INQUIRY_EN)) and _detect_dept_key(text):
         return "SPECIALTY_INQUIRY"
     return None
@@ -769,6 +836,14 @@ def handle_turn(
     lang = _lang(sess.get("language") or language or "ar")
     sess["language"] = lang
     sess["text_direction"] = "rtl" if lang == "ar" else "ltr"
+
+    # ---------------------------------------------------------
+    # Inactivity reminder scheduling (one-time)
+    # NOTE: Engine stores due/sent; proactive sending needs a worker.
+    # ---------------------------------------------------------
+    now = _utcnow()
+    sess["reminder_due_at"] = (now + timedelta(seconds=INACTIVITY_REMINDER_SECONDS)).isoformat()
+    sess["reminder_sent"] = False
 
     # ---------------------------------------------------------
     # FIRST MESSAGE: Try deterministic intent/dept BEFORE showing greeting menu
@@ -834,7 +909,20 @@ def handle_turn(
     sess["last_user_ts"] = _utcnow_iso()
 
     # ---------------------------------------------------------
-    # Session expiry handling -> inactivity nudge + menu
+    # Inactivity reminder (10 minutes) — one-time
+    # IMPORTANT: This will only show when the user comes back after inactivity (inbound-triggered).
+    # For true proactive reminder (message sent without user message), use a worker.
+    # ---------------------------------------------------------
+    if prev_last and _inactivity_due(prev_last) and not bool(sess.get("reminder_sent")) and sess.get("state") != STATE_ESCALATION:
+        sess["reminder_sent"] = True
+        sess["state"] = STATE_MENU
+        sess["last_step"] = STATE_MENU
+        out = _inactivity_nudge(lang) + "\n\n" + _main_menu(lang)
+        _set_bot(sess, out)
+        return EngineResult(out, sess, [])
+
+    # ---------------------------------------------------------
+    # Session expiry handling -> inactivity nudge + menu (60min)
     # ---------------------------------------------------------
     if prev_last and _session_expired_from(prev_last) and sess.get("state") != STATE_ESCALATION:
         keep_lang = _lang(sess.get("language") or lang)
@@ -1123,6 +1211,11 @@ def handle_turn(
     # BOOKING FLOWS
     # ---------------------------------------------------------
     if sess.get("state") == STATE_BOOK_DEPT:
+        # ✅ Accept "01" as "10" (Physiotherapy) — WhatsApp users sometimes type leading zeros
+        if low in {"01", "001"}:
+            raw = "10"
+            low = "10"
+
         # ✅ Auto-correct 21 -> 12
         if _is_digit_choice(raw) and _to_int(raw) == 21 and len(DEPTS) >= 12:
             raw = "12"
