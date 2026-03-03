@@ -21,8 +21,11 @@ TABLE_NAME = os.getenv("SESSIONS_TABLE", "sessions")
 INACTIVITY_MINUTES = int(os.getenv("INACTIVITY_MINUTES", "10"))      # ✅ 10 minutes
 POLL_SECONDS = int(os.getenv("INACTIVITY_POLL_SECONDS", "60"))       # check every 60 sec
 
-WA_TOKEN = (os.getenv("WA_TOKEN") or "").strip()
+WA_TOKEN = (os.getenv("WA_TOKEN") or os.getenv("WA_ACCESS_TOKEN") or "").strip()
 WA_PHONE_NUMBER_ID = (os.getenv("WA_PHONE_NUMBER_ID") or "").strip()
+
+if not WA_TOKEN or not WA_PHONE_NUMBER_ID:
+    raise RuntimeError("WA_TOKEN / WA_PHONE_NUMBER_ID are missing")
 WA_API_VERSION = (os.getenv("WA_API_VERSION") or "v20.0").strip()
 
 DATABASE_URL = (os.getenv("DATABASE_URL") or "").strip()
