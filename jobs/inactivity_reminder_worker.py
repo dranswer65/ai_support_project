@@ -3,10 +3,9 @@ from __future__ import annotations
 
 import os
 import json
-import time
 import asyncio
 from datetime import datetime, timezone, timedelta
-from typing import Any, Dict, Optional, List, Tuple
+from typing import Any, Dict, List, Tuple, Optional
 
 import requests
 from sqlalchemy import text
@@ -18,17 +17,15 @@ from sqlalchemy.ext.asyncio import create_async_engine, AsyncEngine
 # -----------------------------
 TABLE_NAME = os.getenv("SESSIONS_TABLE", "sessions")
 
-INACTIVITY_MINUTES = int(os.getenv("INACTIVITY_MINUTES", "10"))      # ✅ 10 minutes
+INACTIVITY_MINUTES = int(os.getenv("INACTIVITY_MINUTES", "10"))      # 10 minutes
 POLL_SECONDS = int(os.getenv("INACTIVITY_POLL_SECONDS", "60"))       # check every 60 sec
 
-WA_TOKEN = (os.getenv("WA_TOKEN") or os.getenv("WA_ACCESS_TOKEN") or "").strip()
+# IMPORTANT: support both naming styles
+WA_TOKEN = (os.getenv("WA_TOKEN") or os.getenv("WA_ACCESS_TOKEN") or os.getenv("WA_ACCESS_TOKEN".replace(" ", "")) or "").strip()
 WA_PHONE_NUMBER_ID = (os.getenv("WA_PHONE_NUMBER_ID") or "").strip()
-
-if not WA_TOKEN or not WA_PHONE_NUMBER_ID:
-    raise RuntimeError("WA_TOKEN / WA_PHONE_NUMBER_ID are missing")
 WA_API_VERSION = (os.getenv("WA_API_VERSION") or "v20.0").strip()
 
-DATABASE_URL = (os.getenv("DATABASE_URL") or "").strip()
+DATABASE_URL = (os.getenv("DATABASE_URL") or os.getenv("DATABASE_URL".replace(" ", "")) or "").strip()
 
 
 # -----------------------------
@@ -60,6 +57,15 @@ def utcnow() -> datetime:
     return datetime.now(timezone.utc)
 
 
+def parse_iso(s: Optional[str]) -> Optional[datetime]:
+    if not s:
+        return None
+    try:
+        return datetime.fromisoformat(str(s).replace("Z", "+00:00"))
+    except Exception:
+        return None
+
+
 def to_async_db_url(url: str) -> str:
     """
     Railway often gives: postgres://...
@@ -73,7 +79,6 @@ def to_async_db_url(url: str) -> str:
         return url.replace("postgresql://", "postgresql+asyncpg://", 1)
     if url.startswith("postgres://"):
         return url.replace("postgres://", "postgresql+asyncpg://", 1)
-    # fallback: user might already provide correct
     return url
 
 
@@ -105,22 +110,29 @@ def wa_send_text(to_user: str, body: str) -> None:
 async def fetch_candidates(engine: AsyncEngine) -> List[Tuple[str, str, Dict[str, Any]]]:
     """
     Returns list of (tenant_id, user_id, session_json)
-    Candidates:
-      - updated_at <= now - 10 minutes
-      - session_json->>'status' == 'ACTIVE' (or missing)
-      - NOT already nudged: session_json->>'inactivity_nudged_at' is null
-      - NOT in handoff_active == true (optional safety)
+
+    We consider a user "inactive" based on session_json.last_user_ts (not updated_at),
+    and send ONLY ONCE using session_json.inactivity_nudge_sent flag.
+
+    Conditions:
+      - status ACTIVE (or missing)
+      - handoff_active != true
+      - state not ESCALATION/CLOSED (safety)
+      - inactivity_nudge_sent != true
+      - last_user_ts <= now - INACTIVITY_MINUTES
     """
     cutoff = utcnow() - timedelta(minutes=INACTIVITY_MINUTES)
 
     stmt = text(f"""
         SELECT tenant_id, user_id, session_json
         FROM {TABLE_NAME}
-        WHERE updated_at <= :cutoff
-          AND COALESCE(session_json->>'status', 'ACTIVE') = 'ACTIVE'
-          AND (session_json->>'inactivity_nudged_at') IS NULL
+        WHERE COALESCE(session_json->>'status', 'ACTIVE') = 'ACTIVE'
           AND COALESCE((session_json->>'handoff_active')::boolean, false) = false
-        ORDER BY updated_at ASC
+          AND COALESCE(session_json->>'state', '') NOT IN ('ESCALATION', 'CLOSED')
+          AND COALESCE((session_json->>'inactivity_nudge_sent')::boolean, false) = false
+          AND (session_json->>'last_user_ts') IS NOT NULL
+          AND (session_json->>'last_user_ts')::timestamptz <= :cutoff
+        ORDER BY (session_json->>'last_user_ts')::timestamptz ASC
         LIMIT 200;
     """)
 
@@ -133,7 +145,6 @@ async def fetch_candidates(engine: AsyncEngine) -> List[Tuple[str, str, Dict[str
         if isinstance(session_json, dict):
             out.append((tenant_id, user_id, session_json))
         else:
-            # very rare
             try:
                 out.append((tenant_id, user_id, json.loads(session_json)))
             except Exception:
@@ -143,15 +154,24 @@ async def fetch_candidates(engine: AsyncEngine) -> List[Tuple[str, str, Dict[str
 
 async def mark_nudged(engine: AsyncEngine, tenant_id: str, user_id: str) -> None:
     """
-    Writes inactivity_nudged_at into JSONB to ensure one-time reminder.
+    Mark inactivity reminder as sent ONCE.
+    Writes:
+      - inactivity_nudge_sent = true
+      - inactivity_nudge_sent_at = now_iso
     """
     now_iso = utcnow().isoformat()
 
     stmt = text(f"""
         UPDATE {TABLE_NAME}
-        SET session_json = jsonb_set(
-              session_json,
-              '{{inactivity_nudged_at}}',
+        SET session_json =
+            jsonb_set(
+              jsonb_set(
+                session_json,
+                '{{inactivity_nudge_sent}}',
+                'true'::jsonb,
+                true
+              ),
+              '{{inactivity_nudge_sent_at}}',
               to_jsonb(:now_iso::text),
               true
             ),
@@ -170,14 +190,24 @@ async def run_once(engine: AsyncEngine) -> None:
     candidates = await fetch_candidates(engine)
 
     for tenant_id, user_id, sess in candidates:
-        # language choice from session
+        # Extra guard in Python too (defense in depth)
+        if sess.get("inactivity_nudge_sent") is True:
+            continue
+
+        last_user_ts = parse_iso(sess.get("last_user_ts"))
+        if not last_user_ts:
+            continue
+
+        # Ensure >= INACTIVITY_MINUTES (double-check)
+        if (utcnow() - last_user_ts) < timedelta(minutes=INACTIVITY_MINUTES):
+            continue
+
         lang = str(sess.get("language") or "en")
         msg = inactivity_message(lang)
 
         try:
             wa_send_text(user_id, msg)
         except Exception as e:
-            # Don't mark nudged if send failed
             print(f"[reminder] send failed tenant={tenant_id} user={user_id}: {e}")
             continue
 
@@ -185,13 +215,14 @@ async def run_once(engine: AsyncEngine) -> None:
             await mark_nudged(engine, tenant_id, user_id)
             print(f"[reminder] nudged tenant={tenant_id} user={user_id} lang={lang}")
         except Exception as e:
-            # message sent but DB failed; will retry next scan (rare)
+            # message sent but DB failed; could retry next scan (rare)
             print(f"[reminder] DB mark failed tenant={tenant_id} user={user_id}: {e}")
 
 
 async def main() -> None:
     if not DATABASE_URL:
         raise RuntimeError("DATABASE_URL is missing")
+
     if not WA_TOKEN or not WA_PHONE_NUMBER_ID:
         raise RuntimeError("WA_TOKEN / WA_PHONE_NUMBER_ID are missing")
 

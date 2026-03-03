@@ -234,6 +234,10 @@ async def handle_message(
     # schedule 10-min reminder on every inbound message (one-time reminder)
     session["reminder_due_at"] = (datetime.now(timezone.utc) + timedelta(minutes=10)).isoformat()
     session["reminder_sent"] = False
+
+    # Reset inactivity reminder when user sends anything
+    session["inactivity_nudge_sent"] = False
+    session["inactivity_nudge_sent_at"] = None
     session["last_intent"] = session.get("intent") or session.get("last_intent")
 
     # Sticky handoff silence
