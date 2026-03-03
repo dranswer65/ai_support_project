@@ -1,20 +1,14 @@
 # jobs/inactivity_reminder_worker.py
-# Enterprise-ready one-time inactivity reminder worker (V1.2)
+# Enterprise-ready one-time inactivity reminder worker (V1.3)
 #
 # Fixes:
-# ✅ Sends reminder ONLY ONCE per inactivity window (no spam every minute)
-# ✅ Stores 2 flags inside session_json (no DB schema change):
-#    - inactivity_nudge_sent: true/false
+# ✅ NO repeat spam even if multiple Railway workers are running
+# ✅ Atomic "claim + mark" in ONE SQL statement using FOR UPDATE SKIP LOCKED
+# ✅ Writes 2 fields inside session_json (no DB schema change):
+#    - inactivity_nudge_sent: true
 #    - inactivity_nudged_at: ISO datetime
-# ✅ Resets the flags automatically when the user becomes active again
+# ✅ Resets flags ONLY when user becomes active AFTER the nudge (updated_at > nudged_at)
 # ✅ Avoids nudging during handoff/escalation
-#
-# How it works (practical):
-# - Every POLL_SECONDS (default 60s), we scan sessions with updated_at older than 10 mins.
-# - We only send if inactivity_nudge_sent != true
-# - After sending, we write inactivity_nudge_sent=true and inactivity_nudged_at=now
-# - If user sends ANY message, your main app updates updated_at; on the next scan,
-#   we auto-clear inactivity_nudge_sent so a future 10-min inactivity can nudge again.
 
 from __future__ import annotations
 
@@ -22,7 +16,7 @@ import os
 import json
 import asyncio
 from datetime import datetime, timezone, timedelta
-from typing import Any, Dict, List, Tuple
+from typing import Any, Dict, List, Tuple, Optional
 
 import requests
 from sqlalchemy import text
@@ -107,70 +101,49 @@ def wa_send_text(to_user: str, body: str) -> None:
         raise RuntimeError(f"WhatsApp send failed {r.status_code}: {r.text}")
 
 
-def _safe_bool(v: Any) -> bool:
-    if isinstance(v, bool):
-        return v
-    if isinstance(v, (int, float)):
-        return bool(v)
-    if isinstance(v, str):
-        return v.strip().lower() in {"1", "true", "yes", "y"}
-    return False
+def _as_dict(val: Any) -> Optional[Dict[str, Any]]:
+    if isinstance(val, dict):
+        return val
+    if isinstance(val, (str, bytes)):
+        try:
+            return json.loads(val)
+        except Exception:
+            return None
+    return None
 
 
 # -----------------------------
-# DB operations
+# DB operations (atomic)
 # -----------------------------
-async def fetch_candidates(engine: AsyncEngine) -> List[Tuple[str, str, Dict[str, Any]]]:
+async def claim_and_mark_candidates(engine: AsyncEngine) -> List[Tuple[str, str, Dict[str, Any]]]:
     """
-    Candidates:
-      - updated_at <= now - INACTIVITY_MINUTES
-      - session_json status ACTIVE (or missing)
-      - NOT nudged already (inactivity_nudge_sent != true)
-      - NOT handoff_active == true
+    ATOMIC:
+      1) Select candidates FOR UPDATE SKIP LOCKED
+      2) Mark them as nudged in the same statement
+      3) Return (tenant_id, user_id, session_json)
+
+    This prevents duplicates even if multiple worker instances run.
     """
     cutoff = utcnow() - timedelta(minutes=INACTIVITY_MINUTES)
-
-    stmt = text(f"""
-        SELECT tenant_id, user_id, session_json
-        FROM {TABLE_NAME}
-        WHERE updated_at <= :cutoff
-          AND COALESCE(session_json->>'status', 'ACTIVE') = 'ACTIVE'
-          AND COALESCE((session_json->>'handoff_active')::boolean, false) = false
-          AND COALESCE((session_json->>'inactivity_nudge_sent')::boolean, false) = false
-        ORDER BY updated_at ASC
-        LIMIT 200;
-    """)
-
-    async with engine.begin() as conn:
-        res = await conn.execute(stmt, {"cutoff": cutoff})
-        rows = res.fetchall()
-
-    out: List[Tuple[str, str, Dict[str, Any]]] = []
-    for tenant_id, user_id, session_json in rows:
-        if isinstance(session_json, dict):
-            out.append((tenant_id, user_id, session_json))
-        else:
-            try:
-                out.append((tenant_id, user_id, json.loads(session_json)))
-            except Exception:
-                continue
-    return out
-
-
-async def mark_nudged(engine: AsyncEngine, tenant_id: str, user_id: str) -> None:
-    """
-    Sets:
-      inactivity_nudge_sent = true
-      inactivity_nudged_at  = now_iso
-    """
     now_iso = utcnow().isoformat()
 
     stmt = text(f"""
-        UPDATE {TABLE_NAME}
+        WITH candidates AS (
+            SELECT tenant_id, user_id
+            FROM {TABLE_NAME}
+            WHERE updated_at <= :cutoff
+              AND COALESCE(session_json->>'status', 'ACTIVE') = 'ACTIVE'
+              AND COALESCE((session_json->>'handoff_active')::boolean, false) = false
+              AND COALESCE((session_json->>'inactivity_nudge_sent')::boolean, false) = false
+            ORDER BY updated_at ASC
+            LIMIT 200
+            FOR UPDATE SKIP LOCKED
+        )
+        UPDATE {TABLE_NAME} s
         SET session_json =
             jsonb_set(
               jsonb_set(
-                session_json,
+                s.session_json,
                 '{{inactivity_nudge_sent}}',
                 'true'::jsonb,
                 true
@@ -178,76 +151,91 @@ async def mark_nudged(engine: AsyncEngine, tenant_id: str, user_id: str) -> None
               '{{inactivity_nudged_at}}',
               to_jsonb(:now_iso::text),
               true
-            ),
-            updated_at = updated_at
-        WHERE tenant_id = :tenant_id AND user_id = :user_id;
+            )
+        FROM candidates c
+        WHERE s.tenant_id = c.tenant_id AND s.user_id = c.user_id
+        RETURNING s.tenant_id, s.user_id, s.session_json;
     """)
 
     async with engine.begin() as conn:
-        await conn.execute(stmt, {"now_iso": now_iso, "tenant_id": tenant_id, "user_id": user_id})
+        res = await conn.execute(stmt, {"cutoff": cutoff, "now_iso": now_iso})
+        rows = res.fetchall()
+
+    out: List[Tuple[str, str, Dict[str, Any]]] = []
+    for tenant_id, user_id, session_json in rows:
+        d = _as_dict(session_json)
+        if d is not None:
+            out.append((tenant_id, user_id, d))
+    return out
 
 
-async def reset_nudge_if_active(engine: AsyncEngine) -> None:
+async def reset_nudge_when_user_active(engine: AsyncEngine) -> None:
     """
-    If a user becomes active again (updated_at is recent), clear nudge flags
-    so that a future inactivity period can trigger again.
+    Reset nudge flags ONLY if the user became active AFTER we nudged them:
+      updated_at > inactivity_nudged_at
 
-    Condition:
-      updated_at > now - INACTIVITY_MINUTES
-      AND inactivity_nudge_sent == true
+    This avoids mistakenly clearing the flag and re-nudging every minute.
     """
-    cutoff_recent = utcnow() - timedelta(minutes=INACTIVITY_MINUTES)
-
     stmt = text(f"""
         UPDATE {TABLE_NAME}
         SET session_json =
             session_json
             - 'inactivity_nudge_sent'
             - 'inactivity_nudged_at'
-        WHERE updated_at > :cutoff_recent
-          AND COALESCE((session_json->>'inactivity_nudge_sent')::boolean, false) = true;
+        WHERE COALESCE((session_json->>'inactivity_nudge_sent')::boolean, false) = true
+          AND (session_json->>'inactivity_nudged_at') IS NOT NULL
+          AND updated_at >
+              (session_json->>'inactivity_nudged_at')::timestamptz;
     """)
 
     async with engine.begin() as conn:
-        await conn.execute(stmt, {"cutoff_recent": cutoff_recent})
+        await conn.execute(stmt)
+
+
+async def unmark_if_send_failed(engine: AsyncEngine, tenant_id: str, user_id: str) -> None:
+    """
+    If WhatsApp send fails, we remove the flags so it can retry later.
+    """
+    stmt = text(f"""
+        UPDATE {TABLE_NAME}
+        SET session_json =
+            session_json
+            - 'inactivity_nudge_sent'
+            - 'inactivity_nudged_at'
+        WHERE tenant_id = :tenant_id AND user_id = :user_id;
+    """)
+    async with engine.begin() as conn:
+        await conn.execute(stmt, {"tenant_id": tenant_id, "user_id": user_id})
 
 
 # -----------------------------
 # Worker loop
 # -----------------------------
 async def run_once(engine: AsyncEngine) -> None:
-    # 1) Clear nudge flags for sessions that became active again
-    #    (prevents "nudged forever" state)
+    # 1) Reset flags when user is active after previous nudge
     try:
-        await reset_nudge_if_active(engine)
+        await reset_nudge_when_user_active(engine)
     except Exception as e:
-        print(f"[reminder] reset_nudge_if_active error: {e}")
+        print(f"[reminder] reset_nudge_when_user_active error: {e}")
 
-    # 2) Fetch candidates to nudge
-    candidates = await fetch_candidates(engine)
+    # 2) Claim + mark candidates atomically
+    candidates = await claim_and_mark_candidates(engine)
 
+    # 3) Send message for claimed sessions
     for tenant_id, user_id, sess in candidates:
-        # extra safety in case JSON types are strange
-        if _safe_bool(sess.get("handoff_active")):
-            continue
-        if _safe_bool(sess.get("inactivity_nudge_sent")):
-            continue
-
         lang = str(sess.get("language") or "en")
         msg = inactivity_message(lang)
 
         try:
             wa_send_text(user_id, msg)
-        except Exception as e:
-            print(f"[reminder] send failed tenant={tenant_id} user={user_id}: {e}")
-            continue
-
-        try:
-            await mark_nudged(engine, tenant_id, user_id)
             print(f"[reminder] nudged tenant={tenant_id} user={user_id} lang={lang}")
         except Exception as e:
-            # message sent but DB failed; might resend next loop (rare)
-            print(f"[reminder] DB mark failed tenant={tenant_id} user={user_id}: {e}")
+            # Important: undo flags so it can retry
+            print(f"[reminder] send failed tenant={tenant_id} user={user_id}: {e}")
+            try:
+                await unmark_if_send_failed(engine, tenant_id, user_id)
+            except Exception as e2:
+                print(f"[reminder] unmark failed tenant={tenant_id} user={user_id}: {e2}")
 
 
 async def main() -> None:
@@ -255,8 +243,8 @@ async def main() -> None:
     engine = create_async_engine(db_url, pool_pre_ping=True)
 
     print(
-        f"[reminder-worker] started "
-        f"inactivity={INACTIVITY_MINUTES}min poll={POLL_SECONDS}s table={TABLE_NAME}"
+        f"[reminder-worker] started inactivity={INACTIVITY_MINUTES}min "
+        f"poll={POLL_SECONDS}s table={TABLE_NAME}"
     )
 
     try:
