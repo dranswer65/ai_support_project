@@ -1,16 +1,18 @@
 # jobs/inactivity_reminder_worker.py
-# Enterprise-ready one-time inactivity reminder worker (V1.4)
+# Enterprise-ready one-time inactivity reminder worker (V1.5)
 #
 # Fixes:
-# ✅ Sanitizes TABLE_NAME (prevents "sessions (optional...)" SQL crash)
+# ✅ Uses activity_ts = COALESCE(last_user_ts, updated_at) so it works even if last_user_ts is missing
+# ✅ Sanitizes TABLE_NAME hard (prevents "sessions (optional...)" SQL crash)
 # ✅ One-time reminder using atomic claim+mark (SKIP LOCKED)
-# ✅ Uses session_json->>'last_user_ts' as the activity clock
 # ✅ Resets flags only when user becomes active AFTER the nudge
 # ✅ Avoids nudging during handoff/escalation
+# ✅ Debug mode to show candidate count
 
 from __future__ import annotations
 
 import os
+import re
 import json
 import asyncio
 from datetime import datetime, timezone, timedelta
@@ -26,12 +28,13 @@ from sqlalchemy.ext.asyncio import create_async_engine, AsyncEngine
 # -----------------------------
 _RAW_TABLE = (os.getenv("SESSIONS_TABLE", "sessions") or "sessions").strip()
 
-# ✅ IMPORTANT: avoid "sessions (optional but good)" breaking SQL
-# Keep only first token before any spaces
-TABLE_NAME = _RAW_TABLE.split()[0].strip() or "sessions"
+# Keep first token before spaces, then remove any non-identifier chars
+_first = _RAW_TABLE.split()[0].strip()
+TABLE_NAME = re.sub(r"[^A-Za-z0-9_]", "", _first) or "sessions"
 
 INACTIVITY_MINUTES = int(os.getenv("INACTIVITY_MINUTES", "10"))      # 10 minutes
 POLL_SECONDS = int(os.getenv("INACTIVITY_POLL_SECONDS", "60"))       # check every 60 sec
+DEBUG = (os.getenv("INACTIVITY_DEBUG", "false") or "false").strip().lower() in {"1", "true", "yes", "y"}
 
 WA_TOKEN = (os.getenv("WA_TOKEN") or os.getenv("WA_ACCESS_TOKEN") or "").strip()
 WA_PHONE_NUMBER_ID = (os.getenv("WA_PHONE_NUMBER_ID") or "").strip()
@@ -111,12 +114,12 @@ def _as_dict(val: Any) -> Optional[Dict[str, Any]]:
 
 
 # -----------------------------
-# DB operations (atomic)
+# DB operations
 # -----------------------------
 async def reset_nudge_when_user_active(engine: AsyncEngine) -> None:
     """
-    Reset nudge flags ONLY if user was active AFTER nudged:
-      last_user_ts > inactivity_nudged_at
+    Reset nudge flags ONLY if user became active AFTER we nudged them.
+    activity_ts = COALESCE(last_user_ts, updated_at)
     """
     stmt = text(f"""
         UPDATE {TABLE_NAME}
@@ -126,11 +129,12 @@ async def reset_nudge_when_user_active(engine: AsyncEngine) -> None:
             - 'inactivity_nudged_at'
         WHERE COALESCE((session_json->>'inactivity_nudge_sent')::boolean, false) = true
           AND (session_json->>'inactivity_nudged_at') IS NOT NULL
-          AND (session_json->>'last_user_ts') IS NOT NULL
-          AND (session_json->>'last_user_ts')::timestamptz >
+          AND COALESCE(
+                (session_json->>'last_user_ts')::timestamptz,
+                updated_at
+              ) >
               (session_json->>'inactivity_nudged_at')::timestamptz;
     """)
-
     async with engine.begin() as conn:
         await conn.execute(stmt)
 
@@ -138,7 +142,7 @@ async def reset_nudge_when_user_active(engine: AsyncEngine) -> None:
 async def claim_and_mark_candidates(engine: AsyncEngine) -> List[Tuple[str, str, Dict[str, Any]]]:
     """
     Claim candidates atomically and mark them nudged.
-    Uses last_user_ts from session_json for inactivity checks.
+    activity_ts = COALESCE(last_user_ts, updated_at)
     """
     cutoff = utcnow() - timedelta(minutes=INACTIVITY_MINUTES)
     now_iso = utcnow().isoformat()
@@ -151,9 +155,14 @@ async def claim_and_mark_candidates(engine: AsyncEngine) -> List[Tuple[str, str,
               AND COALESCE((session_json->>'handoff_active')::boolean, false) = false
               AND COALESCE((session_json->>'escalation_flag')::boolean, false) = false
               AND COALESCE((session_json->>'inactivity_nudge_sent')::boolean, false) = false
-              AND (session_json->>'last_user_ts') IS NOT NULL
-              AND (session_json->>'last_user_ts')::timestamptz <= :cutoff
-            ORDER BY (session_json->>'last_user_ts')::timestamptz ASC
+              AND COALESCE(
+                    (session_json->>'last_user_ts')::timestamptz,
+                    updated_at
+                  ) <= :cutoff
+            ORDER BY COALESCE(
+                    (session_json->>'last_user_ts')::timestamptz,
+                    updated_at
+                  ) ASC
             LIMIT 200
             FOR UPDATE SKIP LOCKED
         )
@@ -204,9 +213,16 @@ async def unmark_if_send_failed(engine: AsyncEngine, tenant_id: str, user_id: st
 # Worker loop
 # -----------------------------
 async def run_once(engine: AsyncEngine) -> None:
-    await reset_nudge_when_user_active(engine)
+    try:
+        await reset_nudge_when_user_active(engine)
+    except Exception as e:
+        print(f"[reminder] reset_nudge_when_user_active error: {e}")
 
     candidates = await claim_and_mark_candidates(engine)
+
+    if DEBUG:
+        print(f"[reminder] candidates_claimed={len(candidates)} inactivity={INACTIVITY_MINUTES}min table={TABLE_NAME}")
+
     for tenant_id, user_id, sess in candidates:
         lang = str(sess.get("language") or "en")
         msg = inactivity_message(lang)
@@ -223,7 +239,7 @@ async def main() -> None:
     db_url = to_async_db_url(DATABASE_URL)
     engine = create_async_engine(db_url, pool_pre_ping=True)
 
-    print(f"[reminder-worker] started inactivity={INACTIVITY_MINUTES}min poll={POLL_SECONDS}s table={TABLE_NAME}")
+    print(f"[reminder-worker] started inactivity={INACTIVITY_MINUTES}min poll={POLL_SECONDS}s table={TABLE_NAME} debug={DEBUG}")
 
     try:
         while True:
