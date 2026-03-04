@@ -1,7 +1,8 @@
 # jobs/inactivity_reminder_worker.py
-# Enterprise-ready one-time inactivity reminder worker (V1.3)
+# Enterprise-ready one-time inactivity reminder worker (V1.3.1)
 #
 # Fixes:
+# ✅ Fix SQL syntax errors (remove accidental text like "(optional but good)")
 # ✅ NO repeat spam even if multiple Railway workers are running
 # ✅ Atomic "claim + mark" in ONE SQL statement using FOR UPDATE SKIP LOCKED
 # ✅ Writes 2 fields inside session_json (no DB schema change):
@@ -28,8 +29,8 @@ from sqlalchemy.ext.asyncio import create_async_engine, AsyncEngine
 # -----------------------------
 TABLE_NAME = (os.getenv("SESSIONS_TABLE", "sessions") or "sessions").strip()
 
-INACTIVITY_MINUTES = int(os.getenv("INACTIVITY_MINUTES", "10"))      # 10 minutes
-POLL_SECONDS = int(os.getenv("INACTIVITY_POLL_SECONDS", "60"))       # check every 60 sec
+INACTIVITY_MINUTES = int(os.getenv("INACTIVITY_MINUTES", "10"))       # 10 minutes
+POLL_SECONDS = int(os.getenv("INACTIVITY_POLL_SECONDS", "60"))        # check every 60 sec
 
 WA_TOKEN = (os.getenv("WA_TOKEN") or os.getenv("WA_ACCESS_TOKEN") or "").strip()
 WA_PHONE_NUMBER_ID = (os.getenv("WA_PHONE_NUMBER_ID") or "").strip()
@@ -139,7 +140,7 @@ async def claim_and_mark_candidates(engine: AsyncEngine) -> List[Tuple[str, str,
             LIMIT 200
             FOR UPDATE SKIP LOCKED
         )
-        UPDATE {TABLE_NAME} s
+        UPDATE {TABLE_NAME} AS s
         SET session_json =
             jsonb_set(
               jsonb_set(
@@ -152,7 +153,7 @@ async def claim_and_mark_candidates(engine: AsyncEngine) -> List[Tuple[str, str,
               to_jsonb(:now_iso::text),
               true
             )
-        FROM candidates c
+        FROM candidates AS c
         WHERE s.tenant_id = c.tenant_id AND s.user_id = c.user_id
         RETURNING s.tenant_id, s.user_id, s.session_json;
     """)
@@ -194,7 +195,7 @@ async def reset_nudge_when_user_active(engine: AsyncEngine) -> None:
 
 async def unmark_if_send_failed(engine: AsyncEngine, tenant_id: str, user_id: str) -> None:
     """
-    If WhatsApp send fails, we remove the flags so it can retry later.
+    If WhatsApp send fails, remove the flags so it can retry later.
     """
     stmt = text(f"""
         UPDATE {TABLE_NAME}
@@ -212,7 +213,7 @@ async def unmark_if_send_failed(engine: AsyncEngine, tenant_id: str, user_id: st
 # Worker loop
 # -----------------------------
 async def run_once(engine: AsyncEngine) -> None:
-    # 1) Reset flags when user is active after previous nudge
+    # 1) Reset flags when user becomes active again
     try:
         await reset_nudge_when_user_active(engine)
     except Exception as e:
@@ -220,6 +221,7 @@ async def run_once(engine: AsyncEngine) -> None:
 
     # 2) Claim + mark candidates atomically
     candidates = await claim_and_mark_candidates(engine)
+    print(f"[reminder] claimed={len(candidates)} cutoff={INACTIVITY_MINUTES}min")
 
     # 3) Send message for claimed sessions
     for tenant_id, user_id, sess in candidates:
@@ -228,9 +230,8 @@ async def run_once(engine: AsyncEngine) -> None:
 
         try:
             wa_send_text(user_id, msg)
-            print(f"[reminder] nudged tenant={tenant_id} user={user_id} lang={lang}")
+            print(f"[reminder] sent tenant={tenant_id} user={user_id} lang={lang}")
         except Exception as e:
-            # Important: undo flags so it can retry
             print(f"[reminder] send failed tenant={tenant_id} user={user_id}: {e}")
             try:
                 await unmark_if_send_failed(engine, tenant_id, user_id)
