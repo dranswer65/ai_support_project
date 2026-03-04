@@ -2,12 +2,11 @@
 # Enterprise-ready one-time inactivity reminder worker (V1.4)
 #
 # Fixes:
-# ✅ Uses session_json->>'last_user_ts' (REAL user activity clock) instead of updated_at
-# ✅ One-time reminder only (inactivity_nudge_sent / inactivity_nudged_at)
-# ✅ Atomic claim+mark (FOR UPDATE SKIP LOCKED) prevents duplicates across multiple workers
-# ✅ Resets flags ONLY when user becomes active again (last_user_ts > nudged_at)
+# ✅ Sanitizes TABLE_NAME (prevents "sessions (optional...)" SQL crash)
+# ✅ One-time reminder using atomic claim+mark (SKIP LOCKED)
+# ✅ Uses session_json->>'last_user_ts' as the activity clock
+# ✅ Resets flags only when user becomes active AFTER the nudge
 # ✅ Avoids nudging during handoff/escalation
-# ✅ Does NOT depend on having a SQL editor; logs show exactly what's happening
 
 from __future__ import annotations
 
@@ -25,7 +24,11 @@ from sqlalchemy.ext.asyncio import create_async_engine, AsyncEngine
 # -----------------------------
 # Config
 # -----------------------------
-TABLE_NAME = (os.getenv("SESSIONS_TABLE", "sessions") or "sessions").strip()
+_RAW_TABLE = (os.getenv("SESSIONS_TABLE", "sessions") or "sessions").strip()
+
+# ✅ IMPORTANT: avoid "sessions (optional but good)" breaking SQL
+# Keep only first token before any spaces
+TABLE_NAME = _RAW_TABLE.split()[0].strip() or "sessions"
 
 INACTIVITY_MINUTES = int(os.getenv("INACTIVITY_MINUTES", "10"))      # 10 minutes
 POLL_SECONDS = int(os.getenv("INACTIVITY_POLL_SECONDS", "60"))       # check every 60 sec
@@ -35,9 +38,6 @@ WA_PHONE_NUMBER_ID = (os.getenv("WA_PHONE_NUMBER_ID") or "").strip()
 WA_API_VERSION = (os.getenv("WA_API_VERSION") or "v20.0").strip()
 
 DATABASE_URL = (os.getenv("DATABASE_URL") or "").strip()
-
-DEBUG = (os.getenv("INACTIVITY_DEBUG", "0").strip() in {"1", "true", "True", "YES", "yes"})
-
 
 if not DATABASE_URL:
     raise RuntimeError("DATABASE_URL is missing")
@@ -75,10 +75,6 @@ def utcnow() -> datetime:
 
 
 def to_async_db_url(url: str) -> str:
-    """
-    Railway often gives: postgres://...
-    SQLAlchemy async wants: postgresql+asyncpg://...
-    """
     if url.startswith("postgresql+asyncpg://"):
         return url
     if url.startswith("postgresql://"):
@@ -115,12 +111,12 @@ def _as_dict(val: Any) -> Optional[Dict[str, Any]]:
 
 
 # -----------------------------
-# DB operations
+# DB operations (atomic)
 # -----------------------------
-async def reset_nudge_when_user_active(engine: AsyncEngine) -> int:
+async def reset_nudge_when_user_active(engine: AsyncEngine) -> None:
     """
-    Reset flags ONLY if user became active AFTER the nudge:
-      (session_json->>'last_user_ts')::timestamptz > (session_json->>'inactivity_nudged_at')::timestamptz
+    Reset nudge flags ONLY if user was active AFTER nudged:
+      last_user_ts > inactivity_nudged_at
     """
     stmt = text(f"""
         UPDATE {TABLE_NAME}
@@ -136,19 +132,13 @@ async def reset_nudge_when_user_active(engine: AsyncEngine) -> int:
     """)
 
     async with engine.begin() as conn:
-        res = await conn.execute(stmt)
-        return int(getattr(res, "rowcount", 0) or 0)
+        await conn.execute(stmt)
 
 
 async def claim_and_mark_candidates(engine: AsyncEngine) -> List[Tuple[str, str, Dict[str, Any]]]:
     """
-    ATOMIC claim+mark:
-    - Choose sessions whose last_user_ts <= cutoff (10 minutes)
-    - Not nudged yet
-    - Not in handoff/escalation
-    - status ACTIVE
-    - Mark inactivity_nudge_sent=true and inactivity_nudged_at=now
-    - Return rows to send messages
+    Claim candidates atomically and mark them nudged.
+    Uses last_user_ts from session_json for inactivity checks.
     """
     cutoff = utcnow() - timedelta(minutes=INACTIVITY_MINUTES)
     now_iso = utcnow().isoformat()
@@ -198,9 +188,6 @@ async def claim_and_mark_candidates(engine: AsyncEngine) -> List[Tuple[str, str,
 
 
 async def unmark_if_send_failed(engine: AsyncEngine, tenant_id: str, user_id: str) -> None:
-    """
-    If send fails, remove flags so it can retry later.
-    """
     stmt = text(f"""
         UPDATE {TABLE_NAME}
         SET session_json =
@@ -213,49 +200,13 @@ async def unmark_if_send_failed(engine: AsyncEngine, tenant_id: str, user_id: st
         await conn.execute(stmt, {"tenant_id": tenant_id, "user_id": user_id})
 
 
-async def debug_counts(engine: AsyncEngine) -> None:
-    """
-    Prints why worker may be claiming 0 candidates.
-    """
-    cutoff = utcnow() - timedelta(minutes=INACTIVITY_MINUTES)
-
-    stmt = text(f"""
-        SELECT
-          COUNT(*) FILTER (WHERE (session_json->>'last_user_ts') IS NULL) AS missing_last_user_ts,
-          COUNT(*) FILTER (
-            WHERE (session_json->>'last_user_ts') IS NOT NULL
-              AND (session_json->>'last_user_ts')::timestamptz <= :cutoff
-          ) AS older_than_cutoff,
-          COUNT(*) FILTER (
-            WHERE COALESCE((session_json->>'inactivity_nudge_sent')::boolean, false) = true
-          ) AS already_nudged,
-          COUNT(*) AS total
-        FROM {TABLE_NAME};
-    """)
-
-    async with engine.begin() as conn:
-        res = await conn.execute(stmt, {"cutoff": cutoff})
-        row = res.first()
-        if row:
-            print(f"[debug] total={row.total} missing_last_user_ts={row.missing_last_user_ts} older_than_cutoff={row.older_than_cutoff} already_nudged={row.already_nudged}")
-
-
 # -----------------------------
 # Worker loop
 # -----------------------------
 async def run_once(engine: AsyncEngine) -> None:
-    reset_count = 0
-    try:
-        reset_count = await reset_nudge_when_user_active(engine)
-    except Exception as e:
-        print(f"[reminder] reset_nudge_when_user_active error: {e}")
+    await reset_nudge_when_user_active(engine)
 
     candidates = await claim_and_mark_candidates(engine)
-
-    if DEBUG:
-        print(f"[debug] reset_count={reset_count} claimed={len(candidates)} inactivity={INACTIVITY_MINUTES}min")
-        await debug_counts(engine)
-
     for tenant_id, user_id, sess in candidates:
         lang = str(sess.get("language") or "en")
         msg = inactivity_message(lang)
@@ -265,20 +216,14 @@ async def run_once(engine: AsyncEngine) -> None:
             print(f"[reminder] nudged tenant={tenant_id} user={user_id} lang={lang}")
         except Exception as e:
             print(f"[reminder] send failed tenant={tenant_id} user={user_id}: {e}")
-            try:
-                await unmark_if_send_failed(engine, tenant_id, user_id)
-            except Exception as e2:
-                print(f"[reminder] unmark failed tenant={tenant_id} user={user_id}: {e2}")
+            await unmark_if_send_failed(engine, tenant_id, user_id)
 
 
 async def main() -> None:
     db_url = to_async_db_url(DATABASE_URL)
     engine = create_async_engine(db_url, pool_pre_ping=True)
 
-    print(
-        f"[reminder-worker] started inactivity={INACTIVITY_MINUTES}min "
-        f"poll={POLL_SECONDS}s table={TABLE_NAME} debug={DEBUG}"
-    )
+    print(f"[reminder-worker] started inactivity={INACTIVITY_MINUTES}min poll={POLL_SECONDS}s table={TABLE_NAME}")
 
     try:
         while True:
