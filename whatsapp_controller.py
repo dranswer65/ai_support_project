@@ -1,15 +1,15 @@
-# whatsapp_controller.py — Enterprise-ready controller (V6.3)
+# whatsapp_controller.py — Enterprise-ready controller (V6.4)
 # Fixes:
 # ✅ Sticky handoff silence after 99 (including "Thank you")
 # ✅ Prevent language reset loops (don’t show language menu once locked)
 # ✅ Keep Reception = 99 (not 9)
 # ✅ Store last_intent for better handoff payloads
-# ✅ NEW: Deterministic language resolution (AR chars -> ar, EN chars -> en)
-# ✅ NEW: Upsert new session immediately to prevent duplicate webhook race (double reply AR+EN)
+# ✅ Deterministic language resolution (AR chars -> ar, EN chars -> en)
+# ✅ Upsert new session immediately to prevent duplicate webhook race
+# ✅ NEW: Always return meta["actions"] so api_server can persist appointment_requests
 #
 # IMPORTANT:
 # ✅ NO emergency detection / NO symptom triage / NO emergency escalation.
-# Emergency notice is already inside engine greeting.
 
 from __future__ import annotations
 
@@ -117,19 +117,17 @@ def _extract_ticket_id(result: Any) -> Optional[str]:
 
 def _wants_agent(text: str) -> bool:
     t = (text or "").strip().lower()
-    if t in {"99"}:
+    if t == "99":
         return True
-    if t == "9":  # keep 9 NOT reception (Neurology etc.)
+    if t == "9":  # keep 9 NOT reception
         return False
     return any(k in t for k in _AGENT_KEYS)
 
 
 def _resolve_language_for_turn(message_text: str, session: Dict[str, Any]) -> str:
-    # If locked, never change
     if bool(session.get("language_locked")):
         return "ar" if str(session.get("language") or "ar").startswith("ar") else "en"
 
-    # Deterministic: Arabic chars -> ar, English chars -> en
     if _looks_arabic(message_text):
         return "ar"
     if _looks_english(message_text):
@@ -227,17 +225,9 @@ async def handle_message(
             "last_ticket_id": None,
             "last_intent": None,
         }
-        # ✅ Prevent duplicate webhook race: persist immediately
         await upsert_session(db, user_id=user_id, session=session, tenant_id=tenant)
 
     session["last_user_message"] = cleaned
-    # schedule 10-min reminder on every inbound message (one-time reminder)
-    session["reminder_due_at"] = (datetime.now(timezone.utc) + timedelta(minutes=10)).isoformat()
-    session["reminder_sent"] = False
-
-    # Reset inactivity reminder when user sends anything
-    session["inactivity_nudge_sent"] = False
-    session["inactivity_nudge_sent_at"] = None
     session["last_intent"] = session.get("intent") or session.get("last_intent")
 
     # Sticky handoff silence
@@ -257,12 +247,19 @@ async def handle_message(
             reply_text = (engine_out.get("reply_text") or "").strip()
             session2 = engine_out.get("session") if isinstance(engine_out.get("session"), dict) else session
             session2["last_intent"] = session2.get("intent") or session2.get("last_intent")
+
+            actions = engine_out.get("actions") or []
             await upsert_session(db, user_id=user_id, session=session2, tenant_id=tenant)
 
-            return reply_text, {"tenant_id": tenant, "state": session2.get("state"), "handoff_active": False}
+            return reply_text, {
+                "tenant_id": tenant,
+                "state": session2.get("state"),
+                "handoff_active": False,
+                "actions": actions,
+            }
 
         await upsert_session(db, user_id=user_id, session=session, tenant_id=tenant)
-        return "", {"tenant_id": tenant, "state": session.get("state"), "handoff_active": True}
+        return "", {"tenant_id": tenant, "state": session.get("state"), "handoff_active": True, "actions": []}
 
     # Normal language resolution (deterministic)
     language = _resolve_language_for_turn(cleaned, session)
@@ -299,14 +296,13 @@ async def handle_message(
             )
 
         await upsert_session(db, user_id=user_id, session=session, tenant_id=tenant)
-        meta = {"tenant_id": tenant, "state": session.get("state"), "handoff_active": True}
+        meta = {"tenant_id": tenant, "state": session.get("state"), "handoff_active": True, "actions": []}
         meta.update(extra)
         return reply, meta
 
     if is_incident_mode():
         kpi_signals.append("incident_mode")
 
-    # Engine routing (one call only)
     engine_out = run_engine(
         session=session,
         user_message=cleaned,
@@ -316,8 +312,10 @@ async def handle_message(
     )
 
     reply_text = (engine_out.get("reply_text") or "").strip()
+    actions = engine_out.get("actions") or []
     session2 = engine_out.get("session") if isinstance(engine_out.get("session"), dict) else session
     session2["last_intent"] = session2.get("intent") or session2.get("last_intent")
+
     await upsert_session(db, user_id=user_id, session=session2, tenant_id=tenant)
 
     return reply_text, {
@@ -329,4 +327,5 @@ async def handle_message(
         "language_locked": session2.get("language_locked"),
         "handoff_active": session2.get("handoff_active"),
         "urgent_flag": bool(session2.get("urgent_flag")),
+        "actions": actions,
     }
