@@ -1,13 +1,14 @@
 # jobs/inactivity_reminder_worker.py
-# Enterprise-ready one-time inactivity reminder worker (V1.5)
+# Enterprise-ready one-time inactivity reminder worker (V1.5.1)
 #
 # Fixes:
-# ✅ Uses activity_ts = COALESCE(last_user_ts, updated_at) so it works even if last_user_ts is missing
-# ✅ Sanitizes TABLE_NAME hard (prevents "sessions (optional...)" SQL crash)
-# ✅ One-time reminder using atomic claim+mark (SKIP LOCKED)
+# ✅ Fixes Postgres syntax error (no :now_iso::text)
+# ✅ Uses activity_ts = COALESCE(last_user_ts, updated_at)
+# ✅ Sanitizes TABLE_NAME hard
+# ✅ One-time reminder via atomic claim+mark (SKIP LOCKED)
 # ✅ Resets flags only when user becomes active AFTER the nudge
 # ✅ Avoids nudging during handoff/escalation
-# ✅ Debug mode to show candidate count
+# ✅ Debug mode prints claimed count
 
 from __future__ import annotations
 
@@ -27,13 +28,11 @@ from sqlalchemy.ext.asyncio import create_async_engine, AsyncEngine
 # Config
 # -----------------------------
 _RAW_TABLE = (os.getenv("SESSIONS_TABLE", "sessions") or "sessions").strip()
-
-# Keep first token before spaces, then remove any non-identifier chars
 _first = _RAW_TABLE.split()[0].strip()
 TABLE_NAME = re.sub(r"[^A-Za-z0-9_]", "", _first) or "sessions"
 
-INACTIVITY_MINUTES = int(os.getenv("INACTIVITY_MINUTES", "10"))      # 10 minutes
-POLL_SECONDS = int(os.getenv("INACTIVITY_POLL_SECONDS", "60"))       # check every 60 sec
+INACTIVITY_MINUTES = int(os.getenv("INACTIVITY_MINUTES", "10"))
+POLL_SECONDS = int(os.getenv("INACTIVITY_POLL_SECONDS", "60"))
 DEBUG = (os.getenv("INACTIVITY_DEBUG", "false") or "false").strip().lower() in {"1", "true", "yes", "y"}
 
 WA_TOKEN = (os.getenv("WA_TOKEN") or os.getenv("WA_ACCESS_TOKEN") or "").strip()
@@ -176,7 +175,7 @@ async def claim_and_mark_candidates(engine: AsyncEngine) -> List[Tuple[str, str,
                 true
               ),
               '{{inactivity_nudged_at}}',
-              to_jsonb(:now_iso::text),
+              to_jsonb(CAST(:now_iso AS text)),
               true
             )
         FROM candidates c
