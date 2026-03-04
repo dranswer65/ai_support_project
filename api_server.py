@@ -69,8 +69,10 @@ def wa_send_text(to_wa_id: str, text_: str) -> Dict[str, Any]:
 
 
 app = FastAPI(title="SupportPilot", version="0.1.0")
-
+# Reception Dashboard
+from admin_ui.reception_dashboard import router as reception_router
 app.include_router(reception_router)
+
 @app.api_route("/", methods=["GET", "HEAD"])
 async def root():
     return {"ok": True, "service": "SupportPilot"}
