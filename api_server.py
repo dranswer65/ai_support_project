@@ -19,7 +19,7 @@ import requests
 from sqlalchemy import text
 from fastapi import FastAPI, Request, Query, HTTPException, Header
 from fastapi.responses import PlainTextResponse, JSONResponse
-
+from admin_ui.reception_dashboard import router as reception_router
 from database import AsyncSessionLocal
 from core.wa_dedupe_store_pg import ensure_wa_dedupe_table, claim_message_once
 from core.session_store_pg import ensure_sessions_table
@@ -70,7 +70,7 @@ def wa_send_text(to_wa_id: str, text_: str) -> Dict[str, Any]:
 
 app = FastAPI(title="SupportPilot", version="0.1.0")
 
-
+app.include_router(reception_router)
 @app.api_route("/", methods=["GET", "HEAD"])
 async def root():
     return {"ok": True, "service": "SupportPilot"}
