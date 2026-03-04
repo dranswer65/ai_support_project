@@ -2,10 +2,12 @@
 from __future__ import annotations
 
 import os
-from typing import Any, Dict, List, Optional
+from pathlib import Path
+from typing import Any, Dict
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import HTMLResponse
+from fastapi.templating import Jinja2Templates
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -14,6 +16,10 @@ from database import AsyncSessionLocal
 RECEPTION_TOKEN = (os.getenv("RECEPTION_TOKEN") or "").strip()
 
 router = APIRouter()
+
+# Point templates to: admin_ui/templates
+BASE_DIR = Path(__file__).resolve().parent  # .../admin_ui
+templates = Jinja2Templates(directory=str(BASE_DIR / "templates"))
 
 
 async def get_db() -> AsyncSession:
@@ -40,17 +46,11 @@ def _norm_tenant(request: Request) -> str:
 
 @router.get("/reception", response_class=HTMLResponse)
 async def reception_page(request: Request):
+    """
+    Serves the Reception Dashboard HTML from admin_ui/templates/reception.html
+    """
     require_reception_token(request)
-
-    # Simple HTML served inline (or you can load from templates later)
-    # Here we will read the HTML from templates/reception.html
-    try:
-        with open("templates/reception.html", "r", encoding="utf-8") as f:
-            html = f.read()
-    except Exception:
-        raise HTTPException(status_code=500, detail="Missing templates/reception.html")
-
-    return HTMLResponse(html)
+    return templates.TemplateResponse("reception.html", {"request": request})
 
 
 @router.get("/api/reception/requests")
