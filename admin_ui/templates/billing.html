@@ -1,0 +1,350 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8"/>
+<title>Billing</title>
+
+<style>
+body{
+    font-family:Arial,sans-serif;
+    background:#f7f7f7;
+    margin:0;
+}
+header{
+    background:white;
+    border-bottom:1px solid #ddd;
+    padding:14px 18px;
+}
+.wrap{
+    max-width:1200px;
+    margin:auto;
+    padding:20px;
+}
+.card{
+    background:white;
+    border:1px solid #eee;
+    border-radius:10px;
+    padding:18px;
+    margin-bottom:18px;
+}
+button{
+    padding:8px 12px;
+    border-radius:6px;
+    border:1px solid #ccc;
+    background:white;
+    cursor:pointer;
+}
+button.primary{
+    background:#0077ff;
+    color:white;
+    border:none;
+}
+button.small{
+    font-size:12px;
+}
+button.good{
+    background:#ecfdf3;
+    border-color:#86efac;
+    color:#166534;
+}
+button.warn{
+    background:#fff7ed;
+    border-color:#fdba74;
+    color:#9a3412;
+}
+button.info{
+    background:#eff6ff;
+    border-color:#93c5fd;
+    color:#1d4ed8;
+}
+table{
+    width:100%;
+    border-collapse:collapse;
+}
+th, td{
+    border:1px solid #eee;
+    padding:10px;
+}
+th{
+    background:#fafafa;
+}
+.status-pill{
+    padding:4px 10px;
+    border-radius:999px;
+    font-size:12px;
+    border:1px solid #ccc;
+    font-weight:700;
+}
+.status-active{
+    background:#ecfdf3;
+    border-color:#86efac;
+    color:#166534;
+}
+.status-trial{
+    background:#eff6ff;
+    border-color:#93c5fd;
+    color:#1d4ed8;
+}
+.status-pastdue{
+    background:#fff7ed;
+    border-color:#fdba74;
+    color:#9a3412;
+}
+.status-cancelled{
+    background:#fef2f2;
+    border-color:#fca5a5;
+    color:#991b1b;
+}
+.nav{
+    display:flex;
+    gap:8px;
+    flex-wrap:wrap;
+}
+.msg{
+    margin-top:10px;
+    font-size:13px;
+}
+.msg.error{
+    color:#b42318;
+}
+.msg.success{
+    color:#0a7f38;
+}
+</style>
+</head>
+
+<body>
+
+<header>
+<b>Billing Management</b>
+</header>
+
+<div class="wrap">
+
+<div class="card">
+    <div class="nav">
+        <button onclick="openAnalytics()">Analytics</button>
+        <button onclick="openBilling()">Billing</button>
+        <button onclick="openUsage()">Usage</button>
+        <button onclick="openInvoices()">Invoices</button>
+        <button onclick="openTemplates()">Templates</button>
+    </div>
+</div>
+
+<div class="card">
+
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+        <h3 style="margin:0">Subscriptions</h3>
+        <button class="primary" onclick="loadBilling()">Refresh</button>
+    </div>
+
+    <div id="msg" class="msg"></div>
+
+    <table>
+        <thead>
+            <tr>
+                <th>Tenant</th>
+                <th>Clinic</th>
+                <th>Plan</th>
+                <th>Status</th>
+                <th>Started</th>
+                <th>Ends</th>
+                <th>Stripe Customer</th>
+                <th>Actions</th>
+            </tr>
+        </thead>
+
+        <tbody id="billingBody">
+            <tr>
+                <td colspan="8">Loading...</td>
+            </tr>
+        </tbody>
+    </table>
+
+</div>
+
+</div>
+
+<script>
+function adminHeaders(){
+    return {};
+}
+
+function setMsg(text, kind="success"){
+    const el = document.getElementById("msg");
+    el.className = `msg ${kind}`;
+    el.textContent = text || "";
+}
+
+function openAnalytics(){
+    window.location.href = "/admin/analytics";
+}
+
+function openBilling(){
+    window.location.href = "/admin/billing";
+}
+
+function openUsage(){
+    window.location.href = "/admin/usage";
+}
+
+function openInvoices(){
+    window.location.href = "/admin/invoices";
+}
+
+function openTemplates(){
+    window.location.href = "/admin/templates";
+}
+
+function statusPill(status){
+    status = (status || "").toUpperCase();
+
+    if(status === "ACTIVE"){
+        return `<span class="status-pill status-active">ACTIVE</span>`;
+    }
+
+    if(status === "TRIAL"){
+        return `<span class="status-pill status-trial">TRIAL</span>`;
+    }
+
+    if(status === "PAST_DUE"){
+        return `<span class="status-pill status-pastdue">PAST DUE</span>`;
+    }
+
+    if(status === "CANCELLED" || status === "TRIAL_EXPIRED"){
+        return `<span class="status-pill status-cancelled">${status}</span>`;
+    }
+
+    return `<span class="status-pill">${status || "-"}</span>`;
+}
+
+function esc(s){
+    return String(s || "").replace(/'/g, "\\'");
+}
+
+async function startCheckout(tenantId, planCode){
+    try {
+        const res = await fetch("/billing/checkout/session", {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json"
+            },
+            credentials: "same-origin",
+            body: JSON.stringify({
+                tenant_id: tenantId,
+                plan_code: planCode
+            })
+        });
+
+        const json = await res.json();
+
+        if (!res.ok || !json.ok) {
+            setMsg("Checkout failed: " + (json.detail || "unknown error"), "error");
+            return;
+        }
+
+        if (!json.checkout_url) {
+            setMsg("Stripe checkout URL missing", "error");
+            return;
+        }
+
+        window.location.href = json.checkout_url;
+    } catch (e) {
+        console.error("Checkout error:", e);
+        setMsg("Could not start Stripe checkout", "error");
+    }
+}
+
+async function openPortal(tenantId){
+    try {
+        const res = await fetch("/billing/portal/session", {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json"
+            },
+            credentials: "same-origin",
+            body: JSON.stringify({
+                tenant_id: tenantId
+            })
+        });
+
+        const json = await res.json();
+
+        if (!res.ok || !json.ok) {
+            setMsg("Portal failed: " + (json.detail || "unknown error"), "error");
+            return;
+        }
+
+        if (!json.portal_url) {
+            setMsg("Portal URL missing", "error");
+            return;
+        }
+
+        window.open(json.portal_url, "_blank");
+    } catch (e) {
+        console.error("Portal error:", e);
+        setMsg("Could not open billing portal", "error");
+    }
+}
+
+async function loadBilling(){
+    const body = document.getElementById("billingBody");
+    body.innerHTML = "<tr><td colspan='8'>Loading...</td></tr>";
+    setMsg("");
+
+    try{
+        const res = await fetch("/admin/subscriptions/list", {
+            headers: adminHeaders(),
+            credentials: "same-origin"
+        });
+
+        const json = await res.json();
+
+        if(!res.ok || !json.ok){
+            body.innerHTML = "<tr><td colspan='8'>Failed to load</td></tr>";
+            setMsg(json.detail || "Failed to load subscriptions", "error");
+            return;
+        }
+
+        body.innerHTML = "";
+
+        const items = json.items || [];
+
+        if(items.length === 0){
+            body.innerHTML = "<tr><td colspan='8'>No subscriptions found</td></tr>";
+            return;
+        }
+
+        for(const it of items){
+            const tr = document.createElement("tr");
+            const tenantId = esc(it.tenant_id);
+
+            tr.innerHTML = `
+                <td>${it.tenant_id || "-"}</td>
+                <td>${it.clinic_name || "-"}</td>
+                <td>${it.plan_code || "-"}</td>
+                <td>${statusPill(it.status)}</td>
+                <td>${it.started_at || "-"}</td>
+                <td>${it.ends_at || "-"}</td>
+                <td>${it.stripe_customer_id || "-"}</td>
+                <td>
+                    <button class="small good" onclick="startCheckout('${tenantId}','starter')">Starter</button>
+                    <button class="small warn" onclick="startCheckout('${tenantId}','growth')">Growth</button>
+                    <button class="small info" onclick="openPortal('${tenantId}')">Portal</button>
+                </td>
+            `;
+
+            body.appendChild(tr);
+        }
+    }catch(e){
+        console.error(e);
+        body.innerHTML = "<tr><td colspan='8'>Failed to load</td></tr>";
+        setMsg("Failed to load subscriptions", "error");
+    }
+}
+
+loadBilling();
+</script>
+
+</body>
+</html>

@@ -1,0 +1,927 @@
+<!doctype html>
+<html lang="en" dir="ltr">
+<head>
+<meta charset="utf-8"/>
+<title>Patients Dashboard</title>
+
+<style>
+body{
+  font-family:Arial,sans-serif;
+  background:#f7f7f7;
+  margin:0;
+}
+
+header{
+  background:white;
+  border-bottom:1px solid #ddd;
+  padding:14px 18px;
+}
+
+.wrap{
+  max-width:1450px;
+  margin:auto;
+  padding:20px;
+}
+
+.card{
+  background:white;
+  border:1px solid #eee;
+  border-radius:10px;
+  padding:18px;
+  margin-bottom:18px;
+}
+
+.row{
+  display:grid;
+  grid-template-columns:1.6fr 220px 220px 180px;
+  gap:12px;
+  margin-bottom:14px;
+}
+
+button{
+  padding:8px 12px;
+  border-radius:6px;
+  border:1px solid #ccc;
+  background:white;
+  cursor:pointer;
+}
+
+button.primary{
+  background:#0077ff;
+  color:white;
+  border:none;
+}
+
+button.good{
+  background:#ecfdf3;
+  border-color:#86efac;
+  color:#166534;
+}
+
+input, select{
+  width:100%;
+  padding:8px;
+  box-sizing:border-box;
+}
+
+table{
+  width:100%;
+  border-collapse:collapse;
+}
+
+th, td{
+  border:1px solid #eee;
+  padding:10px;
+  text-align:left;
+  vertical-align:top;
+}
+
+th{
+  background:#fafafa;
+}
+
+.muted{
+  color:#666;
+  font-size:12px;
+}
+
+.nav{
+  display:flex;
+  gap:8px;
+  flex-wrap:wrap;
+}
+
+.status-pill{
+  display:inline-block;
+  padding:4px 10px;
+  border-radius:999px;
+  font-size:12px;
+  border:1px solid #ccc;
+  font-weight:700;
+  background:#fff;
+}
+
+.status-confirmed{
+  background:#ecfdf3;
+  border-color:#86efac;
+  color:#166534;
+}
+
+.status-completed{
+  background:#eff6ff;
+  border-color:#93c5fd;
+  color:#1d4ed8;
+}
+
+.status-cancelled{
+  background:#fef2f2;
+  border-color:#fca5a5;
+  color:#991b1b;
+}
+
+.status-no-show{
+  background:#fff7ed;
+  border-color:#fdba74;
+  color:#9a3412;
+}
+
+.status-other{
+  background:#f8fafc;
+  border-color:#cbd5e1;
+  color:#334155;
+}
+
+.insurance-pill{
+  display:inline-block;
+  padding:4px 10px;
+  border-radius:999px;
+  font-size:12px;
+  border:1px solid #ccc;
+  font-weight:700;
+  background:#fff;
+  margin-bottom:6px;
+}
+
+.insurance-self{
+  background:#f5f5f5;
+  border-color:#d4d4d4;
+  color:#444;
+}
+
+.insurance-unverified{
+  background:#fff7ed;
+  border-color:#fdba74;
+  color:#9a3412;
+}
+
+.insurance-verified{
+  background:#ecfdf3;
+  border-color:#86efac;
+  color:#166534;
+}
+
+.insurance-expired{
+  background:#fef2f2;
+  border-color:#fca5a5;
+  color:#991b1b;
+}
+
+.insurance-approval{
+  background:#eff6ff;
+  border-color:#93c5fd;
+  color:#1d4ed8;
+}
+
+.verify-badge{
+  display:inline-block;
+  padding:3px 8px;
+  border-radius:999px;
+  font-size:11px;
+  font-weight:700;
+  border:1px solid #ccc;
+  background:#fff;
+  margin-right:4px;
+  margin-top:4px;
+}
+
+.verify-ok{
+  background:#ecfdf3;
+  border-color:#86efac;
+  color:#166534;
+}
+
+.verify-warn{
+  background:#fff7ed;
+  border-color:#fdba74;
+  color:#9a3412;
+}
+
+.verify-bad{
+  background:#fef2f2;
+  border-color:#fca5a5;
+  color:#991b1b;
+}
+
+.verify-info{
+  background:#eff6ff;
+  border-color:#93c5fd;
+  color:#1d4ed8;
+}
+
+.empty{
+  padding:20px;
+  text-align:center;
+  color:#666;
+}
+
+.section-title{
+  font-size:14px;
+  font-weight:700;
+  margin-bottom:8px;
+}
+
+.patient-meta{
+  display:flex;
+  flex-wrap:wrap;
+  gap:6px;
+  margin-top:6px;
+}
+
+.meta-chip{
+  display:inline-block;
+  padding:3px 8px;
+  border:1px solid #ddd;
+  border-radius:999px;
+  font-size:11px;
+  background:#fafafa;
+}
+
+.summary-grid{
+  display:grid;
+  grid-template-columns:repeat(4, 1fr);
+  gap:12px;
+}
+
+.stat{
+  border:1px solid #eee;
+  border-radius:10px;
+  padding:14px;
+  background:#fff;
+}
+
+.stat .label{
+  font-size:12px;
+  color:#666;
+}
+
+.stat .value{
+  font-size:24px;
+  font-weight:700;
+  margin-top:6px;
+}
+
+html[dir="rtl"] body{
+  direction: rtl;
+}
+
+html[dir="rtl"] th,
+html[dir="rtl"] td,
+html[dir="rtl"] input,
+html[dir="rtl"] select,
+html[dir="rtl"] label,
+html[dir="rtl"] .section-title,
+html[dir="rtl"] .stat .label,
+html[dir="rtl"] .stat .value,
+html[dir="rtl"] header{
+  text-align:right;
+}
+
+html[dir="rtl"] .nav,
+html[dir="rtl"] .patient-meta{
+  flex-direction:row-reverse;
+}
+
+html[dir="rtl"] .verify-badge{
+  margin-right:0;
+  margin-left:4px;
+}
+
+@media (max-width: 1200px){
+  .summary-grid{
+    grid-template-columns:repeat(2, 1fr);
+  }
+}
+
+@media (max-width: 1100px){
+  .row{
+    grid-template-columns:1fr;
+  }
+
+  table{
+    display:block;
+    overflow:auto;
+  }
+}
+
+@media (max-width: 700px){
+  .summary-grid{
+    grid-template-columns:1fr;
+  }
+}
+</style>
+</head>
+
+<body>
+
+<header>
+  <b id="pageTitle">Patients Dashboard</b>
+</header>
+
+<div class="wrap">
+
+  <div class="card">
+    <div class="nav">
+      <button id="navAnalytics" onclick="openAnalytics()">Analytics</button>
+      <button id="navBilling" onclick="openBilling()">Billing</button>
+      <button id="navUsage" onclick="openUsage()">Usage</button>
+      <button id="navInvoices" onclick="openInvoices()">Invoices</button>
+      <button id="navTemplates" onclick="openTemplates()">Templates</button>
+      <button id="navSettings" onclick="openSettings()">Settings</button>
+      <button id="navAppointments" onclick="openAppointments()">Appointments</button>
+      <button id="navPatients" onclick="openPatients()">Patients</button>
+      <button id="btnEnglish" onclick="switchLang('en')">English</button>
+      <button id="btnArabic" onclick="switchLang('ar')">العربية</button>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="row">
+      <div>
+        <label id="lblSearch">Search Patient / Phone / Insurance / Registry ID</label>
+        <input id="q" placeholder="e.g. Fatima / 9665 / Bupa / PAT- / insurance member id"/>
+      </div>
+
+      <div>
+        <label id="lblLimit">Limit</label>
+        <select id="limit">
+          <option value="20">20</option>
+          <option value="50" selected>50</option>
+          <option value="100">100</option>
+          <option value="200">200</option>
+        </select>
+      </div>
+
+      <div style="display:flex;align-items:end;">
+        <button id="btnSearch" class="primary" onclick="loadPatients()">Search</button>
+      </div>
+
+      <div style="display:flex;align-items:end;">
+        <button id="btnExport" class="good" onclick="exportCsv()">Export CSV</button>
+      </div>
+    </div>
+
+    <div id="searchHelp" class="muted">
+      Search supports patient name, mobile, patient registry ID, insurance provider, and insurance member ID.
+    </div>
+  </div>
+
+  <div class="card">
+    <div id="summaryTitle" class="section-title">Quick Summary</div>
+    <div class="summary-grid">
+      <div class="stat">
+        <div id="lblRows" class="label">Rows Loaded</div>
+        <div class="value" id="statRows">0</div>
+      </div>
+      <div class="stat">
+        <div id="lblPatients" class="label">Unique Patients</div>
+        <div class="value" id="statPatients">0</div>
+      </div>
+      <div class="stat">
+        <div id="lblConfirmed" class="label">Confirmed Appointments</div>
+        <div class="value" id="statConfirmed">0</div>
+      </div>
+      <div class="stat">
+        <div id="lblCompleted" class="label">Completed Appointments</div>
+        <div class="value" id="statCompleted">0</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div id="resultsTitle" class="section-title">Results</div>
+
+    <table>
+      <thead>
+        <tr>
+          <th id="thPatient">Patient</th>
+          <th id="thClinic">Clinic</th>
+          <th id="thDoctor">Doctor</th>
+          <th id="thAppointment">Appointment</th>
+          <th id="thInsurance">Insurance</th>
+          <th id="thStatus">Status</th>
+          <th id="thCreated">Created</th>
+        </tr>
+      </thead>
+      <tbody id="patientsBody">
+        <tr>
+          <td colspan="7" class="muted">Search to load patients...</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+</div>
+
+<script>
+const qs = new URLSearchParams(location.search);
+const platformToken = qs.get("token") || "";
+const uiLang = (qs.get("lang") || "en").toLowerCase() === "ar" ? "ar" : "en";
+let lastItems = [];
+
+const I18N = {
+  en: {
+    pageTitle: "Patients Dashboard",
+    navAnalytics: "Analytics",
+    navBilling: "Billing",
+    navUsage: "Usage",
+    navInvoices: "Invoices",
+    navTemplates: "Templates",
+    navSettings: "Settings",
+    navAppointments: "Appointments",
+    navPatients: "Patients",
+    btnEnglish: "English",
+    btnArabic: "العربية",
+
+    lblSearch: "Search Patient / Phone / Insurance / Registry ID",
+    searchPlaceholder: "e.g. Fatima / 9665 / Bupa / PAT- / insurance member id",
+    lblLimit: "Limit",
+    btnSearch: "Search",
+    btnExport: "Export CSV",
+    searchHelp: "Search supports patient name, mobile, patient registry ID, insurance provider, and insurance member ID.",
+
+    summaryTitle: "Quick Summary",
+    lblRows: "Rows Loaded",
+    lblPatients: "Unique Patients",
+    lblConfirmed: "Confirmed Appointments",
+    lblCompleted: "Completed Appointments",
+
+    resultsTitle: "Results",
+    thPatient: "Patient",
+    thClinic: "Clinic",
+    thDoctor: "Doctor",
+    thAppointment: "Appointment",
+    thInsurance: "Insurance",
+    thStatus: "Status",
+    thCreated: "Created",
+
+    searchToLoad: "Search to load patients...",
+    enterSearchFirst: "Enter a search term first.",
+    loadingPatients: "Loading patients...",
+    failedToLoad: "Failed to load patients",
+    noPatientsFound: "No patients found",
+    failedExport: "Failed to export CSV",
+
+    registry: "Registry",
+    nationalId: "National ID",
+    gender: "Gender",
+    plan: "Plan",
+    memberId: "Member ID",
+    expiry: "Expiry",
+
+    confirmed: "CONFIRMED",
+    completed: "COMPLETED",
+    cancelled: "CANCELLED",
+    noShow: "NO_SHOW",
+    unknown: "UNKNOWN",
+
+    selfPay: "SELF PAY",
+    insuredVerified: "INSURED VERIFIED",
+    insuredUnverified: "INSURED UNVERIFIED",
+    insuranceExpired: "INSURANCE EXPIRED",
+    approvalRequired: "APPROVAL REQUIRED",
+
+    badgeSelfPay: "Self Pay",
+    badgeApprovalRequired: "Approval Required",
+    badgeExpired: "Expired",
+    badgeVerified: "Verified",
+    badgeUnverified: "Unverified",
+    badgeExpiringSoon: "Expiring Soon"
+  },
+  ar: {
+    pageTitle: "لوحة المرضى",
+    navAnalytics: "التحليلات",
+    navBilling: "الفوترة",
+    navUsage: "الاستخدام",
+    navInvoices: "الفواتير",
+    navTemplates: "القوالب",
+    navSettings: "الإعدادات",
+    navAppointments: "المواعيد",
+    navPatients: "المرضى",
+    btnEnglish: "English",
+    btnArabic: "العربية",
+
+    lblSearch: "بحث بالمريض / الجوال / التأمين / رقم الملف",
+    searchPlaceholder: "مثال: فاطمة / 9665 / بوبا / PAT- / رقم عضو التأمين",
+    lblLimit: "الحد",
+    btnSearch: "بحث",
+    btnExport: "تصدير CSV",
+    searchHelp: "يمكن البحث باسم المريض أو الجوال أو رقم الملف أو شركة التأمين أو رقم عضو التأمين.",
+
+    summaryTitle: "ملخص سريع",
+    lblRows: "الصفوف المحملة",
+    lblPatients: "المرضى الفريدون",
+    lblConfirmed: "المواعيد المؤكدة",
+    lblCompleted: "المواعيد المكتملة",
+
+    resultsTitle: "النتائج",
+    thPatient: "المريض",
+    thClinic: "العيادة",
+    thDoctor: "الطبيب",
+    thAppointment: "الموعد",
+    thInsurance: "التأمين",
+    thStatus: "الحالة",
+    thCreated: "تاريخ الإنشاء",
+
+    searchToLoad: "ابدأ بالبحث لعرض المرضى...",
+    enterSearchFirst: "أدخل عبارة بحث أولاً.",
+    loadingPatients: "جاري تحميل المرضى...",
+    failedToLoad: "فشل تحميل المرضى",
+    noPatientsFound: "لا يوجد مرضى",
+    failedExport: "فشل تصدير CSV",
+
+    registry: "رقم الملف",
+    nationalId: "الهوية",
+    gender: "الجنس",
+    plan: "الخطة",
+    memberId: "رقم العضوية",
+    expiry: "الانتهاء",
+
+    confirmed: "مؤكد",
+    completed: "مكتمل",
+    cancelled: "ملغي",
+    noShow: "عدم حضور",
+    unknown: "غير معروف",
+
+    selfPay: "دفع ذاتي",
+    insuredVerified: "مؤمن موثق",
+    insuredUnverified: "مؤمن غير موثق",
+    insuranceExpired: "التأمين منتهي",
+    approvalRequired: "مطلوب موافقة",
+
+    badgeSelfPay: "دفع ذاتي",
+    badgeApprovalRequired: "موافقة مطلوبة",
+    badgeExpired: "منتهي",
+    badgeVerified: "موثق",
+    badgeUnverified: "غير موثق",
+    badgeExpiringSoon: "ينتهي قريباً"
+  }
+};
+
+function t(key){
+  return (I18N[uiLang] && I18N[uiLang][key]) || key;
+}
+
+function applyLanguage(){
+  document.documentElement.setAttribute("lang", uiLang);
+  document.documentElement.setAttribute("dir", uiLang === "ar" ? "rtl" : "ltr");
+
+  const ids = [
+    "pageTitle",
+    "navAnalytics",
+    "navBilling",
+    "navUsage",
+    "navInvoices",
+    "navTemplates",
+    "navSettings",
+    "navAppointments",
+    "navPatients",
+    "btnEnglish",
+    "btnArabic",
+    "lblSearch",
+    "lblLimit",
+    "btnSearch",
+    "btnExport",
+    "searchHelp",
+    "summaryTitle",
+    "lblRows",
+    "lblPatients",
+    "lblConfirmed",
+    "lblCompleted",
+    "resultsTitle",
+    "thPatient",
+    "thClinic",
+    "thDoctor",
+    "thAppointment",
+    "thInsurance",
+    "thStatus",
+    "thCreated"
+  ];
+
+  for(const id of ids){
+    const el = document.getElementById(id);
+    if(el){
+      el.textContent = t(id);
+    }
+  }
+
+  document.getElementById("q").placeholder = t("searchPlaceholder");
+}
+
+function switchLang(lang){
+  const params = new URLSearchParams(window.location.search);
+  params.set("lang", lang);
+  params.set("token", platformToken);
+  window.location.href = `${window.location.pathname}?${params.toString()}`;
+}
+
+function adminHeaders(){
+  return {
+    "X-Admin-Token": platformToken
+  };
+}
+
+function navUrl(path){
+  return `${path}?token=${encodeURIComponent(platformToken)}&lang=${encodeURIComponent(uiLang)}`;
+}
+
+function openAnalytics(){
+  window.location.href = navUrl("/admin/analytics");
+}
+
+function openBilling(){
+  window.location.href = navUrl("/admin/billing");
+}
+
+function openUsage(){
+  window.location.href = navUrl("/admin/usage");
+}
+
+function openInvoices(){
+  window.location.href = navUrl("/admin/invoices");
+}
+
+function openTemplates(){
+  window.location.href = navUrl("/admin/templates");
+}
+
+function openSettings(){
+  window.location.href = navUrl("/admin/settings");
+}
+
+function openAppointments(){
+  window.location.href = navUrl("/admin/appointments");
+}
+
+function openPatients(){
+  window.location.href = navUrl("/admin/patients");
+}
+
+function fmt(v){
+  return v === null || v === undefined || v === "" ? "-" : String(v);
+}
+
+function parseDateOnly(value){
+  if(!value) return null;
+  const s = String(value).slice(0, 10);
+  const d = new Date(s + "T00:00:00");
+  return isNaN(d.getTime()) ? null : d;
+}
+
+function daysUntil(dateObj){
+  if(!dateObj) return null;
+  const now = new Date();
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const target = new Date(dateObj.getFullYear(), dateObj.getMonth(), dateObj.getDate());
+  const diffMs = target - today;
+  return Math.floor(diffMs / 86400000);
+}
+
+function statusPill(status){
+  const s = String(status || "").toUpperCase();
+
+  if(s === "CONFIRMED"){
+    return `<span class="status-pill status-confirmed">${t("confirmed")}</span>`;
+  }
+  if(s === "COMPLETED"){
+    return `<span class="status-pill status-completed">${t("completed")}</span>`;
+  }
+  if(s === "CANCELLED"){
+    return `<span class="status-pill status-cancelled">${t("cancelled")}</span>`;
+  }
+  if(s === "NO_SHOW"){
+    return `<span class="status-pill status-no-show">${t("noShow")}</span>`;
+  }
+
+  return `<span class="status-pill status-other">${fmt(s || t("unknown"))}</span>`;
+}
+
+function insurancePill(status, verified){
+  const s = String(status || "SELF_PAY").toUpperCase();
+
+  if (s === "INSURED_VERIFIED" || verified) {
+    return `<span class="insurance-pill insurance-verified">${t("insuredVerified")}</span>`;
+  }
+  if (s === "INSURED_UNVERIFIED") {
+    return `<span class="insurance-pill insurance-unverified">${t("insuredUnverified")}</span>`;
+  }
+  if (s === "INSURANCE_EXPIRED") {
+    return `<span class="insurance-pill insurance-expired">${t("insuranceExpired")}</span>`;
+  }
+  if (s === "APPROVAL_REQUIRED") {
+    return `<span class="insurance-pill insurance-approval">${t("approvalRequired")}</span>`;
+  }
+  return `<span class="insurance-pill insurance-self">${t("selfPay")}</span>`;
+}
+
+function insuranceBadges(it){
+  const status = String(it.insurance_status || "SELF_PAY").toUpperCase();
+  const verified = !!it.insurance_verified;
+  const expiryDate = parseDateOnly(it.insurance_expiry);
+  const days = daysUntil(expiryDate);
+
+  let html = "";
+
+  if(status === "SELF_PAY"){
+    html += `<span class="verify-badge verify-info">${t("badgeSelfPay")}</span>`;
+    return html;
+  }
+
+  if(status === "APPROVAL_REQUIRED"){
+    html += `<span class="verify-badge verify-info">${t("badgeApprovalRequired")}</span>`;
+  }
+
+  if(status === "INSURANCE_EXPIRED" || (days !== null && days < 0)){
+    html += `<span class="verify-badge verify-bad">${t("badgeExpired")}</span>`;
+    return html;
+  }
+
+  if(status === "INSURED_VERIFIED" || verified){
+    html += `<span class="verify-badge verify-ok">${t("badgeVerified")}</span>`;
+  } else {
+    html += `<span class="verify-badge verify-warn">${t("badgeUnverified")}</span>`;
+  }
+
+  if(days !== null && days >= 0 && days <= 30){
+    html += `<span class="verify-badge verify-warn">${t("badgeExpiringSoon")}</span>`;
+  }
+
+  return html;
+}
+
+function insuranceBlock(it){
+  return `
+    <div>${insurancePill(it.insurance_status, it.insurance_verified)}</div>
+    <div>${insuranceBadges(it)}</div>
+    <div class="muted">${fmt(it.insurance_provider)}</div>
+    <div class="muted">${it.insurance_plan ? t("plan") + ": " + it.insurance_plan : ""}</div>
+    <div class="muted">${it.insurance_member_id ? t("memberId") + ": " + it.insurance_member_id : ""}</div>
+    <div class="muted">${it.insurance_expiry ? t("expiry") + ": " + it.insurance_expiry : ""}</div>
+  `;
+}
+
+function patientMeta(it){
+  const bits = [];
+
+  if(it.patient_id){
+    bits.push(`<span class="meta-chip">${t("registry")}: ${fmt(it.patient_id)}</span>`);
+  }
+  if(it.national_id){
+    bits.push(`<span class="meta-chip">${t("nationalId")}: ${fmt(it.national_id)}</span>`);
+  }
+  if(it.gender){
+    bits.push(`<span class="meta-chip">${t("gender")}: ${fmt(it.gender)}</span>`);
+  }
+
+  return bits.length ? `<div class="patient-meta">${bits.join("")}</div>` : "";
+}
+
+function renderStats(items){
+  document.getElementById("statRows").textContent = String(items.length);
+
+  const uniquePatients = new Set(
+    items.map(it => String(it.patient_id || it.patient_mobile || it.patient_name || ""))
+          .filter(Boolean)
+  );
+  document.getElementById("statPatients").textContent = String(uniquePatients.size);
+
+  const confirmed = items.filter(it => String(it.status || "").toUpperCase() === "CONFIRMED").length;
+  const completed = items.filter(it => String(it.status || "").toUpperCase() === "COMPLETED").length;
+
+  document.getElementById("statConfirmed").textContent = String(confirmed);
+  document.getElementById("statCompleted").textContent = String(completed);
+}
+
+async function loadPatients(){
+  const q = document.getElementById("q").value.trim();
+  const limit = document.getElementById("limit").value;
+  const body = document.getElementById("patientsBody");
+
+  if(!q){
+    body.innerHTML = `<tr><td colspan="7" class="empty">${t("enterSearchFirst")}</td></tr>`;
+    renderStats([]);
+    return;
+  }
+
+  body.innerHTML = `<tr><td colspan="7" class="muted">${t("loadingPatients")}</td></tr>`;
+
+  const url = new URL("/admin/patients/history", window.location.origin);
+  url.searchParams.set("q", q);
+  url.searchParams.set("limit", limit);
+
+  const res = await fetch(url.toString(), {
+    headers: adminHeaders()
+  });
+
+  const json = await res.json();
+
+  if(!json.ok){
+    body.innerHTML = `<tr><td colspan="7" class="empty">${t("failedToLoad")}</td></tr>`;
+    renderStats([]);
+    return;
+  }
+
+  const items = json.items || [];
+  lastItems = items;
+  renderStats(items);
+  body.innerHTML = "";
+
+  if(items.length === 0){
+    body.innerHTML = `<tr><td colspan="7" class="empty">${t("noPatientsFound")}</td></tr>`;
+    return;
+  }
+
+  for(const it of items){
+    const tr = document.createElement("tr");
+
+    tr.innerHTML = `
+      <td>
+        <div><b>${fmt(it.patient_name)}</b></div>
+        <div class="muted">${fmt(it.patient_mobile)}</div>
+        ${patientMeta(it)}
+      </td>
+
+      <td>
+        <div><b>${fmt(it.clinic_name)}</b></div>
+        <div class="muted">${fmt(it.tenant_id)}</div>
+      </td>
+
+      <td>${fmt(it.doctor_key)}</td>
+
+      <td>
+        <div><b>${fmt(it.slot_date)} ${fmt(it.slot_time)}</b></div>
+      </td>
+
+      <td>${insuranceBlock(it)}</td>
+
+      <td>${statusPill(it.status)}</td>
+
+      <td>${fmt(it.created_at)}</td>
+    `;
+
+    body.appendChild(tr);
+  }
+}
+
+async function exportCsv(){
+  const q = document.getElementById("q").value.trim();
+  const limit = document.getElementById("limit").value;
+
+  if(!q){
+    alert(t("enterSearchFirst"));
+    return;
+  }
+
+  try{
+    const url = new URL("/admin/patients/history/export.csv", window.location.origin);
+    url.searchParams.set("q", q);
+    url.searchParams.set("limit", limit);
+
+    const res = await fetch(url.toString(), {
+      headers: {
+        "X-Admin-Token": platformToken
+      }
+    });
+
+    if(!res.ok){
+      let msg = t("failedExport");
+      try{
+        const j = await res.json();
+        msg = j.detail || msg;
+      }catch(e){}
+      alert(msg);
+      return;
+    }
+
+    const blob = await res.blob();
+    const safeName = q.replace(/["/\\ ]+/g, "_");
+    const filename = `patient_history_${safeName || "export"}.csv`;
+
+    const downloadUrl = window.URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = downloadUrl;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    window.URL.revokeObjectURL(downloadUrl);
+
+  }catch(e){
+    alert(t("failedExport"));
+  }
+}
+
+document.getElementById("q").addEventListener("keydown", function(e){
+  if(e.key === "Enter"){
+    loadPatients();
+  }
+});
+
+(function init(){
+  applyLanguage();
+  document.getElementById("patientsBody").innerHTML =
+    `<tr><td colspan="7" class="muted">${t("searchToLoad")}</td></tr>`;
+})();
+</script>
+
+</body>
+</html>

@@ -1,0 +1,306 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8"/>
+<title>Usage Metrics</title>
+
+<style>
+body{
+    font-family:Arial,sans-serif;
+    background:#f7f7f7;
+    margin:0;
+}
+header{
+    background:white;
+    border-bottom:1px solid #ddd;
+    padding:14px 18px;
+}
+.wrap{
+    max-width:1200px;
+    margin:auto;
+    padding:20px;
+}
+.card{
+    background:white;
+    border:1px solid #eee;
+    border-radius:10px;
+    padding:18px;
+    margin-bottom:18px;
+}
+.nav{
+    display:flex;
+    gap:8px;
+    flex-wrap:wrap;
+}
+button{
+    padding:8px 12px;
+    border-radius:6px;
+    border:1px solid #ccc;
+    background:white;
+    cursor:pointer;
+}
+button.primary{
+    background:#0077ff;
+    color:white;
+    border:none;
+}
+.metric-grid{
+    display:grid;
+    grid-template-columns:repeat(auto-fill,minmax(260px,1fr));
+    gap:16px;
+}
+.metric-card{
+    border:1px solid #eee;
+    border-radius:10px;
+    padding:16px;
+    background:#fafafa;
+}
+.metric-title{
+    font-weight:700;
+    margin-bottom:8px;
+}
+.metric-value{
+    font-size:28px;
+    font-weight:700;
+}
+.metric-limit{
+    font-size:12px;
+    color:#666;
+}
+.bar{
+    height:10px;
+    background:#e5e5e5;
+    border-radius:6px;
+    margin-top:10px;
+}
+.bar-inner{
+    height:10px;
+    border-radius:6px;
+}
+.bar-low{
+    background:#22c55e;
+}
+.bar-mid{
+    background:#f59e0b;
+}
+.bar-high{
+    background:#ef4444;
+}
+table{
+    width:100%;
+    border-collapse:collapse;
+}
+th,td{
+    border:1px solid #eee;
+    padding:10px;
+}
+th{
+    background:#fafafa;
+}
+#msg{
+    margin-top:8px;
+    font-size:13px;
+}
+.error{
+    color:#b42318;
+}
+.success{
+    color:#0a7f38;
+}
+</style>
+</head>
+
+<body>
+
+<header>
+<b>SaaS Usage Metrics</b>
+</header>
+
+<div class="wrap">
+
+<div class="card">
+    <div class="nav">
+        <button onclick="openAnalytics()">Analytics</button>
+        <button onclick="openBilling()">Billing</button>
+        <button onclick="openUsage()">Usage</button>
+        <button onclick="openInvoices()">Invoices</button>
+        <button onclick="openTemplates()">Templates</button>
+    </div>
+</div>
+
+<div class="card">
+    <div style="display:flex;justify-content:space-between;align-items:center">
+        <h3>Current Month Usage</h3>
+        <button class="primary" onclick="loadUsage()">Refresh</button>
+    </div>
+
+    <div id="msg"></div>
+
+    <div id="usageGrid" class="metric-grid">
+        <div>Loading metrics...</div>
+    </div>
+</div>
+
+<div class="card">
+    <h3>Clinic Usage Breakdown</h3>
+
+    <table>
+        <thead>
+            <tr>
+                <th>Tenant</th>
+                <th>Clinic</th>
+                <th>Plan</th>
+                <th>AI Conversations</th>
+                <th>Appointments</th>
+                <th>Doctors</th>
+            </tr>
+        </thead>
+
+        <tbody id="usageTable">
+            <tr>
+                <td colspan="6">Loading...</td>
+            </tr>
+        </tbody>
+    </table>
+</div>
+
+</div>
+
+<script>
+function adminHeaders(){
+    return {};
+}
+
+function setMsg(text, kind="success"){
+    const el = document.getElementById("msg");
+    el.className = kind;
+    el.textContent = text || "";
+}
+
+function openAnalytics(){
+    window.location.href = "/admin/analytics";
+}
+
+function openBilling(){
+    window.location.href = "/admin/billing";
+}
+
+function openUsage(){
+    window.location.href = "/admin/usage";
+}
+
+function openInvoices(){
+    window.location.href = "/admin/invoices";
+}
+
+function openTemplates(){
+    window.location.href = "/admin/templates";
+}
+
+function usageBar(percent){
+    let cls = "bar-low";
+    if(percent > 70) cls = "bar-mid";
+    if(percent > 90) cls = "bar-high";
+
+    return `
+        <div class="bar">
+            <div class="bar-inner ${cls}" style="width:${percent}%"></div>
+        </div>
+    `;
+}
+
+async function loadUsage(){
+    const grid = document.getElementById("usageGrid");
+    const table = document.getElementById("usageTable");
+
+    grid.innerHTML = "Loading...";
+    table.innerHTML = "<tr><td colspan='6'>Loading...</td></tr>";
+    setMsg("");
+
+    try{
+        const res = await fetch("/admin/usage/overview", {
+            headers: adminHeaders(),
+            credentials: "same-origin"
+        });
+
+        const json = await res.json();
+
+        if(!res.ok || !json.ok){
+            grid.innerHTML = "Failed to load usage";
+            table.innerHTML = "<tr><td colspan='6'>Failed to load</td></tr>";
+            setMsg(json.detail || "Failed to load usage", "error");
+            return;
+        }
+
+        const stats = json.summary || {};
+
+        const aiUsed = stats.ai_used || 0;
+        const aiLimit = stats.ai_limit || 0;
+
+        const apptUsed = stats.appt_used || 0;
+        const apptLimit = stats.appt_limit || 0;
+
+        const doctorsUsed = stats.doctors_used || 0;
+        const doctorsLimit = stats.doctors_limit || 0;
+
+        function percent(used, limit){
+            if(!limit) return 0;
+            return Math.round((used / limit) * 100);
+        }
+
+        grid.innerHTML = `
+            <div class="metric-card">
+                <div class="metric-title">AI Conversations</div>
+                <div class="metric-value">${aiUsed}</div>
+                <div class="metric-limit">limit ${aiLimit}</div>
+                ${usageBar(percent(aiUsed, aiLimit))}
+            </div>
+
+            <div class="metric-card">
+                <div class="metric-title">Appointments Created</div>
+                <div class="metric-value">${apptUsed}</div>
+                <div class="metric-limit">limit ${apptLimit}</div>
+                ${usageBar(percent(apptUsed, apptLimit))}
+            </div>
+
+            <div class="metric-card">
+                <div class="metric-title">Active Doctors</div>
+                <div class="metric-value">${doctorsUsed}</div>
+                <div class="metric-limit">limit ${doctorsLimit}</div>
+                ${usageBar(percent(doctorsUsed, doctorsLimit))}
+            </div>
+        `;
+
+        table.innerHTML = "";
+
+        const items = json.items || [];
+        if(items.length === 0){
+            table.innerHTML = "<tr><td colspan='6'>No usage rows found</td></tr>";
+            return;
+        }
+
+        for(const it of items){
+            table.innerHTML += `
+                <tr>
+                    <td>${it.tenant_id || "-"}</td>
+                    <td>${it.clinic_name || "-"}</td>
+                    <td>${it.plan_code || "-"}</td>
+                    <td>${it.ai_used || 0}/${it.ai_limit || 0}</td>
+                    <td>${it.appt_used || 0}/${it.appt_limit || 0}</td>
+                    <td>${it.doctors_used || 0}/${it.doctors_limit || 0}</td>
+                </tr>
+            `;
+        }
+    }catch(e){
+        console.error(e);
+        grid.innerHTML = "Failed to load usage";
+        table.innerHTML = "<tr><td colspan='6'>Failed to load</td></tr>";
+        setMsg("Failed to load usage", "error");
+    }
+}
+
+loadUsage();
+</script>
+
+</body>
+</html>

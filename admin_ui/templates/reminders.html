@@ -1,0 +1,334 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8"/>
+<title>Reminder Logs</title>
+
+<style>
+body{
+  font-family:Arial,sans-serif;
+  background:#f7f7f7;
+  margin:0;
+}
+
+header{
+  background:white;
+  border-bottom:1px solid #ddd;
+  padding:14px 18px;
+}
+
+.wrap{
+  max-width:1400px;
+  margin:auto;
+  padding:20px;
+}
+
+.card{
+  background:white;
+  border:1px solid #eee;
+  border-radius:10px;
+  padding:18px;
+  margin-bottom:18px;
+}
+
+.row{
+  display:grid;
+  grid-template-columns:1fr 220px 220px 180px;
+  gap:12px;
+  margin-bottom:14px;
+}
+
+button{
+  padding:8px 12px;
+  border-radius:6px;
+  border:1px solid #ccc;
+  background:white;
+  cursor:pointer;
+}
+
+button.primary{
+  background:#0077ff;
+  color:white;
+  border:none;
+}
+
+input, select{
+  width:100%;
+  padding:8px;
+  box-sizing:border-box;
+}
+
+table{
+  width:100%;
+  border-collapse:collapse;
+}
+
+th, td{
+  border:1px solid #eee;
+  padding:10px;
+  text-align:left;
+  vertical-align:top;
+}
+
+th{
+  background:#fafafa;
+}
+
+.muted{
+  color:#666;
+  font-size:12px;
+}
+
+.nav{
+  display:flex;
+  gap:8px;
+  flex-wrap:wrap;
+}
+
+.status-pill{
+  display:inline-block;
+  padding:4px 10px;
+  border-radius:999px;
+  font-size:12px;
+  border:1px solid #ccc;
+  font-weight:700;
+  background:#fff;
+}
+
+.status-sent{
+  background:#ecfdf3;
+  border-color:#86efac;
+  color:#166534;
+}
+
+.status-pending{
+  background:#eff6ff;
+  border-color:#93c5fd;
+  color:#1d4ed8;
+}
+
+.status-failed{
+  background:#fef2f2;
+  border-color:#fca5a5;
+  color:#991b1b;
+}
+
+.type-pill{
+  display:inline-block;
+  padding:4px 10px;
+  border-radius:999px;
+  font-size:12px;
+  border:1px solid #ccc;
+  background:#fff7ed;
+  border-color:#fdba74;
+  color:#9a3412;
+}
+</style>
+</head>
+
+<body>
+
+<header>
+  <b>Reminder Logs</b>
+</header>
+
+<div class="wrap">
+
+  <div class="card">
+    <div class="nav">
+      <button onclick="openAnalytics()">Analytics</button>
+      <button onclick="openBilling()">Billing</button>
+      <button onclick="openUsage()">Usage</button>
+      <button onclick="openInvoices()">Invoices</button>
+      <button onclick="openTemplates()">Templates</button>
+      <button onclick="openSettings()">Settings</button>
+      <button onclick="openReminders()">Reminders</button>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="row">
+      <div>
+        <label>Tenant</label>
+        <input id="tenantFilter" placeholder="e.g. alnoor_clinic"/>
+      </div>
+
+      <div>
+        <label>Status</label>
+        <select id="statusFilter">
+          <option value="">ALL</option>
+          <option value="SENT">SENT</option>
+          <option value="PENDING">PENDING</option>
+          <option value="FAILED">FAILED</option>
+        </select>
+      </div>
+
+      <div>
+        <label>Reminder Type</label>
+        <select id="typeFilter">
+          <option value="">ALL</option>
+          <option value="REMINDER_MAIN">REMINDER_MAIN</option>
+          <option value="REMINDER_2H">REMINDER_2H</option>
+        </select>
+      </div>
+
+      <div style="display:flex;align-items:end;">
+        <button class="primary" onclick="loadReminders()">Refresh</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <table>
+      <thead>
+        <tr>
+          <th>Clinic</th>
+          <th>Tenant</th>
+          <th>Patient</th>
+          <th>Doctor</th>
+          <th>Appointment</th>
+          <th>Reminder Type</th>
+          <th>Status</th>
+          <th>Sent At</th>
+          <th>Error</th>
+        </tr>
+      </thead>
+      <tbody id="remindersBody">
+        <tr>
+          <td colspan="9" class="muted">Loading reminders...</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+</div>
+
+<script>
+const qs = new URLSearchParams(location.search);
+const platformToken = qs.get("token") || "";
+
+function adminHeaders(){
+  return {
+    "X-Admin-Token": platformToken
+  };
+}
+
+function openAnalytics(){
+  window.location.href = `/admin/analytics?token=${encodeURIComponent(platformToken)}`;
+}
+
+function openBilling(){
+  window.location.href = `/admin/billing?token=${encodeURIComponent(platformToken)}`;
+}
+
+function openUsage(){
+  window.location.href = `/admin/usage?token=${encodeURIComponent(platformToken)}`;
+}
+
+function openInvoices(){
+  window.location.href = `/admin/invoices?token=${encodeURIComponent(platformToken)}`;
+}
+
+function openTemplates(){
+  window.location.href = `/admin/templates?token=${encodeURIComponent(platformToken)}`;
+}
+
+function openSettings(){
+  window.location.href = `/admin/settings?token=${encodeURIComponent(platformToken)}`;
+}
+
+function openReminders(){
+  window.location.href = `/admin/reminders?token=${encodeURIComponent(platformToken)}`;
+}
+
+function fmt(v){
+  return v === null || v === undefined || v === "" ? "-" : String(v);
+}
+
+function statusPill(status){
+  const s = String(status || "").toUpperCase();
+
+  if(s === "SENT"){
+    return `<span class="status-pill status-sent">SENT</span>`;
+  }
+  if(s === "PENDING"){
+    return `<span class="status-pill status-pending">PENDING</span>`;
+  }
+  if(s === "FAILED"){
+    return `<span class="status-pill status-failed">FAILED</span>`;
+  }
+
+  return `<span class="status-pill">${s || "UNKNOWN"}</span>`;
+}
+
+function typePill(type){
+  return `<span class="type-pill">${fmt(type)}</span>`;
+}
+
+async function loadReminders(){
+  const body = document.getElementById("remindersBody");
+  body.innerHTML = `<tr><td colspan="9" class="muted">Loading reminders...</td></tr>`;
+
+  const tenant = document.getElementById("tenantFilter").value.trim();
+  const status = document.getElementById("statusFilter").value.trim();
+  const reminderType = document.getElementById("typeFilter").value.trim();
+
+  const url = new URL("/admin/reminders/list", window.location.origin);
+
+  if(tenant) url.searchParams.set("tenant_id", tenant);
+  if(status) url.searchParams.set("status", status);
+  if(reminderType) url.searchParams.set("reminder_type", reminderType);
+
+  const res = await fetch(url.toString(), {
+    headers: adminHeaders()
+  });
+
+  const json = await res.json();
+
+  if(!json.ok){
+    body.innerHTML = `<tr><td colspan="9" class="muted">Failed to load reminders</td></tr>`;
+    return;
+  }
+
+  const items = json.items || [];
+  body.innerHTML = "";
+
+  if(items.length === 0){
+    body.innerHTML = `<tr><td colspan="9" class="muted">No reminder logs found</td></tr>`;
+    return;
+  }
+
+  for(const it of items){
+    const tr = document.createElement("tr");
+
+    tr.innerHTML = `
+      <td><b>${fmt(it.clinic_name)}</b></td>
+      <td><span class="muted">${fmt(it.tenant_id)}</span></td>
+      <td>
+        <div><b>${fmt(it.patient_name)}</b></div>
+        <div class="muted">${fmt(it.patient_mobile)}</div>
+      </td>
+      <td>${fmt(it.doctor_key)}</td>
+      <td>
+        <div>${fmt(it.appt_date)} ${fmt(it.appt_time)}</div>
+        <div class="muted">Appointment ID: ${fmt(it.appointment_id)}</div>
+      </td>
+      <td>${typePill(it.reminder_type)}</td>
+      <td>${statusPill(it.status)}</td>
+      <td>${fmt(it.sent_at)}</td>
+      <td>${fmt(it.error_text)}</td>
+    `;
+
+    body.appendChild(tr);
+  }
+}
+
+document.getElementById("tenantFilter").addEventListener("input", loadReminders);
+document.getElementById("statusFilter").addEventListener("change", loadReminders);
+document.getElementById("typeFilter").addEventListener("change", loadReminders);
+
+loadReminders();
+</script>
+
+</body>
+</html>

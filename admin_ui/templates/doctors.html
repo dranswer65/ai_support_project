@@ -1,0 +1,998 @@
+<!doctype html>
+<html lang="en" dir="ltr">
+<head>
+<meta charset="utf-8"/>
+<title>Doctor Management</title>
+
+<style>
+body{
+  font-family:Arial,sans-serif;
+  background:#f7f7f7;
+  margin:0;
+}
+
+header{
+  background:white;
+  border-bottom:1px solid #ddd;
+  padding:14px 18px;
+}
+
+.wrap{
+  max-width:1400px;
+  margin:auto;
+  padding:20px;
+}
+
+.card{
+  background:white;
+  border:1px solid #eee;
+  border-radius:10px;
+  padding:18px;
+  margin-bottom:18px;
+}
+
+.row{
+  display:grid;
+  grid-template-columns:1.2fr 280px 220px;
+  gap:12px;
+  margin-bottom:14px;
+}
+
+.form-grid{
+  display:grid;
+  grid-template-columns:1fr 1fr 1fr;
+  gap:12px;
+}
+
+.workload-grid{
+  display:grid;
+  grid-template-columns:repeat(auto-fill,minmax(260px,1fr));
+  gap:14px;
+}
+
+.workload-card{
+  border:1px solid #eee;
+  border-radius:10px;
+  padding:14px;
+  background:#fafafa;
+}
+
+.workload-title{
+  font-weight:700;
+}
+
+.workload-meta{
+  font-size:12px;
+  color:#666;
+}
+
+.workload-stats{
+  display:flex;
+  gap:14px;
+  margin-top:10px;
+}
+
+.stat{
+  font-size:18px;
+  font-weight:700;
+}
+
+.stat-label{
+  font-size:11px;
+  color:#666;
+}
+
+.actions{
+  margin-top:10px;
+  display:flex;
+  gap:6px;
+  flex-wrap:wrap;
+}
+
+.nav{
+  display:flex;
+  gap:8px;
+  flex-wrap:wrap;
+}
+
+button{
+  padding:8px 12px;
+  border-radius:6px;
+  border:1px solid #ccc;
+  background:white;
+  cursor:pointer;
+}
+
+button.primary{
+  background:#0077ff;
+  color:white;
+  border:none;
+}
+
+button.small{
+  font-size:12px;
+}
+
+button.info{
+  background:#eff6ff;
+  border-color:#93c5fd;
+  color:#1d4ed8;
+}
+
+button.warn{
+  background:#fff7ed;
+  border-color:#fdba74;
+  color:#9a3412;
+}
+
+button.danger{
+  background:#fef2f2;
+  border-color:#fca5a5;
+  color:#991b1b;
+}
+
+button.good{
+  background:#ecfdf3;
+  border-color:#86efac;
+  color:#166534;
+}
+
+table{
+  width:100%;
+  border-collapse:collapse;
+}
+
+th, td{
+  border:1px solid #eee;
+  padding:10px;
+}
+
+th{
+  background:#fafafa;
+}
+
+.muted{
+  color:#666;
+  font-size:12px;
+}
+
+.success{
+  color:#0a7f38;
+  font-size:13px;
+}
+
+.error{
+  color:#b42318;
+  font-size:13px;
+}
+
+.pill{
+  padding:4px 10px;
+  border-radius:999px;
+  font-size:12px;
+  border:1px solid #ccc;
+  font-weight:700;
+}
+
+.pill.active{
+  background:#ecfdf3;
+  border-color:#86efac;
+  color:#166534;
+}
+
+.pill.inactive{
+  background:#fef2f2;
+  border-color:#fca5a5;
+  color:#991b1b;
+}
+
+.modal-backdrop{
+  position:fixed;
+  inset:0;
+  background:rgba(0,0,0,.35);
+  display:none;
+  align-items:center;
+  justify-content:center;
+}
+
+.modal{
+  width:500px;
+  max-width:92vw;
+  background:white;
+  padding:20px;
+  border-radius:10px;
+}
+
+.hidden{
+  display:none !important;
+}
+
+.scope-box{
+  border:1px solid #dbeafe;
+  background:#eff6ff;
+  color:#1e3a8a;
+  border-radius:10px;
+  padding:12px;
+}
+
+html[dir="rtl"] body{
+  direction: rtl;
+}
+
+html[dir="rtl"] th,
+html[dir="rtl"] td,
+html[dir="rtl"] input,
+html[dir="rtl"] select,
+html[dir="rtl"] textarea,
+html[dir="rtl"] label,
+html[dir="rtl"] header,
+html[dir="rtl"] .workload-title,
+html[dir="rtl"] .workload-meta,
+html[dir="rtl"] .stat-label,
+html[dir="rtl"] .muted,
+html[dir="rtl"] h3{
+  text-align:right;
+}
+
+html[dir="rtl"] .nav,
+html[dir="rtl"] .actions,
+html[dir="rtl"] .workload-stats{
+  flex-direction:row-reverse;
+}
+
+@media (max-width:1100px){
+  .form-grid{
+    grid-template-columns:1fr;
+  }
+}
+</style>
+</head>
+
+<body>
+
+<header>
+  <b id="pageTitle">Doctor Management</b>
+</header>
+
+<div class="wrap">
+
+  <div class="card">
+    <div class="nav">
+      <button id="navAnalytics" onclick="openAnalytics()">Analytics</button>
+      <button id="navAppointments" onclick="openAppointments()">Appointments</button>
+      <button id="navCalendar" onclick="openCalendar()">Calendar</button>
+      <button id="navPatients" onclick="openPatients()">Patients</button>
+      <button id="navDoctors" onclick="openDoctors()">Doctors</button>
+      <button id="btnEnglish" onclick="switchLang('en')">English</button>
+      <button id="btnArabic" onclick="switchLang('ar')">العربية</button>
+    </div>
+  </div>
+
+  <div id="scopeCard" class="card hidden">
+    <div class="scope-box">
+      <div><b id="scopeTitle">Doctor Scoped Access</b></div>
+      <div id="scopeText" class="muted"></div>
+    </div>
+  </div>
+
+  <div class="card">
+    <h3 id="titleWorkload">Doctor Workload Today</h3>
+    <div id="workloadCards" class="workload-grid">
+      <div class="muted" id="loadingWorkload">Loading doctor workload...</div>
+    </div>
+  </div>
+
+  <div id="doctorFormCard" class="card">
+    <h3 id="titleAddUpdate">Add / Update Doctor</h3>
+
+    <div class="form-grid">
+
+      <div>
+        <label id="lblTenant">Clinic / Tenant</label>
+        <select id="tenantSelect"></select>
+      </div>
+
+      <div>
+        <label id="lblDoctorKey">Doctor Key</label>
+        <input id="doctorKey"/>
+      </div>
+
+      <div>
+        <label id="lblDoctorName">Doctor Name</label>
+        <input id="doctorName"/>
+      </div>
+
+      <div>
+        <label id="lblSpecialtyKey">Specialty Key</label>
+        <input id="specialtyKey"/>
+      </div>
+
+      <div>
+        <label id="lblSpecialtyLabel">Specialty Label</label>
+        <input id="specialtyLabel"/>
+      </div>
+
+      <div>
+        <label id="lblStatus">Status</label>
+        <select id="doctorActive">
+          <option value="true">Active</option>
+          <option value="false">Inactive</option>
+        </select>
+      </div>
+
+    </div>
+
+    <div style="margin-top:14px">
+      <button id="btnSaveDoctor" class="primary" onclick="saveDoctor()">Save Doctor</button>
+    </div>
+
+    <div id="msg" style="margin-top:10px"></div>
+  </div>
+
+  <div class="card">
+    <table>
+      <thead>
+        <tr>
+          <th id="thClinic">Clinic</th>
+          <th id="thDoctor">Doctor</th>
+          <th id="thDoctorKey">Doctor Key</th>
+          <th id="thSpecialty">Specialty</th>
+          <th id="thStatus">Status</th>
+          <th id="thUpdated">Updated</th>
+          <th id="thActions">Actions</th>
+        </tr>
+      </thead>
+
+      <tbody id="doctorsBody">
+        <tr>
+          <td colspan="7" class="muted" id="loadingDoctors">Loading doctors...</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+</div>
+
+<div id="scheduleBackdrop" class="modal-backdrop">
+  <div class="modal">
+
+    <h3 id="scheduleTitle">Doctor Daily Schedule</h3>
+
+    <div id="scheduleMeta" class="muted" style="margin-bottom:10px"></div>
+
+    <div style="margin-bottom:10px">
+      <label id="lblScheduleDate">Date</label>
+      <input id="scheduleDate" type="date"/>
+      <button id="btnLoadSchedule" onclick="loadDoctorSchedule()">Load</button>
+    </div>
+
+    <table>
+      <thead>
+        <tr>
+          <th id="thTime">Time</th>
+          <th id="thSchedStatus">Status</th>
+          <th id="thPatient">Patient</th>
+        </tr>
+      </thead>
+      <tbody id="scheduleBody">
+        <tr>
+          <td colspan="3" class="muted" id="selectDateText">Select date</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <div style="margin-top:10px">
+      <button id="btnCloseSchedule" onclick="closeDoctorSchedule()">Close</button>
+    </div>
+
+  </div>
+</div>
+
+<script>
+const qs = new URLSearchParams(location.search);
+const platformToken = qs.get("token") || "";
+const uiLang = (qs.get("lang") || "en").toLowerCase() === "ar" ? "ar" : "en";
+
+const accessMode = "{{ access_mode or '' }}";
+const isPlatformAdmin = "{{ 'true' if is_platform_admin else 'false' }}" === "true";
+const scopeTenantId = "{{ scope_tenant_id or '' }}";
+const scopeDoctorKey = "{{ scope_doctor_key or '' }}";
+const scopeRoleCode = "{{ scope_role_code or '' }}";
+const scopeFullName = "{{ scope_full_name or '' }}";
+const scopeEmail = "{{ scope_email or '' }}";
+
+let scheduleTenant = null;
+let scheduleDoctor = null;
+
+const I18N = {
+  en: {
+    pageTitle: "Doctor Management",
+    navAnalytics: "Analytics",
+    navAppointments: "Appointments",
+    navCalendar: "Calendar",
+    navPatients: "Patients",
+    navDoctors: "Doctors",
+    btnEnglish: "English",
+    btnArabic: "العربية",
+
+    titleWorkload: "Doctor Workload Today",
+    loadingWorkload: "Loading doctor workload...",
+    failedWorkload: "Failed loading workload",
+    noDoctorsFound: "No doctors found",
+    today: "Today",
+    upcoming: "Upcoming",
+    next: "Next",
+    viewBookings: "View Bookings",
+    schedule: "Schedule",
+
+    titleAddUpdate: "Add / Update Doctor",
+    lblTenant: "Clinic / Tenant",
+    lblDoctorKey: "Doctor Key",
+    lblDoctorName: "Doctor Name",
+    lblSpecialtyKey: "Specialty Key",
+    lblSpecialtyLabel: "Specialty Label",
+    lblStatus: "Status",
+    active: "Active",
+    inactive: "Inactive",
+    btnSaveDoctor: "Save Doctor",
+
+    thClinic: "Clinic",
+    thDoctor: "Doctor",
+    thDoctorKey: "Doctor Key",
+    thSpecialty: "Specialty",
+    thStatus: "Status",
+    thUpdated: "Updated",
+    thActions: "Actions",
+    loadingDoctors: "Loading doctors...",
+    noDoctorsTable: "No doctors found",
+
+    bookings: "Bookings",
+    scheduleTitle: "Doctor Daily Schedule",
+    lblScheduleDate: "Date",
+    btnLoadSchedule: "Load",
+    thTime: "Time",
+    thSchedStatus: "Status",
+    thPatient: "Patient",
+    selectDateText: "Select date",
+    btnCloseSchedule: "Close",
+    failedSchedule: "Failed loading schedule",
+    noSlots: "No slots",
+
+    selectClinic: "Select clinic",
+    saveDoctorSuccess: "Doctor saved",
+    saveDoctorFailed: "Save failed",
+    tenantRequired: "Tenant is required",
+    doctorKeyRequired: "Doctor key is required",
+    doctorNameRequired: "Doctor name is required",
+
+    activeUpper: "ACTIVE",
+    inactiveUpper: "INACTIVE",
+
+    doctorScopedTitle: "Doctor Scoped Access",
+    doctorScopedText: "You are viewing only your own doctor record and schedule.",
+    clinicLabel: "Clinic",
+    roleLabel: "Role",
+    doctorLabel: "Doctor",
+    userLabel: "User"
+  },
+  ar: {
+    pageTitle: "إدارة الأطباء",
+    navAnalytics: "التحليلات",
+    navAppointments: "المواعيد",
+    navCalendar: "التقويم",
+    navPatients: "المرضى",
+    navDoctors: "الأطباء",
+    btnEnglish: "English",
+    btnArabic: "العربية",
+
+    titleWorkload: "عبء عمل الأطباء اليوم",
+    loadingWorkload: "جاري تحميل عبء العمل...",
+    failedWorkload: "فشل تحميل عبء العمل",
+    noDoctorsFound: "لا يوجد أطباء",
+    today: "اليوم",
+    upcoming: "القادم",
+    next: "التالي",
+    viewBookings: "عرض الحجوزات",
+    schedule: "الجدول",
+
+    titleAddUpdate: "إضافة / تحديث طبيب",
+    lblTenant: "العيادة",
+    lblDoctorKey: "رمز الطبيب",
+    lblDoctorName: "اسم الطبيب",
+    lblSpecialtyKey: "رمز التخصص",
+    lblSpecialtyLabel: "اسم التخصص",
+    lblStatus: "الحالة",
+    active: "نشط",
+    inactive: "غير نشط",
+    btnSaveDoctor: "حفظ الطبيب",
+
+    thClinic: "العيادة",
+    thDoctor: "الطبيب",
+    thDoctorKey: "رمز الطبيب",
+    thSpecialty: "التخصص",
+    thStatus: "الحالة",
+    thUpdated: "آخر تحديث",
+    thActions: "الإجراءات",
+    loadingDoctors: "جاري تحميل الأطباء...",
+    noDoctorsTable: "لا يوجد أطباء",
+
+    bookings: "الحجوزات",
+    scheduleTitle: "الجدول اليومي للطبيب",
+    lblScheduleDate: "التاريخ",
+    btnLoadSchedule: "تحميل",
+    thTime: "الوقت",
+    thSchedStatus: "الحالة",
+    thPatient: "المريض",
+    selectDateText: "اختر التاريخ",
+    btnCloseSchedule: "إغلاق",
+    failedSchedule: "فشل تحميل الجدول",
+    noSlots: "لا توجد مواعيد",
+
+    selectClinic: "اختر العيادة",
+    saveDoctorSuccess: "تم حفظ الطبيب",
+    saveDoctorFailed: "فشل الحفظ",
+    tenantRequired: "العيادة مطلوبة",
+    doctorKeyRequired: "رمز الطبيب مطلوب",
+    doctorNameRequired: "اسم الطبيب مطلوب",
+
+    activeUpper: "نشط",
+    inactiveUpper: "غير نشط",
+
+    doctorScopedTitle: "وصول مقيّد للطبيب",
+    doctorScopedText: "أنت تشاهد فقط بيانات الطبيب الخاصة بك وجدولك.",
+    clinicLabel: "العيادة",
+    roleLabel: "الدور",
+    doctorLabel: "الطبيب",
+    userLabel: "المستخدم"
+  }
+};
+
+function t(key){
+  return (I18N[uiLang] && I18N[uiLang][key]) || key;
+}
+
+function adminHeaders(){
+  return platformToken ? { "X-Admin-Token": platformToken } : {};
+}
+
+function pageUrl(path){
+  const params = new URLSearchParams();
+  if (platformToken) params.set("token", platformToken);
+  if (uiLang) params.set("lang", uiLang);
+
+  if (accessMode === "doctor_scoped") {
+    if (scopeTenantId) params.set("tenant_id", scopeTenantId);
+    if (scopeDoctorKey) params.set("doctor_key", scopeDoctorKey);
+  }
+
+  const qsText = params.toString();
+  return qsText ? `${path}?${qsText}` : path;
+}
+
+function applyLanguage(){
+  document.documentElement.setAttribute("lang", uiLang);
+  document.documentElement.setAttribute("dir", uiLang === "ar" ? "rtl" : "ltr");
+
+  const ids = [
+    "pageTitle",
+    "navAnalytics",
+    "navAppointments",
+    "navCalendar",
+    "navPatients",
+    "navDoctors",
+    "btnEnglish",
+    "btnArabic",
+    "titleWorkload",
+    "loadingWorkload",
+    "titleAddUpdate",
+    "lblTenant",
+    "lblDoctorKey",
+    "lblDoctorName",
+    "lblSpecialtyKey",
+    "lblSpecialtyLabel",
+    "lblStatus",
+    "btnSaveDoctor",
+    "thClinic",
+    "thDoctor",
+    "thDoctorKey",
+    "thSpecialty",
+    "thStatus",
+    "thUpdated",
+    "thActions",
+    "loadingDoctors",
+    "scheduleTitle",
+    "lblScheduleDate",
+    "btnLoadSchedule",
+    "thTime",
+    "thSchedStatus",
+    "thPatient",
+    "selectDateText",
+    "btnCloseSchedule"
+  ];
+
+  for(const id of ids){
+    const el = document.getElementById(id);
+    if(el){
+      el.textContent = t(id);
+    }
+  }
+
+  document.querySelector('#doctorActive option[value="true"]').textContent = t("active");
+  document.querySelector('#doctorActive option[value="false"]').textContent = t("inactive");
+
+  if(accessMode === "doctor_scoped"){
+    document.getElementById("scopeTitle").textContent = t("doctorScopedTitle");
+    document.getElementById("scopeText").textContent =
+      `${t("doctorScopedText")} ${t("clinicLabel")}: ${scopeTenantId || "-"} • ${t("doctorLabel")}: ${scopeDoctorKey || "-"} • ${t("roleLabel")}: ${scopeRoleCode || "-"} • ${t("userLabel")}: ${scopeFullName || scopeEmail || "-"}`;
+  }
+}
+
+function setMsg(text, kind="success"){
+  const el = document.getElementById("msg");
+  el.className = kind === "error" ? "error" : "success";
+  el.textContent = text || "";
+}
+
+function openAnalytics(){
+  window.location.href = pageUrl("/admin/analytics");
+}
+
+function openAppointments(){
+  window.location.href = pageUrl("/admin/appointments");
+}
+
+function openCalendar(){
+  window.location.href = pageUrl("/admin/calendar");
+}
+
+function openPatients(){
+  window.location.href = pageUrl("/admin/patients");
+}
+
+function openDoctors(){
+  window.location.href = pageUrl("/admin/doctors");
+}
+
+function switchLang(lang){
+  const params = new URLSearchParams(window.location.search);
+  params.set("lang", lang);
+  if(platformToken) params.set("token", platformToken);
+
+  if (accessMode === "doctor_scoped") {
+    if (scopeTenantId) params.set("tenant_id", scopeTenantId);
+    if (scopeDoctorKey) params.set("doctor_key", scopeDoctorKey);
+  }
+
+  window.location.href = `${window.location.pathname}?${params.toString()}`;
+}
+
+function applyRoleMode(){
+  if(accessMode === "doctor_scoped"){
+    document.getElementById("scopeCard").classList.remove("hidden");
+    document.getElementById("doctorFormCard").classList.add("hidden");
+  } else {
+    document.getElementById("scopeCard").classList.add("hidden");
+    document.getElementById("doctorFormCard").classList.remove("hidden");
+  }
+}
+
+async function loadTenants(){
+  const sel = document.getElementById("tenantSelect");
+
+  if(accessMode === "doctor_scoped"){
+    sel.innerHTML = `<option value="${scopeTenantId}">${scopeTenantId}</option>`;
+    sel.value = scopeTenantId;
+    sel.disabled = true;
+    return;
+  }
+
+  const res = await fetch("/admin/appointments/tenants", {
+    headers: adminHeaders(),
+    credentials: "same-origin"
+  });
+
+  const json = await res.json();
+  sel.innerHTML = `<option value="">${t("selectClinic")}</option>`;
+
+  if(!json.ok) return;
+
+  for(const it of (json.items || [])){
+    const opt = document.createElement("option");
+    opt.value = it.tenant_id || "";
+    opt.textContent = `${it.clinic_name || it.tenant_id} (${it.tenant_id})`;
+    sel.appendChild(opt);
+  }
+
+  const tenantFromUrl = qs.get("tenant_id") || "";
+  if(tenantFromUrl){
+    sel.value = tenantFromUrl;
+  }
+}
+
+async function loadDoctorWorkload(){
+  let tenant = "";
+  if(accessMode === "doctor_scoped"){
+    tenant = scopeTenantId;
+  } else {
+    tenant = document.getElementById("tenantSelect").value || qs.get("tenant_id") || "alnoor_clinic";
+  }
+
+  const res = await fetch(
+    `/admin/doctors/workload/cards?tenant_id=${encodeURIComponent(tenant)}`,
+    {
+      headers: adminHeaders(),
+      credentials: "same-origin"
+    }
+  );
+
+  const json = await res.json();
+  const box = document.getElementById("workloadCards");
+
+  if(!json.ok){
+    box.innerHTML = `<div class="muted">${t("failedWorkload")}</div>`;
+    return;
+  }
+
+  let items = json.items || [];
+
+  if(accessMode === "doctor_scoped"){
+    items = items.filter(d => String(d.doctor_key || "") === String(scopeDoctorKey || ""));
+  }
+
+  box.innerHTML = "";
+
+  if(items.length === 0){
+    box.innerHTML = `<div class="muted">${t("noDoctorsFound")}</div>`;
+    return;
+  }
+
+  for(const d of items){
+    const el = document.createElement("div");
+    el.className = "workload-card";
+
+    el.innerHTML = `
+      <div class="workload-title">${d.doctor_name || d.doctor_key}</div>
+      <div class="workload-meta">${d.specialty_label || ""}</div>
+
+      <div class="workload-stats">
+        <div>
+          <div class="stat">${d.today_appointments || 0}</div>
+          <div class="stat-label">${t("today")}</div>
+        </div>
+
+        <div>
+          <div class="stat">${d.upcoming_appointments || 0}</div>
+          <div class="stat-label">${t("upcoming")}</div>
+        </div>
+      </div>
+
+      <div class="muted" style="margin-top:8px">
+        ${t("next")}: ${d.next_appt_date || "-"} ${d.next_appt_time || ""}
+      </div>
+
+      <div class="actions">
+        <button class="small info"
+        onclick="openDoctorBookings('${d.tenant_id}','${d.doctor_key}')">
+        ${t("viewBookings")}
+        </button>
+
+        <button class="small warn"
+        onclick="openDoctorSchedule('${d.tenant_id}','${d.doctor_key}')">
+        ${t("schedule")}
+        </button>
+      </div>
+    `;
+
+    box.appendChild(el);
+  }
+}
+
+function openDoctorBookings(tenant, doctor){
+  const params = new URLSearchParams();
+  if (platformToken) params.set("token", platformToken);
+  params.set("lang", uiLang);
+  params.set("tenant_id", tenant);
+  params.set("doctor_key", doctor);
+
+  window.open(`/admin/appointments?${params.toString()}`, "_blank");
+}
+
+function openDoctorSchedule(tenant, doctor){
+  scheduleTenant = tenant;
+  scheduleDoctor = doctor;
+
+  document.getElementById("scheduleBackdrop").style.display = "flex";
+  document.getElementById("scheduleMeta").textContent = `${doctor} • ${tenant}`;
+  document.getElementById("scheduleDate").value = new Date().toISOString().slice(0,10);
+
+  loadDoctorSchedule();
+}
+
+function closeDoctorSchedule(){
+  document.getElementById("scheduleBackdrop").style.display = "none";
+}
+
+async function loadDoctorSchedule(){
+  const date = document.getElementById("scheduleDate").value;
+  const body = document.getElementById("scheduleBody");
+
+  const res = await fetch(
+    `/admin/calendar/slots?tenant_id=${encodeURIComponent(scheduleTenant)}&doctor_key=${encodeURIComponent(scheduleDoctor)}&date_from=${encodeURIComponent(date)}&date_to=${encodeURIComponent(date)}`,
+    {
+      headers: adminHeaders(),
+      credentials: "same-origin"
+    }
+  );
+
+  const json = await res.json();
+  body.innerHTML = "";
+
+  if(!json.ok){
+    body.innerHTML = `<tr><td colspan="3">${t("failedSchedule")}</td></tr>`;
+    return;
+  }
+
+  const items = json.slots || [];
+
+  if(items.length === 0){
+    body.innerHTML = `<tr><td colspan="3">${t("noSlots")}</td></tr>`;
+    return;
+  }
+
+  for(const s of items){
+    const tr = document.createElement("tr");
+    tr.innerHTML = `
+      <td>${(s.slot_time || "").slice(0,5)}</td>
+      <td>${s.status || "-"}</td>
+      <td>-</td>
+    `;
+    body.appendChild(tr);
+  }
+}
+
+async function loadDoctors(){
+  let tenant = "";
+  let url = "";
+
+  if(accessMode === "doctor_scoped"){
+    tenant = scopeTenantId;
+    url = `/admin/doctors/platform/list?tenant_id=${encodeURIComponent(tenant)}`;
+  } else {
+    tenant = document.getElementById("tenantSelect").value || "";
+    url = tenant
+      ? `/admin/doctors/platform/list?tenant_id=${encodeURIComponent(tenant)}`
+      : `/admin/doctors/platform/list`;
+  }
+
+  const res = await fetch(url, {
+    headers: adminHeaders(),
+    credentials: "same-origin"
+  });
+  const json = await res.json();
+
+  const body = document.getElementById("doctorsBody");
+  body.innerHTML = "";
+
+  if(!json.ok){
+    body.innerHTML = `<tr><td colspan="7" class="muted">${t("loadingDoctors")}</td></tr>`;
+    return;
+  }
+
+  let items = json.items || [];
+
+  if(accessMode === "doctor_scoped"){
+    items = items.filter(it => String(it.doctor_key || "") === String(scopeDoctorKey || ""));
+  }
+
+  if(items.length === 0){
+    body.innerHTML = `<tr><td colspan="7" class="muted">${t("noDoctorsTable")}</td></tr>`;
+    return;
+  }
+
+  for(const it of items){
+    const tr = document.createElement("tr");
+
+    tr.innerHTML = `
+      <td>${it.clinic_name || "-"}</td>
+      <td>${it.doctor_name || "-"}</td>
+      <td>${it.doctor_key || "-"}</td>
+      <td>${it.specialty_label || "-"}</td>
+      <td>${it.is_active
+        ? `<span class="pill active">${t("activeUpper")}</span>`
+        : `<span class="pill inactive">${t("inactiveUpper")}</span>`
+      }</td>
+      <td>${it.updated_at || "-"}</td>
+      <td>
+        <button class="small info"
+        onclick="openDoctorBookings('${it.tenant_id}','${it.doctor_key}')">
+        ${t("bookings")}
+        </button>
+
+        <button class="small warn"
+        onclick="openDoctorSchedule('${it.tenant_id}','${it.doctor_key}')">
+        ${t("schedule")}
+        </button>
+      </td>
+    `;
+
+    body.appendChild(tr);
+  }
+}
+
+async function saveDoctor(){
+  if(accessMode === "doctor_scoped"){
+    setMsg(t("saveDoctorFailed"), "error");
+    return;
+  }
+
+  const tenant_id = document.getElementById("tenantSelect").value.trim();
+  const doctor_key = document.getElementById("doctorKey").value.trim();
+  const doctor_name = document.getElementById("doctorName").value.trim();
+  const specialty_key = document.getElementById("specialtyKey").value.trim();
+  const specialty_label = document.getElementById("specialtyLabel").value.trim();
+  const is_active = document.getElementById("doctorActive").value === "true";
+
+  if(!tenant_id){
+    setMsg(t("tenantRequired"), "error");
+    return;
+  }
+  if(!doctor_key){
+    setMsg(t("doctorKeyRequired"), "error");
+    return;
+  }
+  if(!doctor_name){
+    setMsg(t("doctorNameRequired"), "error");
+    return;
+  }
+
+  const res = await fetch("/admin/doctors/platform/upsert", {
+    method: "POST",
+    headers: Object.assign({"Content-Type":"application/json"}, adminHeaders()),
+    credentials: "same-origin",
+    body: JSON.stringify({
+      tenant_id,
+      doctor_key,
+      doctor_name,
+      specialty_key: specialty_key || null,
+      specialty_label: specialty_label || null,
+      is_active
+    })
+  });
+
+  const json = await res.json();
+
+  if(!json.ok){
+    setMsg(`${t("saveDoctorFailed")}: ${json.detail || "unknown"}`, "error");
+    return;
+  }
+
+  setMsg(t("saveDoctorSuccess"), "success");
+  await loadDoctorWorkload();
+  await loadDoctors();
+}
+
+document.getElementById("tenantSelect").addEventListener("change", async function(){
+  if(accessMode === "doctor_scoped"){
+    return;
+  }
+  await loadDoctorWorkload();
+  await loadDoctors();
+});
+
+async function init(){
+  applyRoleMode();
+  applyLanguage();
+  await loadTenants();
+
+  if(accessMode === "doctor_scoped"){
+    document.getElementById("tenantSelect").value = scopeTenantId || "";
+  }
+
+  await loadDoctorWorkload();
+  await loadDoctors();
+}
+
+init();
+</script>
+</body>
+</html>

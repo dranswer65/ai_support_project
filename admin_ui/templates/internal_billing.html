@@ -1,0 +1,1009 @@
+<!doctype html>
+<html lang="en" dir="ltr">
+<head>
+<meta charset="utf-8"/>
+<title>Internal Billing</title>
+
+<style>
+body{
+  font-family:Arial,sans-serif;
+  background:#f7f7f7;
+  margin:0;
+}
+header{
+  background:white;
+  border-bottom:1px solid #ddd;
+  padding:14px 18px;
+}
+.wrap{
+  max-width:1400px;
+  margin:auto;
+  padding:20px;
+}
+.card{
+  background:white;
+  border:1px solid #eee;
+  border-radius:10px;
+  padding:18px;
+  margin-bottom:18px;
+}
+.row{
+  display:grid;
+  grid-template-columns:1fr 220px 220px 220px;
+  gap:12px;
+  margin-bottom:14px;
+}
+.row-2{
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  gap:18px;
+}
+input, select, textarea{
+  width:100%;
+  padding:8px;
+  box-sizing:border-box;
+}
+button{
+  padding:8px 12px;
+  border-radius:6px;
+  border:1px solid #ccc;
+  background:white;
+  cursor:pointer;
+}
+button.primary{
+  background:#0077ff;
+  color:white;
+  border:none;
+}
+button.good{
+  background:#ecfdf3;
+  border-color:#86efac;
+  color:#166534;
+}
+button.warn{
+  background:#fff7ed;
+  border-color:#fdba74;
+  color:#9a3412;
+}
+button.info{
+  background:#eff6ff;
+  border-color:#93c5fd;
+  color:#1d4ed8;
+}
+button.small{
+  font-size:12px;
+}
+table{
+  width:100%;
+  border-collapse:collapse;
+}
+th, td{
+  border:1px solid #eee;
+  padding:10px;
+  text-align:left;
+  vertical-align:top;
+}
+th{
+  background:#fafafa;
+}
+.muted{
+  color:#666;
+  font-size:12px;
+}
+.success{
+  color:#0a7f38;
+  font-size:13px;
+}
+.error{
+  color:#b42318;
+  font-size:13px;
+}
+.stat-grid{
+  display:grid;
+  grid-template-columns:repeat(5,1fr);
+  gap:12px;
+}
+.stat-box{
+  background:#fafafa;
+  border:1px solid #eee;
+  border-radius:10px;
+  padding:14px;
+}
+.stat-label{
+  color:#666;
+  font-size:12px;
+}
+.stat-value{
+  font-size:26px;
+  font-weight:700;
+}
+.actions{
+  display:flex;
+  gap:8px;
+  flex-wrap:wrap;
+}
+html[dir="rtl"] body{
+  direction: rtl;
+}
+html[dir="rtl"] th,
+html[dir="rtl"] td,
+html[dir="rtl"] input,
+html[dir="rtl"] select,
+html[dir="rtl"] label,
+html[dir="rtl"] .stat-label,
+html[dir="rtl"] .stat-value,
+html[dir="rtl"] h3,
+html[dir="rtl"] header{
+  text-align:right;
+}
+html[dir="rtl"] .actions{
+  justify-content:flex-start;
+  flex-direction:row-reverse;
+}
+@media (max-width:1100px){
+  .row, .row-2, .stat-grid{
+    grid-template-columns:1fr;
+  }
+}
+</style>
+</head>
+
+<body>
+
+<header>
+  <b id="pageTitle">Reception Billing</b>
+</header>
+
+<div class="wrap">
+
+  <div class="card">
+    <div class="actions">
+      <button id="navAppointments" onclick="openAppointments()">Appointments</button>
+      <button id="navPatients" onclick="openPatients()">Patients</button>
+      <button id="navAnalytics" onclick="openAnalytics()">Analytics</button>
+      <button id="navInternalBilling" class="primary" onclick="openBillingPage()">Internal Billing</button>
+      <button onclick="switchLang('en')">English</button>
+      <button onclick="switchLang('ar')">العربية</button>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="row">
+      <div>
+        <label id="lblTenant">Tenant</label>
+        <input id="tenantId" value="alnoor_clinic"/>
+      </div>
+      <div>
+        <label id="lblPatientId">Patient ID</label>
+        <input id="patientId" placeholder="PAT-001"/>
+      </div>
+      <div>
+        <label id="lblAppointmentId">Appointment ID</label>
+        <input id="appointmentId" placeholder="1"/>
+      </div>
+      <div style="display:flex;align-items:end;">
+        <button id="btnCreateBillingAccount" class="primary" onclick="createBillingAccount()">Create Billing Account</button>
+      </div>
+    </div>
+
+    <div class="row">
+      <div>
+        <label id="lblLoadExistingBillingAccount">Load Existing Billing Account</label>
+        <input id="existingAccountId" placeholder="Enter billing account id, e.g. 3"/>
+      </div>
+      <div style="display:flex;align-items:end;">
+        <button id="btnLoadAccount" onclick="loadExistingAccount()">Load Account</button>
+      </div>
+      <div></div>
+      <div></div>
+    </div>
+
+    <div id="msg"></div>
+  </div>
+
+  <div class="card">
+    <div class="stat-grid">
+      <div class="stat-box">
+        <div id="statLblBillingAccount" class="stat-label">Billing Account</div>
+        <div id="statAccountId" class="stat-value">-</div>
+      </div>
+      <div class="stat-box">
+        <div id="statLblSubtotal" class="stat-label">Subtotal</div>
+        <div id="statSubtotal" class="stat-value">0.00</div>
+      </div>
+      <div class="stat-box">
+        <div id="statLblPatientDue" class="stat-label">Patient Due</div>
+        <div id="statDue" class="stat-value">0.00</div>
+      </div>
+      <div class="stat-box">
+        <div id="statLblPaid" class="stat-label">Paid</div>
+        <div id="statPaid" class="stat-value">0.00</div>
+      </div>
+      <div class="stat-box">
+        <div id="statLblBalance" class="stat-label">Balance</div>
+        <div id="statBalance" class="stat-value">0.00</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="row-2">
+
+    <div class="card">
+      <h3 id="sectionAddCharge">Add Charge</h3>
+      <div class="row" style="grid-template-columns:1fr 160px;">
+        <div>
+          <label id="lblCatalogItem">Catalog Item</label>
+          <select id="itemCode"></select>
+        </div>
+        <div>
+          <label id="lblQuantity">Quantity</label>
+          <input id="itemQty" type="number" step="1" value="1"/>
+        </div>
+      </div>
+
+      <div class="actions">
+        <button id="btnAddItem" class="good" onclick="addItem()">Add Item</button>
+        <button id="btnReloadCatalog" class="info" onclick="loadCatalog()">Reload Catalog</button>
+        <button id="btnReloadAccount1" onclick="loadAccount()">Reload Account</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <h3 id="sectionCollectPayment">Collect Payment</h3>
+      <div class="row" style="grid-template-columns:1fr 180px 180px;">
+        <div>
+          <label id="lblAmount">Amount</label>
+          <input id="payAmount" type="number" step="0.01" placeholder="100"/>
+        </div>
+        <div>
+          <label id="lblMethod">Method</label>
+          <select id="payMethod">
+            <option value="CASH">CASH</option>
+            <option value="CARD">CARD</option>
+            <option value="BANK_TRANSFER">BANK_TRANSFER</option>
+            <option value="ONLINE">ONLINE</option>
+          </select>
+        </div>
+        <div>
+          <label id="lblReference">Reference</label>
+          <input id="payRef" placeholder="FRONTDESK-001"/>
+        </div>
+      </div>
+
+      <div class="actions">
+        <button id="btnAddPayment" class="warn" onclick="addPayment()">Add Payment</button>
+        <button id="btnCreateInvoice" onclick="createInvoice()">Create Invoice</button>
+      </div>
+    </div>
+
+  </div>
+
+  <div class="card">
+    <h3 id="sectionItems">Items</h3>
+    <table>
+      <thead>
+        <tr>
+          <th id="thItemCode">Code</th>
+          <th id="thItemName">Name</th>
+          <th id="thItemDept">Dept</th>
+          <th id="thItemQty">Qty</th>
+          <th id="thItemUnitPrice">Unit Price</th>
+          <th id="thItemPatientAmount">Patient Amount</th>
+          <th id="thItemStatus">Status</th>
+        </tr>
+      </thead>
+      <tbody id="itemsBody">
+        <tr><td colspan="7" class="muted">No items loaded</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="row-2">
+
+    <div class="card">
+      <h3 id="sectionPayments">Payments</h3>
+      <table>
+        <thead>
+          <tr>
+            <th id="thPayAmount">Amount</th>
+            <th id="thPayMethod">Method</th>
+            <th id="thPayReference">Reference</th>
+            <th id="thPayPaidAt">Paid At</th>
+          </tr>
+        </thead>
+        <tbody id="paymentsBody">
+          <tr><td colspan="4" class="muted">No payments loaded</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="card">
+      <h3 id="sectionInvoices">Invoices</h3>
+      <table>
+        <thead>
+          <tr>
+            <th id="thInvoiceNumber">Invoice #</th>
+            <th id="thInvoiceStatus">Status</th>
+            <th id="thInvoiceTotal">Total</th>
+            <th id="thInvoiceIssued">Issued</th>
+            <th id="thInvoiceAction">Action</th>
+          </tr>
+        </thead>
+        <tbody id="invoicesBody">
+          <tr><td colspan="5" class="muted">No invoices loaded</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+  </div>
+
+</div>
+
+<script>
+const qs = new URLSearchParams(location.search);
+const token = qs.get("token") || "";
+const uiLang = (qs.get("lang") || "en").toLowerCase() === "ar" ? "ar" : "en";
+
+const prefillTenantId = qs.get("tenant_id") || "";
+const prefillPatientId = qs.get("patient_id") || "";
+const prefillAppointmentId = qs.get("appointment_id") || "";
+const prefillBillingAccountId = qs.get("billing_account_id") || "";
+
+let currentBillingAccountId = null;
+
+const I18N = {
+  en: {
+    pageTitle: "Reception Billing",
+    navAppointments: "Appointments",
+    navPatients: "Patients",
+    navAnalytics: "Analytics",
+    navInternalBilling: "Internal Billing",
+
+    lblTenant: "Tenant",
+    lblPatientId: "Patient ID",
+    lblAppointmentId: "Appointment ID",
+    btnCreateBillingAccount: "Create Billing Account",
+    lblLoadExistingBillingAccount: "Load Existing Billing Account",
+    btnLoadAccount: "Load Account",
+
+    statLblBillingAccount: "Billing Account",
+    statLblSubtotal: "Subtotal",
+    statLblPatientDue: "Patient Due",
+    statLblPaid: "Paid",
+    statLblBalance: "Balance",
+
+    sectionAddCharge: "Add Charge",
+    lblCatalogItem: "Catalog Item",
+    lblQuantity: "Quantity",
+    btnAddItem: "Add Item",
+    btnReloadCatalog: "Reload Catalog",
+    btnReloadAccount1: "Reload Account",
+
+    sectionCollectPayment: "Collect Payment",
+    lblAmount: "Amount",
+    lblMethod: "Method",
+    lblReference: "Reference",
+    btnAddPayment: "Add Payment",
+    btnCreateInvoice: "Create Invoice",
+
+    sectionItems: "Items",
+    sectionPayments: "Payments",
+    sectionInvoices: "Invoices",
+
+    thItemCode: "Code",
+    thItemName: "Name",
+    thItemDept: "Dept",
+    thItemQty: "Qty",
+    thItemUnitPrice: "Unit Price",
+    thItemPatientAmount: "Patient Amount",
+    thItemStatus: "Status",
+
+    thPayAmount: "Amount",
+    thPayMethod: "Method",
+    thPayReference: "Reference",
+    thPayPaidAt: "Paid At",
+
+    thInvoiceNumber: "Invoice #",
+    thInvoiceStatus: "Status",
+    thInvoiceTotal: "Total",
+    thInvoiceIssued: "Issued",
+    thInvoiceAction: "Action",
+    btnPrintInvoice: "Print",
+
+    msgChargeAdded: "Charge added",
+    msgPaymentAdded: "Payment added",
+    msgEnterBillingAccountFirst: "Enter billing account id first",
+    msgCreateOrLoadFirst: "Create or load a billing account first",
+    msgSelectCatalogFirst: "Select a catalog item first",
+    msgLoadedExisting: "Loaded existing billing account",
+    msgAutoCreated: "Billing account auto-created",
+    msgAutoFailed: "Auto billing setup failed",
+    msgCreated: "Billing account created",
+    msgInvoiceCreated: "Invoice created",
+    msgLoadFailed: "Load account failed",
+    msgCreateFailed: "Create billing account failed",
+    msgAddItemFailed: "Add item failed",
+    msgAddPaymentFailed: "Add payment failed",
+    msgCreateInvoiceFailed: "Create invoice failed"
+  },
+
+  ar: {
+    pageTitle: "فوترة الاستقبال",
+    navAppointments: "المواعيد",
+    navPatients: "المرضى",
+    navAnalytics: "التحليلات",
+    navInternalBilling: "الفوترة الداخلية",
+
+    lblTenant: "العيادة",
+    lblPatientId: "رقم المريض",
+    lblAppointmentId: "رقم الموعد",
+    btnCreateBillingAccount: "إنشاء حساب فوترة",
+    lblLoadExistingBillingAccount: "تحميل حساب فوترة موجود",
+    btnLoadAccount: "تحميل الحساب",
+
+    statLblBillingAccount: "حساب الفوترة",
+    statLblSubtotal: "الإجمالي الفرعي",
+    statLblPatientDue: "المبلغ على المريض",
+    statLblPaid: "المدفوع",
+    statLblBalance: "المتبقي",
+
+    sectionAddCharge: "إضافة بند",
+    lblCatalogItem: "البند",
+    lblQuantity: "الكمية",
+    btnAddItem: "إضافة بند",
+    btnReloadCatalog: "إعادة تحميل الدليل",
+    btnReloadAccount1: "إعادة تحميل الحساب",
+
+    sectionCollectPayment: "تحصيل الدفعة",
+    lblAmount: "المبلغ",
+    lblMethod: "الطريقة",
+    lblReference: "المرجع",
+    btnAddPayment: "إضافة دفعة",
+    btnCreateInvoice: "إنشاء فاتورة",
+
+    sectionItems: "البنود",
+    sectionPayments: "المدفوعات",
+    sectionInvoices: "الفواتير",
+
+    thItemCode: "الرمز",
+    thItemName: "الاسم",
+    thItemDept: "القسم",
+    thItemQty: "الكمية",
+    thItemUnitPrice: "سعر الوحدة",
+    thItemPatientAmount: "مبلغ المريض",
+    thItemStatus: "الحالة",
+
+    thPayAmount: "المبلغ",
+    thPayMethod: "الطريقة",
+    thPayReference: "المرجع",
+    thPayPaidAt: "وقت الدفع",
+
+    thInvoiceNumber: "رقم الفاتورة",
+    thInvoiceStatus: "الحالة",
+    thInvoiceTotal: "الإجمالي",
+    thInvoiceIssued: "تاريخ الإصدار",
+    thInvoiceAction: "الإجراء",
+    btnPrintInvoice: "طباعة",
+
+    msgChargeAdded: "تمت إضافة البند",
+    msgPaymentAdded: "تمت إضافة الدفعة",
+    msgEnterBillingAccountFirst: "أدخل رقم حساب الفوترة أولاً",
+    msgCreateOrLoadFirst: "أنشئ أو حمّل حساب فوترة أولاً",
+    msgSelectCatalogFirst: "اختر بندًا من الدليل أولاً",
+    msgLoadedExisting: "تم تحميل حساب الفوترة الحالي",
+    msgAutoCreated: "تم إنشاء حساب الفوترة تلقائيًا",
+    msgAutoFailed: "فشل إعداد الفوترة التلقائي",
+    msgCreated: "تم إنشاء حساب الفوترة",
+    msgInvoiceCreated: "تم إنشاء الفاتورة",
+    msgLoadFailed: "فشل تحميل الحساب",
+    msgCreateFailed: "فشل إنشاء حساب الفوترة",
+    msgAddItemFailed: "فشل إضافة البند",
+    msgAddPaymentFailed: "فشل إضافة الدفعة",
+    msgCreateInvoiceFailed: "فشل إنشاء الفاتورة"
+  }
+};
+
+function t(key){
+  return (I18N[uiLang] && I18N[uiLang][key]) || key;
+}
+
+function applyLanguage(){
+  document.documentElement.setAttribute("lang", uiLang);
+  document.documentElement.setAttribute("dir", uiLang === "ar" ? "rtl" : "ltr");
+
+  const ids = [
+    "pageTitle",
+    "navAppointments",
+    "navPatients",
+    "navAnalytics",
+    "navInternalBilling",
+    "lblTenant",
+    "lblPatientId",
+    "lblAppointmentId",
+    "btnCreateBillingAccount",
+    "lblLoadExistingBillingAccount",
+    "btnLoadAccount",
+    "statLblBillingAccount",
+    "statLblSubtotal",
+    "statLblPatientDue",
+    "statLblPaid",
+    "statLblBalance",
+    "sectionAddCharge",
+    "lblCatalogItem",
+    "lblQuantity",
+    "btnAddItem",
+    "btnReloadCatalog",
+    "btnReloadAccount1",
+    "sectionCollectPayment",
+    "lblAmount",
+    "lblMethod",
+    "lblReference",
+    "btnAddPayment",
+    "btnCreateInvoice",
+    "sectionItems",
+    "sectionPayments",
+    "sectionInvoices",
+    "thItemCode",
+    "thItemName",
+    "thItemDept",
+    "thItemQty",
+    "thItemUnitPrice",
+    "thItemPatientAmount",
+    "thItemStatus",
+    "thPayAmount",
+    "thPayMethod",
+    "thPayReference",
+    "thPayPaidAt",
+    "thInvoiceNumber",
+    "thInvoiceStatus",
+    "thInvoiceTotal",
+    "thInvoiceIssued",
+    "thInvoiceAction"
+  ];
+
+  for(const id of ids){
+    const el = document.getElementById(id);
+    if(el){
+      el.textContent = t(id);
+    }
+  }
+}
+
+function adminHeaders(){
+  return {
+    "X-Admin-Token": token
+  };
+}
+
+function setMsg(text, kind="success"){
+  const el = document.getElementById("msg");
+  el.className = kind === "error" ? "error" : "success";
+  el.textContent = text || "";
+}
+
+function openAppointments(){
+  window.location.href = `/admin/appointments?token=${encodeURIComponent(token)}&lang=${encodeURIComponent(uiLang)}`;
+}
+
+function openPatients(){
+  window.location.href = `/admin/patients?token=${encodeURIComponent(token)}&lang=${encodeURIComponent(uiLang)}`;
+}
+
+function openAnalytics(){
+  window.location.href = `/admin/analytics?token=${encodeURIComponent(token)}&lang=${encodeURIComponent(uiLang)}`;
+}
+
+function openBillingPage(){
+  window.location.href = `/admin/internal-billing?token=${encodeURIComponent(token)}&lang=${encodeURIComponent(uiLang)}`;
+}
+
+function printInvoice(invoiceId){
+  const url = `/admin/internal-billing/invoices/${invoiceId}/print?token=${encodeURIComponent(token)}&lang=${encodeURIComponent(uiLang)}`;
+  window.open(url, "_blank");
+}
+
+function fmt(v){
+  if(v === null || v === undefined || v === "") return "-";
+  return String(v);
+}
+
+function fmtMoney(v){
+  const n = Number(v || 0);
+  return n.toFixed(2);
+}
+
+function fmtDate(v){
+  if(!v) return "-";
+  const s = String(v).replace("T", " ");
+  return s.slice(0, 16);
+}
+
+function applyPrefillFromQuery(){
+  if(prefillTenantId){
+    document.getElementById("tenantId").value = prefillTenantId;
+  }
+
+  if(prefillPatientId){
+    document.getElementById("patientId").value = prefillPatientId;
+  }
+
+  if(prefillAppointmentId){
+    document.getElementById("appointmentId").value = prefillAppointmentId;
+  }
+
+  if(prefillBillingAccountId){
+    currentBillingAccountId = Number(prefillBillingAccountId);
+    document.getElementById("existingAccountId").value = prefillBillingAccountId;
+    document.getElementById("statAccountId").textContent = prefillBillingAccountId;
+  }
+}
+
+function switchLang(lang){
+  const params = new URLSearchParams(window.location.search);
+
+  if(token){
+    params.set("token", token);
+  }
+
+  params.set("lang", lang);
+
+  const tenantId = document.getElementById("tenantId")?.value?.trim();
+  const patientId = document.getElementById("patientId")?.value?.trim();
+  const appointmentId = document.getElementById("appointmentId")?.value?.trim();
+
+  if(tenantId){
+    params.set("tenant_id", tenantId);
+  }
+  if(patientId){
+    params.set("patient_id", patientId);
+  }
+  if(appointmentId){
+    params.set("appointment_id", appointmentId);
+  }
+  if(currentBillingAccountId){
+    params.set("billing_account_id", String(currentBillingAccountId));
+  }
+
+  window.location.href = `/admin/internal-billing?${params.toString()}`;
+}
+
+async function loadCatalog(){
+  const tenantId = document.getElementById("tenantId").value.trim();
+  const sel = document.getElementById("itemCode");
+
+  sel.innerHTML = `<option value="">Loading...</option>`;
+
+  if(!tenantId){
+    sel.innerHTML = `<option value="">Enter tenant first</option>`;
+    return;
+  }
+
+  const res = await fetch(`/admin/internal-billing/catalog/list?tenant_id=${encodeURIComponent(tenantId)}`, {
+    headers: adminHeaders()
+  });
+
+  const json = await res.json();
+
+  if(!json.ok){
+    sel.innerHTML = `<option value="">Failed to load catalog</option>`;
+    return;
+  }
+
+  const items = json.items || [];
+  sel.innerHTML = "";
+
+  if(items.length === 0){
+    sel.innerHTML = `<option value="">No catalog items found</option>`;
+    return;
+  }
+
+  for(const it of items){
+    const opt = document.createElement("option");
+    opt.value = it.item_code || "";
+    opt.textContent = `${it.item_name} (${it.item_code}) - ${fmtMoney(it.base_price)}`;
+    sel.appendChild(opt);
+  }
+}
+
+async function autoLoadOrCreateBillingAccount(){
+  const tenantId = document.getElementById("tenantId").value.trim();
+  const patientId = document.getElementById("patientId").value.trim();
+  const appointmentId = document.getElementById("appointmentId").value.trim();
+
+  if(!tenantId || !appointmentId){
+    return;
+  }
+
+  try {
+    const findRes = await fetch(
+      `/admin/internal-billing/accounts/find-by-appointment?tenant_id=${encodeURIComponent(tenantId)}&appointment_id=${encodeURIComponent(appointmentId)}`,
+      { headers: adminHeaders() }
+    );
+
+    const findJson = await findRes.json();
+
+    if(findJson.ok && findJson.found && findJson.item){
+      currentBillingAccountId = Number(findJson.item.id);
+      document.getElementById("existingAccountId").value = currentBillingAccountId;
+      document.getElementById("statAccountId").textContent = currentBillingAccountId;
+      setMsg(`${t("msgLoadedExisting")}: ${currentBillingAccountId}`);
+      await loadAccount();
+      return;
+    }
+
+    const createRes = await fetch("/admin/internal-billing/accounts/create", {
+      method: "POST",
+      headers: Object.assign({"Content-Type":"application/json"}, adminHeaders()),
+      body: JSON.stringify({
+        tenant_id: tenantId,
+        patient_id: patientId || null,
+        appointment_id: appointmentId || null,
+        encounter_type: "OPD",
+        source_module: "APPOINTMENTS",
+        source_id: appointmentId || null,
+        currency: "SAR",
+        notes: "Auto-created from appointment billing entry"
+      })
+    });
+
+    const createJson = await createRes.json();
+
+    if(createJson.ok && createJson.billing_account_id){
+      currentBillingAccountId = Number(createJson.billing_account_id);
+      document.getElementById("existingAccountId").value = currentBillingAccountId;
+      document.getElementById("statAccountId").textContent = currentBillingAccountId;
+      setMsg(`${t("msgAutoCreated")}: ${currentBillingAccountId}`);
+      await loadAccount();
+    } else {
+      setMsg(`${t("msgAutoFailed")}: ${createJson.detail || "unknown"}`, "error");
+    }
+  } catch (e) {
+    setMsg(t("msgAutoFailed"), "error");
+  }
+}
+
+async function createBillingAccount(){
+  const tenantId = document.getElementById("tenantId").value.trim();
+  const patientId = document.getElementById("patientId").value.trim();
+  const appointmentId = document.getElementById("appointmentId").value.trim();
+
+  if(!tenantId){
+    setMsg("tenant_id required", "error");
+    return;
+  }
+
+  const res = await fetch("/admin/internal-billing/accounts/create", {
+    method: "POST",
+    headers: Object.assign({"Content-Type":"application/json"}, adminHeaders()),
+    body: JSON.stringify({
+      tenant_id: tenantId,
+      patient_id: patientId || null,
+      appointment_id: appointmentId || null,
+      encounter_type: "OPD",
+      source_module: "APPOINTMENTS",
+      source_id: appointmentId || null,
+      currency: "SAR",
+      notes: "Reception billing account"
+    })
+  });
+
+  const json = await res.json();
+
+  if(!json.ok){
+    setMsg(`${t("msgCreateFailed")}: ${json.detail || "unknown"}`, "error");
+    return;
+  }
+
+  currentBillingAccountId = json.billing_account_id;
+  document.getElementById("statAccountId").textContent = currentBillingAccountId;
+  document.getElementById("existingAccountId").value = currentBillingAccountId;
+  setMsg(`${t("msgCreated")}: ${currentBillingAccountId}`);
+  await loadCatalog();
+  await loadAccount();
+}
+
+async function loadExistingAccount(){
+  const val = document.getElementById("existingAccountId").value.trim();
+  if(!val){
+    setMsg(t("msgEnterBillingAccountFirst"), "error");
+    return;
+  }
+
+  currentBillingAccountId = Number(val);
+  document.getElementById("statAccountId").textContent = currentBillingAccountId;
+  setMsg(`${t("msgLoadedExisting")}: ${currentBillingAccountId}`);
+  await loadCatalog();
+  await loadAccount();
+}
+
+async function addItem(){
+  if(!currentBillingAccountId){
+    setMsg(t("msgCreateOrLoadFirst"), "error");
+    return;
+  }
+
+  const itemCode = document.getElementById("itemCode").value.trim();
+  const qty = Number(document.getElementById("itemQty").value || 1);
+
+  if(!itemCode){
+    setMsg(t("msgSelectCatalogFirst"), "error");
+    return;
+  }
+
+  const res = await fetch(`/admin/internal-billing/accounts/${currentBillingAccountId}/items/add`, {
+    method: "POST",
+    headers: Object.assign({"Content-Type":"application/json"}, adminHeaders()),
+    body: JSON.stringify({
+      item_code: itemCode,
+      quantity: qty
+    })
+  });
+
+  const json = await res.json();
+
+  if(!json.ok){
+    setMsg(`${t("msgAddItemFailed")}: ${json.detail || "unknown"}`, "error");
+    return;
+  }
+
+  setMsg(t("msgChargeAdded"));
+  await loadAccount();
+}
+
+async function addPayment(){
+  if(!currentBillingAccountId){
+    setMsg(t("msgCreateOrLoadFirst"), "error");
+    return;
+  }
+
+  const amount = Number(document.getElementById("payAmount").value || 0);
+  const paymentMethod = document.getElementById("payMethod").value;
+  const paymentReference = document.getElementById("payRef").value.trim();
+
+  const res = await fetch(`/admin/internal-billing/accounts/${currentBillingAccountId}/payments/add`, {
+    method: "POST",
+    headers: Object.assign({"Content-Type":"application/json"}, adminHeaders()),
+    body: JSON.stringify({
+      amount: amount,
+      payment_method: paymentMethod,
+      payment_reference: paymentReference,
+      collected_by: "reception"
+    })
+  });
+
+  const json = await res.json();
+
+  if(!json.ok){
+    setMsg(`${t("msgAddPaymentFailed")}: ${json.detail || "unknown"}`, "error");
+    return;
+  }
+
+  setMsg(t("msgPaymentAdded"));
+  await loadAccount();
+}
+
+async function createInvoice(){
+  if(!currentBillingAccountId){
+    setMsg(t("msgCreateOrLoadFirst"), "error");
+    return;
+  }
+
+  const res = await fetch(`/admin/internal-billing/accounts/${currentBillingAccountId}/invoice/create`, {
+    method: "POST",
+    headers: adminHeaders()
+  });
+
+  const json = await res.json();
+
+  if(!json.ok){
+    setMsg(`${t("msgCreateInvoiceFailed")}: ${json.detail || "unknown"}`, "error");
+    return;
+  }
+
+  setMsg(`${t("msgInvoiceCreated")}: ${json.invoice_number}`);
+  await loadAccount();
+}
+
+async function loadAccount(){
+  if(!currentBillingAccountId){
+    return;
+  }
+
+  const res = await fetch(`/admin/internal-billing/accounts/${currentBillingAccountId}`, {
+    headers: adminHeaders()
+  });
+
+  const json = await res.json();
+
+  if(!json.ok){
+    setMsg(`${t("msgLoadFailed")}: ${json.detail || "unknown"}`, "error");
+    return;
+  }
+
+  const account = json.account || {};
+  const items = json.items || [];
+  const payments = json.payments || [];
+  const invoices = json.invoices || [];
+
+  document.getElementById("statAccountId").textContent = account.id || "-";
+  document.getElementById("statSubtotal").textContent = fmtMoney(account.subtotal);
+  document.getElementById("statDue").textContent = fmtMoney(account.patient_due_total);
+  document.getElementById("statPaid").textContent = fmtMoney(account.paid_total);
+  document.getElementById("statBalance").textContent = fmtMoney(account.balance_due);
+
+  const itemsBody = document.getElementById("itemsBody");
+  itemsBody.innerHTML = "";
+  if(items.length === 0){
+    itemsBody.innerHTML = `<tr><td colspan="7" class="muted">No items</td></tr>`;
+  } else {
+    for(const it of items){
+      itemsBody.innerHTML += `
+        <tr>
+          <td>${fmt(it.item_code)}</td>
+          <td>${fmt(it.item_name)}</td>
+          <td>${fmt(it.department_code)}</td>
+          <td>${fmt(it.quantity)}</td>
+          <td>${fmtMoney(it.unit_price)}</td>
+          <td>${fmtMoney(it.patient_amount)}</td>
+          <td>${fmt(it.status)}</td>
+        </tr>
+      `;
+    }
+  }
+
+  const paymentsBody = document.getElementById("paymentsBody");
+  paymentsBody.innerHTML = "";
+  if(payments.length === 0){
+    paymentsBody.innerHTML = `<tr><td colspan="4" class="muted">No payments</td></tr>`;
+  } else {
+    for(const p of payments){
+      paymentsBody.innerHTML += `
+        <tr>
+          <td>${fmtMoney(p.amount)}</td>
+          <td>${fmt(p.payment_method)}</td>
+          <td>${fmt(p.payment_reference)}</td>
+          <td>${fmtDate(p.paid_at)}</td>
+        </tr>
+      `;
+    }
+  }
+
+  const invoicesBody = document.getElementById("invoicesBody");
+  invoicesBody.innerHTML = "";
+  if(invoices.length === 0){
+    invoicesBody.innerHTML = `<tr><td colspan="5" class="muted">No invoices</td></tr>`;
+  } else {
+    for(const inv of invoices){
+      invoicesBody.innerHTML += `
+        <tr>
+          <td>${fmt(inv.invoice_number)}</td>
+          <td>${fmt(inv.invoice_status)}</td>
+          <td>${fmtMoney(inv.total_amount)}</td>
+          <td>${fmtDate(inv.issued_at)}</td>
+          <td>
+            <button class="small info" onclick="printInvoice(${inv.id})">${t("btnPrintInvoice")}</button>
+          </td>
+        </tr>
+      `;
+    }
+  }
+}
+
+(async function init(){
+  applyLanguage();
+  applyPrefillFromQuery();
+  await loadCatalog();
+
+  if(currentBillingAccountId){
+    await loadAccount();
+    return;
+  }
+
+  if(prefillTenantId && prefillAppointmentId){
+    await autoLoadOrCreateBillingAccount();
+  }
+})();
+</script>
+
+</body>
+</html>

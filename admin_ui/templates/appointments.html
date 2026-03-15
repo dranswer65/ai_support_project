@@ -1,0 +1,1432 @@
+<!doctype html>
+<html lang="en" dir="ltr">
+<head>
+<meta charset="utf-8"/>
+<title>Appointments</title>
+
+<style>
+body{
+  font-family:Arial,sans-serif;
+  background:#f7f7f7;
+  margin:0;
+}
+
+header{
+  background:white;
+  border-bottom:1px solid #ddd;
+  padding:14px 18px;
+}
+
+.wrap{
+  max-width:1500px;
+  margin:auto;
+  padding:20px;
+}
+
+.card{
+  background:white;
+  border:1px solid #eee;
+  border-radius:12px;
+  padding:18px;
+  margin-bottom:18px;
+}
+
+.layout{
+  display:grid;
+  grid-template-columns:minmax(0, 1fr) 360px;
+  gap:18px;
+  align-items:start;
+}
+
+.left-col{
+  min-width:0;
+}
+
+.right-col{
+  min-width:0;
+  position:sticky;
+  top:18px;
+  align-self:start;
+}
+
+.row{
+  display:grid;
+  grid-template-columns:1.2fr 220px 220px 220px 140px;
+  gap:12px;
+  margin-bottom:14px;
+}
+
+.top-stats{
+  display:grid;
+  grid-template-columns:repeat(4,1fr);
+  gap:12px;
+}
+
+.stat-box{
+  background:#fafafa;
+  border:1px solid #eee;
+  border-radius:12px;
+  padding:14px;
+}
+
+.stat-label{
+  color:#666;
+  font-size:12px;
+}
+
+.stat-value{
+  font-size:28px;
+  font-weight:700;
+}
+
+.quick-chips{
+  display:flex;
+  gap:8px;
+  flex-wrap:wrap;
+  margin-top:12px;
+}
+
+.chip{
+  padding:8px 12px;
+  border-radius:999px;
+  border:1px solid #d4d4d4;
+  background:white;
+  cursor:pointer;
+  font-size:12px;
+  font-weight:700;
+}
+
+.chip.active{
+  background:#0077ff;
+  color:white;
+  border-color:#0077ff;
+}
+
+input, select{
+  width:100%;
+  padding:8px;
+  box-sizing:border-box;
+}
+
+button{
+  padding:8px 12px;
+  border-radius:6px;
+  border:1px solid #ccc;
+  background:white;
+  cursor:pointer;
+}
+
+button.primary{
+  background:#0077ff;
+  color:white;
+  border:none;
+}
+
+button.small{
+  font-size:12px;
+}
+
+button.good{
+  background:#ecfdf3;
+  border-color:#86efac;
+  color:#166534;
+}
+
+button.warn{
+  background:#fff7ed;
+  border-color:#fdba74;
+  color:#9a3412;
+}
+
+button.info{
+  background:#eff6ff;
+  border-color:#93c5fd;
+  color:#1d4ed8;
+}
+
+button.danger{
+  background:#fef2f2;
+  border-color:#fca5a5;
+  color:#991b1b;
+}
+
+button.dim{
+  opacity:.5;
+  cursor:not-allowed;
+}
+
+.table-wrap{
+  overflow:auto;
+  border-radius:12px;
+}
+
+table{
+  width:100%;
+  border-collapse:collapse;
+  background:white;
+}
+
+th, td{
+  border:1px solid #eee;
+  padding:10px;
+  text-align:left;
+  vertical-align:top;
+}
+
+th{
+  background:#fafafa;
+  position:sticky;
+  top:0;
+  z-index:2;
+}
+
+tbody tr{
+  cursor:pointer;
+}
+
+tbody tr:hover{
+  background:#fafafa;
+}
+
+tbody tr.selected{
+  outline:2px solid #93c5fd;
+  outline-offset:-2px;
+  background:#f8fbff;
+}
+
+tbody tr.row-cancelled{
+  background:#fff7f7;
+}
+
+tbody tr.row-noshow{
+  background:#fffaf2;
+}
+
+tbody tr.row-completed{
+  background:#f7fff9;
+}
+
+tbody tr.row-today{
+  box-shadow:inset 4px 0 0 #3b82f6;
+}
+
+.muted{
+  color:#666;
+  font-size:12px;
+}
+
+.success{
+  color:#0a7f38;
+  font-size:13px;
+}
+
+.error{
+  color:#b42318;
+  font-size:13px;
+}
+
+.actions{
+  display:flex;
+  flex-wrap:wrap;
+  gap:6px;
+}
+
+.status-pill{
+  display:inline-block;
+  padding:4px 10px;
+  border-radius:999px;
+  font-size:12px;
+  border:1px solid #ccc;
+  font-weight:700;
+  background:#fff;
+}
+
+.status-booked{
+  background:#eff6ff;
+  border-color:#93c5fd;
+  color:#1d4ed8;
+}
+
+.status-completed{
+  background:#ecfdf3;
+  border-color:#86efac;
+  color:#166534;
+}
+
+.status-cancelled{
+  background:#fef2f2;
+  border-color:#fca5a5;
+  color:#991b1b;
+}
+
+.status-noshow{
+  background:#fff7ed;
+  border-color:#fdba74;
+  color:#9a3412;
+}
+
+.status-other{
+  background:#f5f5f5;
+  border-color:#d4d4d4;
+  color:#444;
+}
+
+.badge{
+  display:inline-block;
+  padding:4px 10px;
+  border-radius:999px;
+  font-size:11px;
+  font-weight:700;
+  border:1px solid #ccc;
+  background:#fff;
+  margin-right:6px;
+  margin-top:6px;
+}
+
+.badge-today{
+  background:#eff6ff;
+  border-color:#93c5fd;
+  color:#1d4ed8;
+}
+
+.badge-risk{
+  background:#fff7ed;
+  border-color:#fdba74;
+  color:#9a3412;
+}
+
+.badge-danger{
+  background:#fef2f2;
+  border-color:#fca5a5;
+  color:#991b1b;
+}
+
+.badge-ok{
+  background:#ecfdf3;
+  border-color:#86efac;
+  color:#166534;
+}
+
+.nav{
+  display:flex;
+  gap:8px;
+  flex-wrap:wrap;
+}
+
+.side-panel{
+  min-height:240px;
+}
+
+.side-title{
+  font-size:18px;
+  font-weight:700;
+  margin-bottom:6px;
+}
+
+.side-sub{
+  color:#666;
+  font-size:12px;
+  margin-bottom:12px;
+}
+
+.side-section{
+  border-top:1px solid #eee;
+  padding-top:12px;
+  margin-top:12px;
+}
+
+.side-grid{
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  gap:10px 12px;
+}
+
+.side-field-label{
+  font-size:11px;
+  color:#666;
+  margin-bottom:4px;
+}
+
+.side-field-value{
+  font-size:14px;
+  word-break:break-word;
+}
+
+.side-actions{
+  display:flex;
+  flex-wrap:wrap;
+  gap:8px;
+  margin-top:12px;
+}
+
+.empty-panel{
+  color:#666;
+  font-size:13px;
+}
+
+html[dir="rtl"] body{
+  direction: rtl;
+}
+
+html[dir="rtl"] th,
+html[dir="rtl"] td,
+html[dir="rtl"] input,
+html[dir="rtl"] select,
+html[dir="rtl"] label,
+html[dir="rtl"] .stat-label,
+html[dir="rtl"] .stat-value,
+html[dir="rtl"] h1,
+html[dir="rtl"] h2,
+html[dir="rtl"] h3,
+html[dir="rtl"] header,
+html[dir="rtl"] .side-field-label,
+html[dir="rtl"] .side-field-value,
+html[dir="rtl"] .side-title,
+html[dir="rtl"] .side-sub{
+  text-align:right;
+}
+
+html[dir="rtl"] .nav,
+html[dir="rtl"] .actions,
+html[dir="rtl"] .quick-chips,
+html[dir="rtl"] .side-actions{
+  flex-direction:row-reverse;
+}
+
+html[dir="rtl"] .badge{
+  margin-right:0;
+  margin-left:6px;
+}
+
+@media (max-width:1300px){
+  .layout{
+    grid-template-columns:1fr;
+  }
+  .right-col{
+    position:static;
+  }
+}
+
+@media (max-width:1200px){
+  .row{
+    grid-template-columns:1fr;
+  }
+  .top-stats{
+    grid-template-columns:repeat(2,1fr);
+  }
+}
+</style>
+</head>
+
+<body>
+
+<header>
+  <b id="pageTitle">Appointments</b>
+</header>
+
+<div class="wrap">
+
+  <div class="card">
+    <div class="nav">
+      <button id="navAnalytics" onclick="openAnalytics()">Analytics</button>
+      <button id="navAppointments" onclick="openAppointments()">Appointments</button>
+      <button id="navBilling" onclick="openBilling()">Billing</button>
+      <button id="navPatients" onclick="openPatients()">Patients</button>
+      <button id="btnEnglish" onclick="switchLang('en')">English</button>
+      <button id="btnArabic" onclick="switchLang('ar')">العربية</button>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="top-stats">
+      <div class="stat-box">
+        <div id="lblStatTotal" class="stat-label">Total</div>
+        <div id="statTotal" class="stat-value">0</div>
+      </div>
+
+      <div class="stat-box">
+        <div id="lblStatBooked" class="stat-label">Booked</div>
+        <div id="statBooked" class="stat-value">0</div>
+      </div>
+
+      <div class="stat-box">
+        <div id="lblStatCompleted" class="stat-label">Completed</div>
+        <div id="statCompleted" class="stat-value">0</div>
+      </div>
+
+      <div class="stat-box">
+        <div id="lblStatRisk" class="stat-label">Cancelled / No Show</div>
+        <div id="statRisk" class="stat-value">0</div>
+      </div>
+    </div>
+
+    <div class="quick-chips">
+      <button class="chip" id="chipAll" onclick="applyQuickFilter('ALL')">All</button>
+      <button class="chip" id="chipToday" onclick="applyQuickFilter('TODAY')">Today</button>
+      <button class="chip" id="chipConfirmed" onclick="applyQuickFilter('CONFIRMED')">Confirmed</button>
+      <button class="chip" id="chipCompleted" onclick="applyQuickFilter('COMPLETED')">Completed</button>
+      <button class="chip" id="chipRisk" onclick="applyQuickFilter('RISK')">Risk</button>
+      <button class="chip" id="chipInsurance" onclick="applyQuickFilter('INSURANCE')">Insurance Issues</button>
+    </div>
+  </div>
+
+  <div class="layout">
+    <div class="left-col">
+
+      <div class="card">
+        <div class="row">
+          <div>
+            <label id="lblSearch">Search</label>
+            <input id="searchBox" placeholder="Patient, mobile, doctor, clinic, insurance"/>
+          </div>
+
+          <div>
+            <label id="lblTenant">Tenant</label>
+            <select id="tenantFilter">
+              <option value="">ALL</option>
+            </select>
+          </div>
+
+          <div>
+            <label id="lblStatus">Status</label>
+            <select id="statusFilter">
+              <option value="ALL">ALL</option>
+              <option value="BOOKED">BOOKED</option>
+              <option value="COMPLETED">COMPLETED</option>
+              <option value="CANCELLED">CANCELLED</option>
+              <option value="NO_SHOW">NO_SHOW</option>
+              <option value="RESCHEDULED">RESCHEDULED</option>
+            </select>
+          </div>
+
+          <div>
+            <label id="lblDoctor">Doctor</label>
+            <input id="doctorFilter" placeholder="doctor_key"/>
+          </div>
+
+          <div style="display:flex;align-items:end;">
+            <button id="btnRefresh" class="primary" onclick="loadAppointments()">Refresh</button>
+          </div>
+        </div>
+
+        <div id="msg"></div>
+      </div>
+
+      <div class="card">
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th id="thClinic">Clinic</th>
+                <th id="thDoctor">Doctor</th>
+                <th id="thPatient">Patient</th>
+                <th id="thDate">Date</th>
+                <th id="thTime">Time</th>
+                <th id="thInsurance">Insurance</th>
+                <th id="thStatus">Status</th>
+                <th id="thActions">Actions</th>
+              </tr>
+            </thead>
+            <tbody id="appointmentsBody">
+              <tr>
+                <td colspan="8" class="muted" id="loadingRow">Loading appointments...</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+    </div>
+
+    <div class="right-col">
+      <div class="card side-panel">
+        <div class="side-title" id="detailPanelTitle">Appointment Details</div>
+        <div class="side-sub" id="detailPanelSub">Select a row to view full appointment details.</div>
+
+        <div id="detailPanelBody" class="empty-panel">
+          Select an appointment from the table.
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<script>
+const qs = new URLSearchParams(location.search);
+const platformToken = qs.get("token") || "";
+const uiLang = (qs.get("lang") || "en").toLowerCase() === "ar" ? "ar" : "en";
+
+let currentAppointments = [];
+let selectedAppointment = null;
+let quickFilter = "ALL";
+
+const I18N = {
+  en: {
+    pageTitle: "Appointments",
+    navAnalytics: "Analytics",
+    navAppointments: "Appointments",
+    navBilling: "Billing",
+    navPatients: "Patients",
+    btnEnglish: "English",
+    btnArabic: "العربية",
+
+    lblStatTotal: "Total",
+    lblStatBooked: "Booked",
+    lblStatCompleted: "Completed",
+    lblStatRisk: "Cancelled / No Show",
+
+    lblSearch: "Search",
+    searchPlaceholder: "Patient, mobile, doctor, clinic, insurance",
+    lblTenant: "Tenant",
+    lblStatus: "Status",
+    lblDoctor: "Doctor",
+    doctorPlaceholder: "doctor_key",
+    btnRefresh: "Refresh",
+
+    thClinic: "Clinic",
+    thDoctor: "Doctor",
+    thPatient: "Patient",
+    thDate: "Date",
+    thTime: "Time",
+    thInsurance: "Insurance",
+    thStatus: "Status",
+    thActions: "Actions",
+
+    all: "ALL",
+    booked: "BOOKED",
+    completed: "COMPLETED",
+    cancelled: "CANCELLED",
+    noShow: "NO_SHOW",
+    rescheduled: "RESCHEDULED",
+
+    loadingAppointments: "Loading appointments...",
+    failedToLoadAppointments: "Failed to load appointments",
+    noAppointmentsFound: "No appointments found",
+
+    cancel: "Cancel",
+    complete: "Complete",
+    noShowBtn: "No Show",
+    reminder: "Reminder",
+    billing: "Billing",
+
+    insuranceNone: "-",
+    unknown: "UNKNOWN",
+
+    cancelConfirm: "Cancel this appointment?",
+    cancelFailed: "Cancel failed",
+    completeFailed: "Complete failed",
+    noShowFailed: "No-show update failed",
+    reminderFailed: "Reminder failed",
+
+    appointmentCancelled: "Appointment cancelled",
+    appointmentCompleted: "Appointment marked completed",
+    appointmentNoShow: "Appointment marked no-show",
+    reminderSent: "Reminder sent",
+
+    noShowBadge: "NO SHOW",
+    bookedBadge: "BOOKED",
+    completedBadge: "COMPLETED",
+    cancelledBadge: "CANCELLED",
+    confirmedBadge: "CONFIRMED",
+    approvedBadge: "APPROVED",
+
+    chipAll: "All",
+    chipToday: "Today",
+    chipConfirmed: "Confirmed",
+    chipRisk: "Risk",
+    chipInsurance: "Insurance Issues",
+
+    badgeToday: "TODAY",
+    badgeInsuranceExpired: "INSURANCE EXPIRED",
+    badgeApprovalRequired: "APPROVAL REQUIRED",
+    badgeInsuranceUnverified: "INSURANCE UNVERIFIED",
+    badgeVerified: "VERIFIED",
+
+    detailPanelTitle: "Appointment Details",
+    detailPanelSub: "Select a row to view full appointment details.",
+    emptyPanel: "Select an appointment from the table.",
+
+    detailClinic: "Clinic",
+    detailTenant: "Tenant",
+    detailDoctor: "Doctor",
+    detailPatient: "Patient",
+    detailMobile: "Mobile",
+    detailPatientId: "Patient ID",
+    detailDate: "Date",
+    detailTime: "Time",
+    detailStatus: "Status",
+    detailInsurance: "Insurance",
+    detailInsuranceStatus: "Insurance Status",
+    detailBookingSource: "Booking Source",
+    detailNotes: "Notes",
+
+    bookingSourceUnknown: "Unknown"
+  },
+  ar: {
+    pageTitle: "المواعيد",
+    navAnalytics: "التحليلات",
+    navAppointments: "المواعيد",
+    navBilling: "الفوترة",
+    navPatients: "المرضى",
+    btnEnglish: "English",
+    btnArabic: "العربية",
+
+    lblStatTotal: "الإجمالي",
+    lblStatBooked: "المؤكدة",
+    lblStatCompleted: "المكتملة",
+    lblStatRisk: "الملغاة / عدم الحضور",
+
+    lblSearch: "بحث",
+    searchPlaceholder: "المريض، الجوال، الطبيب، العيادة، التأمين",
+    lblTenant: "العيادة",
+    lblStatus: "الحالة",
+    lblDoctor: "الطبيب",
+    doctorPlaceholder: "doctor_key",
+    btnRefresh: "تحديث",
+
+    thClinic: "العيادة",
+    thDoctor: "الطبيب",
+    thPatient: "المريض",
+    thDate: "التاريخ",
+    thTime: "الوقت",
+    thInsurance: "التأمين",
+    thStatus: "الحالة",
+    thActions: "الإجراءات",
+
+    all: "الكل",
+    booked: "محجوز",
+    completed: "مكتمل",
+    cancelled: "ملغي",
+    noShow: "عدم حضور",
+    rescheduled: "إعادة جدولة",
+
+    loadingAppointments: "جاري تحميل المواعيد...",
+    failedToLoadAppointments: "فشل تحميل المواعيد",
+    noAppointmentsFound: "لا توجد مواعيد",
+
+    cancel: "إلغاء",
+    complete: "إكمال",
+    noShowBtn: "عدم حضور",
+    reminder: "تذكير",
+    billing: "الفوترة",
+
+    insuranceNone: "-",
+    unknown: "غير معروف",
+
+    cancelConfirm: "هل تريد إلغاء هذا الموعد؟",
+    cancelFailed: "فشل الإلغاء",
+    completeFailed: "فشل تحديث الإكمال",
+    noShowFailed: "فشل تحديث عدم الحضور",
+    reminderFailed: "فشل إرسال التذكير",
+
+    appointmentCancelled: "تم إلغاء الموعد",
+    appointmentCompleted: "تم تحديد الموعد كمكتمل",
+    appointmentNoShow: "تم تحديد الموعد كعدم حضور",
+    reminderSent: "تم إرسال التذكير",
+
+    noShowBadge: "عدم حضور",
+    bookedBadge: "محجوز",
+    completedBadge: "مكتمل",
+    cancelledBadge: "ملغي",
+    confirmedBadge: "مؤكد",
+    approvedBadge: "معتمد",
+
+    chipAll: "الكل",
+    chipToday: "اليوم",
+    chipConfirmed: "المؤكدة",
+    chipRisk: "تحتاج متابعة",
+    chipInsurance: "مشاكل التأمين",
+
+    badgeToday: "اليوم",
+    badgeInsuranceExpired: "التأمين منتهي",
+    badgeApprovalRequired: "تحتاج موافقة",
+    badgeInsuranceUnverified: "تأمين غير متحقق",
+    badgeVerified: "تم التحقق",
+
+    detailPanelTitle: "تفاصيل الموعد",
+    detailPanelSub: "اختر صفاً لعرض التفاصيل الكاملة.",
+    emptyPanel: "اختر موعداً من الجدول.",
+
+    detailClinic: "العيادة",
+    detailTenant: "المعرف",
+    detailDoctor: "الطبيب",
+    detailPatient: "المريض",
+    detailMobile: "الجوال",
+    detailPatientId: "رقم المريض",
+    detailDate: "التاريخ",
+    detailTime: "الوقت",
+    detailStatus: "الحالة",
+    detailInsurance: "التأمين",
+    detailInsuranceStatus: "حالة التأمين",
+    detailBookingSource: "مصدر الحجز",
+    detailNotes: "الملاحظات",
+
+    bookingSourceUnknown: "غير معروف"
+  }
+};
+
+function t(key){
+  return (I18N[uiLang] && I18N[uiLang][key]) || key;
+}
+
+function applyLanguage(){
+  document.documentElement.setAttribute("lang", uiLang);
+  document.documentElement.setAttribute("dir", uiLang === "ar" ? "rtl" : "ltr");
+
+  const ids = [
+    "pageTitle",
+    "navAnalytics",
+    "navAppointments",
+    "navBilling",
+    "navPatients",
+    "btnEnglish",
+    "btnArabic",
+    "lblStatTotal",
+    "lblStatBooked",
+    "lblStatCompleted",
+    "lblStatRisk",
+    "lblSearch",
+    "lblTenant",
+    "lblStatus",
+    "lblDoctor",
+    "btnRefresh",
+    "thClinic",
+    "thDoctor",
+    "thPatient",
+    "thDate",
+    "thTime",
+    "thInsurance",
+    "thStatus",
+    "thActions",
+    "detailPanelTitle",
+    "detailPanelSub"
+  ];
+
+  for(const id of ids){
+    const el = document.getElementById(id);
+    if(el){
+      el.textContent = t(id);
+    }
+  }
+
+  document.getElementById("searchBox").placeholder = t("searchPlaceholder");
+  document.getElementById("doctorFilter").placeholder = t("doctorPlaceholder");
+
+  document.getElementById("chipAll").textContent = t("chipAll");
+  document.getElementById("chipToday").textContent = t("chipToday");
+  document.getElementById("chipConfirmed").textContent = t("chipConfirmed");
+  document.getElementById("chipCompleted").textContent = t("completed");
+  document.getElementById("chipRisk").textContent = t("chipRisk");
+  document.getElementById("chipInsurance").textContent = t("chipInsurance");
+}
+
+function switchLang(lang){
+  const params = new URLSearchParams(window.location.search);
+  params.set("lang", lang);
+  params.set("token", platformToken);
+  window.location.href = `${window.location.pathname}?${params.toString()}`;
+}
+
+function adminHeaders(){
+  return {
+    "X-Admin-Token": platformToken
+  };
+}
+
+function setMsg(text, kind="success"){
+  const el = document.getElementById("msg");
+  el.className = kind === "error" ? "error" : "success";
+  el.textContent = text || "";
+  if(text){
+    setTimeout(() => { el.textContent = ""; }, 8000);
+  }
+}
+
+function openAnalytics(){
+  window.location.href = `/admin/analytics?token=${encodeURIComponent(platformToken)}&lang=${encodeURIComponent(uiLang)}`;
+}
+
+function openAppointments(){
+  window.location.href = `/admin/appointments?token=${encodeURIComponent(platformToken)}&lang=${encodeURIComponent(uiLang)}`;
+}
+
+function openBilling(){
+  window.location.href = `/admin/billing?token=${encodeURIComponent(platformToken)}&lang=${encodeURIComponent(uiLang)}`;
+}
+
+function openPatients(){
+  window.location.href = `/admin/patients?token=${encodeURIComponent(platformToken)}&lang=${encodeURIComponent(uiLang)}`;
+}
+
+function openInternalBilling(appointmentId, tenantId, patientId){
+  const params = new URLSearchParams();
+  params.set("token", platformToken);
+  params.set("lang", uiLang);
+
+  if(tenantId) params.set("tenant_id", tenantId);
+  if(appointmentId) params.set("appointment_id", appointmentId);
+  if(patientId) params.set("patient_id", patientId);
+
+  window.location.href = `/admin/internal-billing?${params.toString()}`;
+}
+
+function fmt(v){
+  return v === null || v === undefined || v === "" ? "-" : String(v);
+}
+
+function todayStr(){
+  return new Date().toISOString().slice(0, 10);
+}
+
+function normalizeDateValue(it){
+  return String(it.slot_date || it.appt_date || "").slice(0, 10);
+}
+
+function isTodayAppointment(it){
+  return normalizeDateValue(it) === todayStr();
+}
+
+function insuranceRiskLevel(it){
+  const s = String(it.insurance_status || "").toUpperCase();
+  if(s === "INSURANCE_EXPIRED") return "expired";
+  if(s === "APPROVAL_REQUIRED") return "approval";
+  if(s === "INSURED_UNVERIFIED") return "unverified";
+  if(s === "INSURED_VERIFIED") return "verified";
+  return "";
+}
+
+function rowClass(it){
+  const s = String(it.status || "").toUpperCase();
+  let out = [];
+  if(s === "CANCELLED") out.push("row-cancelled");
+  if(s === "NO_SHOW") out.push("row-noshow");
+  if(s === "COMPLETED") out.push("row-completed");
+  if(isTodayAppointment(it)) out.push("row-today");
+  if(selectedAppointment && String(selectedAppointment.id || selectedAppointment.appointment_id) === String(it.id || it.appointment_id)){
+    out.push("selected");
+  }
+  return out.join(" ");
+}
+
+function statusPill(status){
+  const s = String(status || "").toUpperCase();
+
+  if(s === "BOOKED"){
+    return `<span class="status-pill status-booked">${t("bookedBadge")}</span>`;
+  }
+  if(s === "CONFIRMED"){
+    return `<span class="status-pill status-booked">${t("confirmedBadge")}</span>`;
+  }
+  if(s === "APPROVED"){
+    return `<span class="status-pill status-booked">${t("approvedBadge")}</span>`;
+  }
+  if(s === "COMPLETED"){
+    return `<span class="status-pill status-completed">${t("completedBadge")}</span>`;
+  }
+  if(s === "CANCELLED"){
+    return `<span class="status-pill status-cancelled">${t("cancelledBadge")}</span>`;
+  }
+  if(s === "NO_SHOW"){
+    return `<span class="status-pill status-noshow">${t("noShowBadge")}</span>`;
+  }
+
+  return `<span class="status-pill status-other">${s || t("unknown")}</span>`;
+}
+
+function insuranceBadges(it){
+  let html = "";
+
+  if(isTodayAppointment(it)){
+    html += `<span class="badge badge-today">${t("badgeToday")}</span>`;
+  }
+
+  const risk = insuranceRiskLevel(it);
+  if(risk === "expired"){
+    html += `<span class="badge badge-danger">${t("badgeInsuranceExpired")}</span>`;
+  } else if(risk === "approval"){
+    html += `<span class="badge badge-risk">${t("badgeApprovalRequired")}</span>`;
+  } else if(risk === "unverified"){
+    html += `<span class="badge badge-risk">${t("badgeInsuranceUnverified")}</span>`;
+  } else if(risk === "verified"){
+    html += `<span class="badge badge-ok">${t("badgeVerified")}</span>`;
+  }
+
+  return html;
+}
+
+function setStats(items){
+  let total = items.length;
+  let booked = 0;
+  let completed = 0;
+  let risk = 0;
+
+  for(const it of items){
+    const s = String(it.status || "").toUpperCase();
+    if(s === "BOOKED" || s === "CONFIRMED" || s === "APPROVED") booked++;
+    else if(s === "COMPLETED") completed++;
+    else if(s === "CANCELLED" || s === "NO_SHOW") risk++;
+  }
+
+  document.getElementById("statTotal").textContent = total;
+  document.getElementById("statBooked").textContent = booked;
+  document.getElementById("statCompleted").textContent = completed;
+  document.getElementById("statRisk").textContent = risk;
+}
+
+async function loadTenants(){
+  const sel = document.getElementById("tenantFilter");
+
+  try{
+    const res = await fetch("/admin/appointments/tenants", {
+      headers: adminHeaders()
+    });
+    const json = await res.json();
+
+    if(!json.ok) return;
+
+    const current = sel.value;
+    sel.innerHTML = `<option value="">${t("all")}</option>`;
+
+    for(const it of (json.items || [])){
+      const opt = document.createElement("option");
+      opt.value = it.tenant_id || "";
+      opt.textContent = `${it.clinic_name || it.tenant_id} (${it.tenant_id})`;
+      sel.appendChild(opt);
+    }
+
+    sel.value = current;
+  }catch(e){}
+}
+
+function localizeStatusOptions(){
+  const sel = document.getElementById("statusFilter");
+  const map = {
+    "ALL": t("all"),
+    "BOOKED": t("booked"),
+    "COMPLETED": t("completed"),
+    "CANCELLED": t("cancelled"),
+    "NO_SHOW": t("noShow"),
+    "RESCHEDULED": t("rescheduled")
+  };
+
+  for(const opt of sel.options){
+    opt.textContent = map[opt.value] || opt.value;
+  }
+}
+
+function applyQuickFilter(mode){
+  quickFilter = mode;
+  const chipIds = ["chipAll", "chipToday", "chipConfirmed", "chipCompleted", "chipRisk", "chipInsurance"];
+  for(const id of chipIds){
+    document.getElementById(id).classList.remove("active");
+  }
+
+  if(mode === "ALL") document.getElementById("chipAll").classList.add("active");
+  if(mode === "TODAY") document.getElementById("chipToday").classList.add("active");
+  if(mode === "CONFIRMED") document.getElementById("chipConfirmed").classList.add("active");
+  if(mode === "COMPLETED") document.getElementById("chipCompleted").classList.add("active");
+  if(mode === "RISK") document.getElementById("chipRisk").classList.add("active");
+  if(mode === "INSURANCE") document.getElementById("chipInsurance").classList.add("active");
+
+  renderAppointments(currentAppointments);
+}
+
+function filterByQuickMode(items){
+  if(quickFilter === "ALL") return items;
+
+  if(quickFilter === "TODAY"){
+    return items.filter(isTodayAppointment);
+  }
+
+  if(quickFilter === "CONFIRMED"){
+    return items.filter(it => {
+      const s = String(it.status || "").toUpperCase();
+      return s === "BOOKED" || s === "CONFIRMED" || s === "APPROVED";
+    });
+  }
+
+  if(quickFilter === "COMPLETED"){
+    return items.filter(it => String(it.status || "").toUpperCase() === "COMPLETED");
+  }
+
+  if(quickFilter === "RISK"){
+    return items.filter(it => {
+      const s = String(it.status || "").toUpperCase();
+      return s === "CANCELLED" || s === "NO_SHOW";
+    });
+  }
+
+  if(quickFilter === "INSURANCE"){
+    return items.filter(it => {
+      const risk = insuranceRiskLevel(it);
+      return risk === "expired" || risk === "approval" || risk === "unverified";
+    });
+  }
+
+  return items;
+}
+
+function renderDetailPanel(it){
+  const body = document.getElementById("detailPanelBody");
+
+  if(!it){
+    body.className = "empty-panel";
+    body.textContent = t("emptyPanel");
+    return;
+  }
+
+  const insuranceText = [
+    it.insurance_provider || "",
+    it.insurance_plan || "",
+    it.insurance_member_id || ""
+  ].filter(Boolean).join(" / ") || t("insuranceNone");
+
+  body.className = "";
+  body.innerHTML = `
+    <div>${statusPill(it.status)}</div>
+    <div style="margin-top:8px;">${insuranceBadges(it)}</div>
+
+    <div class="side-section">
+      <div class="side-grid">
+        <div>
+          <div class="side-field-label">${t("detailClinic")}</div>
+          <div class="side-field-value">${fmt(it.clinic_name)}</div>
+        </div>
+        <div>
+          <div class="side-field-label">${t("detailTenant")}</div>
+          <div class="side-field-value">${fmt(it.tenant_id)}</div>
+        </div>
+
+        <div>
+          <div class="side-field-label">${t("detailDoctor")}</div>
+          <div class="side-field-value">${fmt(it.doctor_key)}</div>
+        </div>
+        <div>
+          <div class="side-field-label">${t("detailStatus")}</div>
+          <div class="side-field-value">${fmt(it.status)}</div>
+        </div>
+
+        <div>
+          <div class="side-field-label">${t("detailPatient")}</div>
+          <div class="side-field-value">${fmt(it.patient_name)}</div>
+        </div>
+        <div>
+          <div class="side-field-label">${t("detailMobile")}</div>
+          <div class="side-field-value">${fmt(it.patient_mobile)}</div>
+        </div>
+
+        <div>
+          <div class="side-field-label">${t("detailPatientId")}</div>
+          <div class="side-field-value">${fmt(it.patient_id)}</div>
+        </div>
+        <div>
+          <div class="side-field-label">${t("detailBookingSource")}</div>
+          <div class="side-field-value">${fmt(it.booking_source || t("bookingSourceUnknown"))}</div>
+        </div>
+
+        <div>
+          <div class="side-field-label">${t("detailDate")}</div>
+          <div class="side-field-value">${fmt(it.slot_date || it.appt_date)}</div>
+        </div>
+        <div>
+          <div class="side-field-label">${t("detailTime")}</div>
+          <div class="side-field-value">${fmt(it.slot_time || it.appt_time)}</div>
+        </div>
+
+        <div style="grid-column:1 / -1;">
+          <div class="side-field-label">${t("detailInsurance")}</div>
+          <div class="side-field-value">${fmt(insuranceText)}</div>
+        </div>
+
+        <div style="grid-column:1 / -1;">
+          <div class="side-field-label">${t("detailInsuranceStatus")}</div>
+          <div class="side-field-value">${fmt(it.insurance_status)}</div>
+        </div>
+
+        <div style="grid-column:1 / -1;">
+          <div class="side-field-label">${t("detailNotes")}</div>
+          <div class="side-field-value">${fmt(it.notes)}</div>
+        </div>
+      </div>
+
+      <div class="side-actions">
+        ${buildSideActionButtons(it)}
+      </div>
+    </div>
+  `;
+}
+
+function buildSideActionButtons(it){
+  const actionId = String(it.id || it.appointment_id || "").replace(/'/g, "\\'");
+  const tenantId = String(it.tenant_id || "").replace(/'/g, "\\'");
+  const patientId = String(it.patient_id || "").replace(/'/g, "\\'");
+  const status = String(it.status || "").toUpperCase();
+
+  const canCancel = !["CANCELLED", "COMPLETED"].includes(status);
+  const canComplete = !["COMPLETED", "CANCELLED", "NO_SHOW"].includes(status);
+  const canNoShow = !["COMPLETED", "CANCELLED", "NO_SHOW"].includes(status);
+
+  return `
+    <button class="small danger ${canCancel ? "" : "dim"}" ${canCancel ? `onclick="cancelAppointment('${actionId}')"` : "disabled"}>${t("cancel")}</button>
+    <button class="small good ${canComplete ? "" : "dim"}" ${canComplete ? `onclick="completeAppointment('${actionId}')"` : "disabled"}>${t("complete")}</button>
+    <button class="small warn ${canNoShow ? "" : "dim"}" ${canNoShow ? `onclick="noShowAppointment('${actionId}')"` : "disabled"}>${t("noShowBtn")}</button>
+    <button class="small info" onclick="sendReminder('${actionId}')">${t("reminder")}</button>
+    <button class="small" onclick="openInternalBilling('${actionId}', '${tenantId}', '${patientId}')">${t("billing")}</button>
+  `;
+}
+
+function selectAppointment(it){
+  selectedAppointment = it;
+  renderAppointments(currentAppointments);
+  renderDetailPanel(it);
+}
+
+async function cancelAppointment(id){
+  if(!id){
+    setMsg(`${t("cancelFailed")}: missing appointment id`, "error");
+    return;
+  }
+
+  if(!confirm(t("cancelConfirm"))) return;
+
+  try{
+    const res = await fetch(`/admin/appointments/${encodeURIComponent(id)}/cancel`, {
+      method: "POST",
+      headers: adminHeaders()
+    });
+
+    const json = await res.json();
+
+    if(!json.ok){
+      setMsg(`${t("cancelFailed")}: ${json.detail || "unknown"}`, "error");
+      return;
+    }
+
+    setMsg(t("appointmentCancelled"));
+    await loadAppointments();
+  }catch(e){
+    setMsg(`${t("cancelFailed")}: network error`, "error");
+  }
+}
+
+async function completeAppointment(id){
+  if(!id){
+    setMsg(`${t("completeFailed")}: missing appointment id`, "error");
+    return;
+  }
+
+  try{
+    const res = await fetch(`/admin/appointments/${encodeURIComponent(id)}/complete`, {
+      method: "POST",
+      headers: adminHeaders()
+    });
+
+    const json = await res.json();
+
+    if(!json.ok){
+      setMsg(`${t("completeFailed")}: ${json.detail || "unknown"}`, "error");
+      return;
+    }
+
+    setMsg(t("appointmentCompleted"));
+    await loadAppointments();
+  }catch(e){
+    setMsg(`${t("completeFailed")}: network error`, "error");
+  }
+}
+
+async function noShowAppointment(id){
+  if(!id){
+    setMsg(`${t("noShowFailed")}: missing appointment id`, "error");
+    return;
+  }
+
+  try{
+    const res = await fetch(`/admin/appointments/${encodeURIComponent(id)}/no-show`, {
+      method: "POST",
+      headers: adminHeaders()
+    });
+
+    const json = await res.json();
+
+    if(!json.ok){
+      setMsg(`${t("noShowFailed")}: ${json.detail || "unknown"}`, "error");
+      return;
+    }
+
+    setMsg(t("appointmentNoShow"));
+    await loadAppointments();
+  }catch(e){
+    setMsg(`${t("noShowFailed")}: network error`, "error");
+  }
+}
+
+async function sendReminder(id){
+  if(!id){
+    setMsg(`${t("reminderFailed")}: missing appointment id`, "error");
+    return;
+  }
+
+  try{
+    const res = await fetch(`/admin/appointments/${encodeURIComponent(id)}/send-reminder`, {
+      method: "POST",
+      headers: Object.assign({"Content-Type":"application/json"}, adminHeaders()),
+      body: JSON.stringify({})
+    });
+
+    const json = await res.json();
+
+    if(!res.ok || !json.ok){
+      setMsg(`${t("reminderFailed")}: ${json.detail || "unknown error"}`, "error");
+      return;
+    }
+
+    setMsg(t("reminderSent"));
+  }catch(e){
+    setMsg(`${t("reminderFailed")}: ${e.message || "network error"}`, "error");
+  }
+}
+
+function renderAppointments(rawItems){
+  const body = document.getElementById("appointmentsBody");
+  let items = [...rawItems];
+  items = filterByQuickMode(items);
+
+  setStats(items);
+  body.innerHTML = "";
+
+  if(items.length === 0){
+    body.innerHTML = `<tr><td colspan="8" class="muted">${t("noAppointmentsFound")}</td></tr>`;
+    renderDetailPanel(selectedAppointment);
+    return;
+  }
+
+  for(const it of items){
+    const insuranceText = [
+      it.insurance_provider || "",
+      it.insurance_plan || "",
+      it.insurance_member_id || ""
+    ].filter(Boolean).join(" / ") || t("insuranceNone");
+
+    const actionId = it.id || it.appointment_id || "";
+    const safeActionId = String(actionId).replace(/'/g, "\\'");
+    const safeTenantId = String(it.tenant_id || "").replace(/'/g, "\\'");
+    const safePatientId = String(it.patient_id || "").replace(/'/g, "\\'");
+    const status = String(it.status || "").toUpperCase();
+
+    const canCancel = !["CANCELLED", "COMPLETED"].includes(status);
+    const canComplete = !["COMPLETED", "CANCELLED", "NO_SHOW"].includes(status);
+    const canNoShow = !["COMPLETED", "CANCELLED", "NO_SHOW"].includes(status);
+
+    const tr = document.createElement("tr");
+    tr.className = rowClass(it);
+    tr.onclick = (ev) => {
+      if(ev.target.closest("button")) return;
+      selectAppointment(it);
+    };
+
+    tr.innerHTML = `
+      <td>
+        <div><b>${fmt(it.clinic_name)}</b></div>
+        <div class="muted">${fmt(it.tenant_id)}</div>
+      </td>
+
+      <td>${fmt(it.doctor_key)}</td>
+
+      <td>
+        <div><b>${fmt(it.patient_name)}</b></div>
+        <div class="muted">${fmt(it.patient_mobile)}</div>
+        <div class="muted">${fmt(it.patient_id)}</div>
+        <div>${insuranceBadges(it)}</div>
+      </td>
+
+      <td>${fmt(it.slot_date || it.appt_date)}</td>
+      <td>${fmt(it.slot_time || it.appt_time)}</td>
+
+      <td>
+        <div>${fmt(insuranceText)}</div>
+        <div class="muted">${fmt(it.insurance_status)}</div>
+      </td>
+
+      <td>${statusPill(it.status)}</td>
+
+      <td>
+        <div class="actions">
+          <button class="small danger ${canCancel ? "" : "dim"}" ${canCancel ? `onclick="cancelAppointment('${safeActionId}')"` : "disabled"}>${t("cancel")}</button>
+          <button class="small good ${canComplete ? "" : "dim"}" ${canComplete ? `onclick="completeAppointment('${safeActionId}')"` : "disabled"}>${t("complete")}</button>
+          <button class="small warn ${canNoShow ? "" : "dim"}" ${canNoShow ? `onclick="noShowAppointment('${safeActionId}')"` : "disabled"}>${t("noShowBtn")}</button>
+          <button class="small info" onclick="sendReminder('${safeActionId}')">${t("reminder")}</button>
+          <button class="small" onclick="openInternalBilling('${safeActionId}', '${safeTenantId}', '${safePatientId}')">${t("billing")}</button>
+        </div>
+      </td>
+    `;
+
+    body.appendChild(tr);
+  }
+
+  if(selectedAppointment){
+    const refreshedSelected = items.find(x => String(x.id || x.appointment_id) === String(selectedAppointment.id || selectedAppointment.appointment_id));
+    renderDetailPanel(refreshedSelected || selectedAppointment);
+  } else {
+    renderDetailPanel(null);
+  }
+}
+
+async function loadAppointments(){
+  const body = document.getElementById("appointmentsBody");
+  body.innerHTML = `<tr><td colspan="8" class="muted">${t("loadingAppointments")}</td></tr>`;
+
+  const tenantId = document.getElementById("tenantFilter").value;
+  const status = document.getElementById("statusFilter").value;
+  const doctorKey = document.getElementById("doctorFilter").value.trim();
+  const q = document.getElementById("searchBox").value.trim();
+
+  const params = new URLSearchParams();
+  if(tenantId) params.set("tenant_id", tenantId);
+  if(status) params.set("status", status);
+  if(doctorKey) params.set("doctor_key", doctorKey);
+  if(q) params.set("q", q);
+  params.set("limit", "200");
+
+  try{
+    const res = await fetch(`/admin/appointments/list?${params.toString()}`, {
+      headers: adminHeaders()
+    });
+
+    const json = await res.json();
+
+    if(!json.ok){
+      body.innerHTML = `<tr><td colspan="8" class="muted">${t("failedToLoadAppointments")}</td></tr>`;
+      return;
+    }
+
+    currentAppointments = json.items || [];
+
+    if(selectedAppointment){
+      const match = currentAppointments.find(x => String(x.id || x.appointment_id) === String(selectedAppointment.id || selectedAppointment.appointment_id));
+      selectedAppointment = match || null;
+    }
+
+    renderAppointments(currentAppointments);
+  }catch(e){
+    body.innerHTML = `<tr><td colspan="8" class="muted">${t("failedToLoadAppointments")}</td></tr>`;
+  }
+}
+
+document.getElementById("searchBox").addEventListener("input", loadAppointments);
+document.getElementById("tenantFilter").addEventListener("change", loadAppointments);
+document.getElementById("statusFilter").addEventListener("change", loadAppointments);
+document.getElementById("doctorFilter").addEventListener("input", loadAppointments);
+
+(async function init(){
+  applyLanguage();
+  localizeStatusOptions();
+  await loadTenants();
+  applyQuickFilter("ALL");
+  await loadAppointments();
+})();
+</script>
+
+</body>
+</html>

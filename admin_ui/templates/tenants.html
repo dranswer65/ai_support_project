@@ -1,0 +1,469 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8"/>
+<title>Onboarded Clinics</title>
+
+<style>
+body{
+  font-family:Arial,sans-serif;
+  background:#f7f7f7;
+  margin:0;
+}
+
+header{
+  background:white;
+  border-bottom:1px solid #ddd;
+  padding:14px 18px;
+}
+
+.wrap{
+  max-width:1200px;
+  margin:auto;
+  padding:20px;
+}
+
+.card{
+  background:white;
+  border:1px solid #eee;
+  border-radius:10px;
+  padding:18px;
+  margin-bottom:18px;
+}
+
+.row{
+  display:grid;
+  grid-template-columns:1fr 220px 220px;
+  gap:12px;
+  margin-bottom:14px;
+}
+
+input, select{
+  width:100%;
+  padding:8px;
+  box-sizing:border-box;
+}
+
+button{
+  padding:10px 14px;
+  border-radius:6px;
+  border:1px solid #ccc;
+  background:white;
+  cursor:pointer;
+}
+
+button.primary{
+  background:#0077ff;
+  color:white;
+  border:none;
+}
+
+button.small{
+  padding:6px 10px;
+  font-size:12px;
+}
+
+button.warn{
+  background:#fff7ed;
+  border-color:#fdba74;
+}
+
+button.danger{
+  background:#fef2f2;
+  border-color:#fca5a5;
+}
+
+button.disabled{
+  opacity:.5;
+  cursor:not-allowed;
+  pointer-events:none;
+}
+
+table{
+  width:100%;
+  border-collapse:collapse;
+}
+
+th, td{
+  border:1px solid #eee;
+  padding:10px;
+  text-align:left;
+  vertical-align:top;
+}
+
+th{
+  background:#fafafa;
+}
+
+.muted{
+  color:#666;
+  font-size:12px;
+}
+
+.tokenbox{
+  font-family:monospace;
+  font-size:12px;
+  word-break:break-all;
+  background:#fafafa;
+  border:1px dashed #ccc;
+  padding:8px;
+  border-radius:8px;
+}
+
+.actions{
+  display:flex;
+  flex-wrap:wrap;
+  gap:8px;
+}
+
+.success{
+  color:#0a7f38;
+  font-size:13px;
+  margin-top:8px;
+}
+
+.error{
+  color:#b42318;
+  font-size:13px;
+  margin-top:8px;
+}
+
+.status-pill{
+  display:inline-block;
+  padding:4px 10px;
+  border-radius:999px;
+  font-size:12px;
+  border:1px solid #ccc;
+  background:#fff;
+  font-weight:700;
+}
+
+.status-active{
+  background:#ecfdf3;
+  border-color:#86efac;
+  color:#166534;
+}
+
+.status-inactive{
+  background:#fef2f2;
+  border-color:#fca5a5;
+  color:#991b1b;
+}
+
+.warning-badge{
+  display:inline-block;
+  margin-top:8px;
+  padding:6px 10px;
+  border-radius:8px;
+  font-size:12px;
+  font-weight:700;
+}
+
+.warning-badge.inactive{
+  background:#fef2f2;
+  border:1px solid #fca5a5;
+  color:#991b1b;
+}
+
+.clinic-warning{
+  margin-top:8px;
+  padding:8px 10px;
+  border-radius:8px;
+  border:1px solid #fca5a5;
+  background:#fff1f2;
+  color:#991b1b;
+  font-size:12px;
+  font-weight:700;
+}
+
+@media (max-width: 900px){
+  .row{
+    grid-template-columns:1fr;
+  }
+}
+</style>
+</head>
+
+<body>
+
+<header>
+  <b>Onboarded Clinics</b>
+</header>
+
+<div class="wrap">
+
+  <div class="card">
+    <div class="row">
+      <div>
+        <label>Search clinic</label>
+        <input id="searchBox" placeholder="Search by tenant id or clinic name"/>
+      </div>
+
+      <div>
+        <label>Status</label>
+        <select id="statusFilter">
+          <option value="ALL">ALL</option>
+          <option value="ACTIVE">ACTIVE</option>
+          <option value="INACTIVE">INACTIVE</option>
+        </select>
+      </div>
+
+      <div style="display:flex;align-items:end;gap:8px;">
+        <button class="primary" onclick="loadTenants()">Refresh</button>
+        <button onclick="goOnboarding()">Open Onboarding</button>
+      </div>
+    </div>
+
+    <div id="msg"></div>
+  </div>
+
+  <div class="card">
+    <table>
+      <thead>
+        <tr>
+          <th>Clinic</th>
+          <th>Tenant</th>
+          <th>Status</th>
+          <th>Timezone</th>
+          <th>Country</th>
+          <th>Reception</th>
+          <th>Admin</th>
+          <th>Actions</th>
+        </tr>
+      </thead>
+      <tbody id="tenantsBody">
+        <tr>
+          <td colspan="8" class="muted">Loading clinics...</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+</div>
+
+<script>
+const qs = new URLSearchParams(location.search);
+const platformToken = qs.get("token") || "";
+
+function setMsg(text, kind="success"){
+  const el = document.getElementById("msg");
+  el.className = kind === "error" ? "error" : "success";
+  el.textContent = text || "";
+}
+
+function clearMsg(){
+  const el = document.getElementById("msg");
+  el.className = "";
+  el.textContent = "";
+}
+
+function adminHeaders(extra = {}){
+  return Object.assign({
+    "X-Admin-Token": platformToken
+  }, extra);
+}
+
+async function copyText(text, okMsg){
+  try{
+    await navigator.clipboard.writeText(text || "");
+    setMsg(okMsg || "Copied");
+  }catch(e){
+    setMsg("Copy failed", "error");
+  }
+}
+
+function goOnboarding(){
+  const url = `/admin/onboarding?token=${encodeURIComponent(platformToken)}`;
+  window.location.href = url;
+}
+
+function buildReceptionUrl(tenantId, receptionToken){
+  return `${location.origin}/reception?tenant=${encodeURIComponent(tenantId)}&token=${encodeURIComponent(receptionToken)}`;
+}
+
+function openTenantOnboarding(tenantId){
+  const url = `/admin/onboarding?token=${encodeURIComponent(platformToken)}&tenant=${encodeURIComponent(tenantId)}`;
+  window.location.href = url;
+}
+
+function statusPill(status){
+  const s = String(status || "").toUpperCase();
+  if(s === "ACTIVE"){
+    return `<span class="status-pill status-active">ACTIVE</span>`;
+  }
+  if(s === "INACTIVE"){
+    return `<span class="status-pill status-inactive">INACTIVE</span>`;
+  }
+  return `<span class="status-pill">${s || "-"}</span>`;
+}
+
+async function activateTenant(tenantId){
+  const ok = confirm(`Activate clinic "${tenantId}"?`);
+  if(!ok) return;
+
+  try{
+    const res = await fetch(`/admin/tenants/${encodeURIComponent(tenantId)}/activate`, {
+      method: "POST",
+      headers: adminHeaders()
+    });
+
+    const json = await res.json();
+
+    if(!json.ok){
+      setMsg("Failed to activate clinic", "error");
+      return;
+    }
+
+    setMsg(`Clinic ${tenantId} activated`);
+    await loadTenants();
+  }catch(e){
+    setMsg("Failed to activate clinic", "error");
+  }
+}
+
+async function deactivateTenant(tenantId){
+  const ok = confirm(`Deactivate clinic "${tenantId}"?\n\nThis will block reception and tenant admin access until reactivated.`);
+  if(!ok) return;
+
+  try{
+    const res = await fetch(`/admin/tenants/${encodeURIComponent(tenantId)}/deactivate`, {
+      method: "POST",
+      headers: adminHeaders()
+    });
+
+    const json = await res.json();
+
+    if(!json.ok){
+      setMsg("Failed to deactivate clinic", "error");
+      return;
+    }
+
+    setMsg(`Clinic ${tenantId} deactivated`);
+    await loadTenants();
+  }catch(e){
+    setMsg("Failed to deactivate clinic", "error");
+  }
+}
+
+async function loadTenants(){
+  clearMsg();
+
+  const body = document.getElementById("tenantsBody");
+  body.innerHTML = `<tr><td colspan="8" class="muted">Loading clinics...</td></tr>`;
+
+  try{
+    const res = await fetch("/admin/tenants/list", {
+      method: "GET",
+      headers: adminHeaders()
+    });
+
+    const json = await res.json();
+
+    if(!json.ok){
+      body.innerHTML = `<tr><td colspan="8" class="muted">Failed to load clinics</td></tr>`;
+      setMsg("Failed to load clinics", "error");
+      return;
+    }
+
+    const search = (document.getElementById("searchBox").value || "").trim().toLowerCase();
+    const statusFilter = document.getElementById("statusFilter").value;
+
+    let items = Array.isArray(json.items) ? json.items : [];
+
+    if(statusFilter !== "ALL"){
+      items = items.filter(x => String(x.status || "").toUpperCase() === statusFilter);
+    }
+
+    if(search){
+      items = items.filter(x => {
+        const tenantId = String(x.tenant_id || "").toLowerCase();
+        const clinicName = String(x.clinic_name || "").toLowerCase();
+        return tenantId.includes(search) || clinicName.includes(search);
+      });
+    }
+
+    if(items.length === 0){
+      body.innerHTML = `<tr><td colspan="8" class="muted">No clinics found</td></tr>`;
+      return;
+    }
+
+    body.innerHTML = "";
+
+    for(const it of items){
+      const tenantId = it.tenant_id || "";
+      const clinicName = it.clinic_name || "";
+      const status = String(it.status || "").toUpperCase();
+      const timezone = it.timezone || "";
+      const country = it.country_code || "";
+      const receptionToken = it.reception_token || "";
+      const adminToken = it.admin_token || "";
+      const receptionUrl = buildReceptionUrl(tenantId, receptionToken);
+
+      const isActive = status === "ACTIVE";
+      const clinicWarningHtml = !isActive
+        ? `<div class="clinic-warning">Clinic suspended — reception and tenant admin access are blocked</div>`
+        : "";
+
+      const receptionActionHtml = isActive
+        ? `<button class="small" onclick='window.open(${JSON.stringify(receptionUrl)}, "_blank")'>Open Reception</button>`
+        : `<button class="small disabled">Open Reception</button>`;
+
+      const tr = document.createElement("tr");
+      tr.innerHTML = `
+        <td>
+          <div><b>${clinicName || "-"}</b></div>
+          <div class="muted">${it.created_at || ""}</div>
+          ${clinicWarningHtml}
+        </td>
+
+        <td>
+          <div class="tokenbox">${tenantId}</div>
+        </td>
+
+        <td>
+          ${statusPill(status)}
+          ${!isActive ? `<div class="warning-badge inactive">Suspended</div>` : ``}
+        </td>
+
+        <td>${timezone || "-"}</td>
+        <td>${country || "-"}</td>
+
+        <td>
+          <div class="tokenbox">${receptionToken || "-"}</div>
+        </td>
+
+        <td>
+          <div class="tokenbox">${adminToken || "-"}</div>
+        </td>
+
+        <td>
+          <div class="actions">
+            ${receptionActionHtml}
+            <button class="small" onclick='copyText(${JSON.stringify(receptionUrl)}, "Reception URL copied")'>Copy Reception URL</button>
+            <button class="small" onclick='copyText(${JSON.stringify(receptionToken)}, "Reception token copied")'>Copy Reception Token</button>
+            <button class="small" onclick='copyText(${JSON.stringify(adminToken)}, "Tenant admin token copied")'>Copy Admin Token</button>
+            <button class="small" onclick='openTenantOnboarding(${JSON.stringify(tenantId)})'>Open Onboarding</button>
+            ${
+              isActive
+              ? `<button class="small danger" onclick='deactivateTenant(${JSON.stringify(tenantId)})'>Deactivate</button>`
+              : `<button class="small warn" onclick='activateTenant(${JSON.stringify(tenantId)})'>Activate</button>`
+            }
+          </div>
+        </td>
+      `;
+      body.appendChild(tr);
+    }
+  }catch(e){
+    body.innerHTML = `<tr><td colspan="8" class="muted">Failed to load clinics</td></tr>`;
+    setMsg("Failed to load clinics", "error");
+  }
+}
+
+document.getElementById("searchBox").addEventListener("input", loadTenants);
+document.getElementById("statusFilter").addEventListener("change", loadTenants);
+
+loadTenants();
+</script>
+
+</body>
+</html>

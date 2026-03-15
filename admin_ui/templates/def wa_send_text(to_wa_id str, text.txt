@@ -1,0 +1,25 @@
+def wa_send_text(to_wa_id: str, text_: str):
+    if not WA_ACCESS_TOKEN or not WA_PHONE_NUMBER_ID:
+        raise RuntimeError("Missing WA config")
+
+    body = (text_ or "").strip()
+
+    if not body:
+        return
+
+    url = f"https://graph.facebook.com/v20.0/{WA_PHONE_NUMBER_ID}/messages"
+
+    payload = {
+        "messaging_product": "whatsapp",
+        "to": to_wa_id,
+        "type": "text",
+        "text": {"body": body[:4000]},
+    }
+
+    headers = {
+        "Authorization": f"Bearer {WA_ACCESS_TOKEN}",
+        "Content-Type": "application/json",
+    }
+
+    requests.post(url, headers=headers, json=payload, timeout=30)
+

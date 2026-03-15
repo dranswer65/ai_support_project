@@ -1,0 +1,1034 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8"/>
+<title>Clinic Onboarding</title>
+
+<style>
+body{
+  font-family:Arial, sans-serif;
+  background:#f7f7f7;
+  margin:0;
+}
+
+header{
+  background:white;
+  border-bottom:1px solid #ddd;
+  padding:14px 18px;
+}
+
+.wrap{
+  padding:20px;
+  max-width:1100px;
+  margin:auto;
+}
+
+.card{
+  background:white;
+  border:1px solid #eee;
+  border-radius:10px;
+  padding:18px;
+  margin-bottom:18px;
+}
+
+.card h3{
+  margin-top:0;
+}
+
+input, select, textarea{
+  width:100%;
+  padding:8px;
+  box-sizing:border-box;
+  margin-top:6px;
+}
+
+.row{
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  gap:14px;
+}
+
+button{
+  padding:10px 14px;
+  border-radius:6px;
+  border:1px solid #ccc;
+  background:white;
+  cursor:pointer;
+}
+
+button.primary{
+  background:#0077ff;
+  color:white;
+  border:none;
+}
+
+.tokenbox{
+  background:#fafafa;
+  border:1px dashed #ccc;
+  padding:10px;
+  margin-top:6px;
+  font-family:monospace;
+  word-break:break-all;
+}
+
+.urlbox{
+  background:#f1f7ff;
+  border:1px solid #d6e7ff;
+  padding:10px;
+  margin-top:6px;
+  font-family:monospace;
+  word-break:break-all;
+}
+
+.tablewrap{
+  overflow:auto;
+  margin-top:12px;
+}
+
+table{
+  width:100%;
+  border-collapse:collapse;
+}
+
+th, td{
+  border:1px solid #eee;
+  padding:8px;
+  text-align:left;
+  vertical-align:top;
+}
+
+th{
+  background:#fafafa;
+}
+
+.muted{
+  color:#666;
+  font-size:12px;
+}
+
+.success{
+  color:#0a7f38;
+  font-size:13px;
+  margin-top:8px;
+}
+
+.error{
+  color:#b42318;
+  font-size:13px;
+  margin-top:8px;
+}
+
+.summary-grid{
+  display:grid;
+  grid-template-columns:repeat(4, 1fr);
+  gap:12px;
+}
+
+.summary-box{
+  border:1px solid #eee;
+  border-radius:10px;
+  padding:14px;
+  background:#fafafa;
+}
+
+.summary-label{
+  color:#666;
+  font-size:12px;
+  margin-bottom:6px;
+}
+
+.summary-value{
+  font-size:28px;
+  font-weight:700;
+}
+
+.check-panel{
+  border-radius:12px;
+  padding:16px;
+  border:1px solid #ddd;
+  transition:all .2s ease;
+}
+
+.check-panel.ok{
+  background:#ecfdf3;
+  border-color:#86efac;
+}
+
+.check-panel.bad{
+  background:#fef2f2;
+  border-color:#fca5a5;
+}
+
+.check-title{
+  font-size:18px;
+  font-weight:700;
+  margin-bottom:8px;
+}
+
+.check-title.ok{
+  color:#166534;
+}
+
+.check-title.bad{
+  color:#991b1b;
+}
+
+.check-list{
+  margin-top:10px;
+  padding-left:18px;
+}
+
+.check-list li{
+  margin:6px 0;
+}
+
+.check-pass{
+  color:#166534;
+}
+
+.check-fail{
+  color:#991b1b;
+}
+
+@media (max-width: 900px){
+  .row{
+    grid-template-columns:1fr;
+  }
+  .summary-grid{
+    grid-template-columns:1fr 1fr;
+  }
+}
+
+@media (max-width: 600px){
+  .summary-grid{
+    grid-template-columns:1fr;
+  }
+}
+</style>
+</head>
+
+<body>
+
+<header>
+  <b>Clinic SaaS Onboarding</b>
+</header>
+
+<div class="wrap">
+
+  <div class="card">
+    <h3>Create Clinic</h3>
+
+    <div class="row">
+      <div>
+        <label>Tenant ID</label>
+        <input id="tenant_id" placeholder="alnoor_clinic"/>
+      </div>
+
+      <div>
+        <label>Clinic Name</label>
+        <input id="clinic_name" placeholder="Al Noor Clinic"/>
+      </div>
+
+      <div>
+        <label>Language</label>
+        <select id="default_language">
+          <option value="en">English</option>
+          <option value="ar">Arabic</option>
+        </select>
+      </div>
+
+      <div>
+        <label>Tone</label>
+        <select id="default_tone">
+          <option value="formal">Formal</option>
+          <option value="friendly">Friendly</option>
+        </select>
+      </div>
+
+      <div>
+        <label>Timezone</label>
+        <input id="timezone" value="Asia/Riyadh"/>
+      </div>
+
+      <div>
+        <label>Country Code</label>
+        <input id="country_code" placeholder="SA"/>
+      </div>
+    </div>
+
+    <br>
+    <button class="primary" onclick="createTenant()">Create Clinic</button>
+    <div id="createTenantMsg"></div>
+  </div>
+
+  <div class="card" id="tokensCard" style="display:none">
+    <h3>Generated Tokens</h3>
+
+    <label>Tenant ID</label>
+    <div id="tenant_out" class="tokenbox"></div>
+
+    <label>Admin Token</label>
+    <div id="admin_token" class="tokenbox"></div>
+
+    <label>Reception Token</label>
+    <div id="reception_token" class="tokenbox"></div>
+
+    <label>Public API Key</label>
+    <div id="public_key" class="tokenbox"></div>
+  </div>
+
+  <div class="card" id="linksCard" style="display:none">
+    <h3>Ready Links</h3>
+
+    <label>Reception Dashboard</label>
+    <div id="reception_url" class="urlbox"></div>
+
+    <br>
+    <button onclick="openReception()">Open Reception Dashboard</button>
+  </div>
+
+  <div class="card" id="summaryCard" style="display:none">
+    <h3>Tenant Setup Summary</h3>
+
+    <div class="summary-grid">
+      <div class="summary-box">
+        <div class="summary-label">Doctors</div>
+        <div id="summary_doctors" class="summary-value">0</div>
+      </div>
+
+      <div class="summary-box">
+        <div class="summary-label">Schedule Rules</div>
+        <div id="summary_rules" class="summary-value">0</div>
+      </div>
+
+      <div class="summary-box">
+        <div class="summary-label">Time Off Records</div>
+        <div id="summary_timeoff" class="summary-value">0</div>
+      </div>
+
+      <div class="summary-box">
+        <div class="summary-label">Generated Slots</div>
+        <div id="summary_slots" class="summary-value">0</div>
+      </div>
+    </div>
+
+    <br>
+    <button onclick="refreshSummary()">Refresh Summary</button>
+    <div id="summaryMsg"></div>
+  </div>
+
+  <div class="card" id="setupCheckCard" style="display:none">
+    <h3>Setup Complete Check</h3>
+
+    <div id="setupCheckPanel" class="check-panel bad">
+      <div id="setupCheckTitle" class="check-title bad">Setup incomplete</div>
+      <div class="muted">This clinic is considered ready only after doctors, schedule rules, and slots exist.</div>
+
+      <ul class="check-list">
+        <li id="checkDoctors" class="check-fail">At least 1 doctor exists</li>
+        <li id="checkRules" class="check-fail">At least 1 schedule rule exists</li>
+        <li id="checkSlots" class="check-fail">Slots have been generated</li>
+      </ul>
+    </div>
+
+    <br>
+    <button class="primary" onclick="runSetupCheck()">Run Check</button>
+    <div id="setupCheckMsg"></div>
+  </div>
+
+  <div class="card" id="doctorCard" style="display:none">
+    <h3>Add Doctor</h3>
+
+    <div class="row">
+      <div>
+        <label>Doctor Key</label>
+        <input id="doctor_key" placeholder="cardio_1"/>
+      </div>
+
+      <div>
+        <label>Doctor Name</label>
+        <input id="doctor_name" placeholder="Dr Ahmed"/>
+      </div>
+
+      <div>
+        <label>Specialty Key</label>
+        <input id="specialty_key" placeholder="cardiology"/>
+      </div>
+
+      <div>
+        <label>Specialty Label</label>
+        <input id="specialty_label" placeholder="Cardiology"/>
+      </div>
+    </div>
+
+    <br>
+    <button onclick="addDoctor()">Add Doctor</button>
+    <button onclick="loadDoctors()">Refresh Doctors</button>
+
+    <div id="doctorMsg"></div>
+
+    <div class="tablewrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Doctor Key</th>
+            <th>Doctor Name</th>
+            <th>Specialty</th>
+            <th>Active</th>
+          </tr>
+        </thead>
+        <tbody id="doctorsTableBody">
+          <tr><td colspan="4" class="muted">No doctors loaded yet.</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="card" id="scheduleCard" style="display:none">
+    <h3>Doctor Schedule Builder</h3>
+
+    <div class="row">
+      <div>
+        <label>Doctor</label>
+        <select id="schedule_doctor_key"></select>
+      </div>
+
+      <div>
+        <label>Day of Week</label>
+        <select id="schedule_day_of_week">
+          <option value="0">Monday</option>
+          <option value="1">Tuesday</option>
+          <option value="2">Wednesday</option>
+          <option value="3">Thursday</option>
+          <option value="4">Friday</option>
+          <option value="5">Saturday</option>
+          <option value="6">Sunday</option>
+        </select>
+      </div>
+
+      <div>
+        <label>Start Time</label>
+        <input id="schedule_start_time" placeholder="09:00"/>
+      </div>
+
+      <div>
+        <label>End Time</label>
+        <input id="schedule_end_time" placeholder="13:00"/>
+      </div>
+
+      <div>
+        <label>Slot Minutes</label>
+        <input id="schedule_slot_minutes" value="15"/>
+      </div>
+
+      <div>
+        <label>Shift Example</label>
+        <div class="muted" style="margin-top:10px;">
+          Morning: 09:00–13:00<br>
+          Evening: 17:00–21:00
+        </div>
+      </div>
+    </div>
+
+    <br>
+    <button onclick="addScheduleRule()">Add Schedule Rule</button>
+    <button onclick="loadScheduleRules()">Refresh Rules</button>
+
+    <div id="scheduleMsg"></div>
+
+    <div class="tablewrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Doctor Key</th>
+            <th>Day</th>
+            <th>Start</th>
+            <th>End</th>
+            <th>Slot Minutes</th>
+            <th>Active</th>
+          </tr>
+        </thead>
+        <tbody id="scheduleRulesTableBody">
+          <tr><td colspan="6" class="muted">No schedule rules loaded yet.</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="card" id="timeoffCard" style="display:none">
+    <h3>Doctor Time Off Builder</h3>
+
+    <div class="row">
+      <div>
+        <label>Doctor</label>
+        <select id="timeoff_doctor_key"></select>
+      </div>
+
+      <div>
+        <label>Reason</label>
+        <input id="timeoff_reason" placeholder="Vacation / Conference / Sick leave"/>
+      </div>
+
+      <div>
+        <label>Starts At</label>
+        <input id="timeoff_starts_at" placeholder="2026-03-15T09:00:00+03:00"/>
+      </div>
+
+      <div>
+        <label>Ends At</label>
+        <input id="timeoff_ends_at" placeholder="2026-03-17T21:00:00+03:00"/>
+      </div>
+    </div>
+
+    <div class="muted" style="margin-top:10px;">
+      Use full ISO datetime with timezone.<br>
+      Example for Riyadh: 2026-03-15T09:00:00+03:00
+    </div>
+
+    <br>
+    <button onclick="addTimeOff()">Add Time Off</button>
+    <button onclick="loadTimeOff()">Refresh Time Off</button>
+
+    <div id="timeoffMsg"></div>
+
+    <div class="tablewrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Doctor Key</th>
+            <th>Starts At</th>
+            <th>Ends At</th>
+            <th>Reason</th>
+            <th>Created At</th>
+          </tr>
+        </thead>
+        <tbody id="timeoffTableBody">
+          <tr><td colspan="5" class="muted">No time off loaded yet.</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="card" id="slotsCard" style="display:none">
+    <h3>Generate Slots</h3>
+
+    <label>Days Ahead</label>
+    <input id="days_ahead" value="14"/>
+
+    <br><br>
+    <button onclick="generateSlots()">Generate Appointment Slots</button>
+    <div id="slotsMsg"></div>
+  </div>
+
+</div>
+
+<script>
+const qs = new URLSearchParams(location.search);
+const platformAdminToken = qs.get("token") || "";
+
+let tenantId = "";
+let tenantAdminToken = "";
+let receptionToken = "";
+
+const DAY_LABELS = {
+  "0": "Monday",
+  "1": "Tuesday",
+  "2": "Wednesday",
+  "3": "Thursday",
+  "4": "Friday",
+  "5": "Saturday",
+  "6": "Sunday"
+};
+
+function platformHeaders(){
+  return {
+    "Content-Type": "application/json",
+    "X-Admin-Token": platformAdminToken
+  };
+}
+
+function tenantAdminHeaders(){
+  return {
+    "Content-Type": "application/json",
+    "X-Tenant-Id": tenantId,
+    "X-Admin-Token": tenantAdminToken
+  };
+}
+
+function setMsg(id, text, kind="success"){
+  const el = document.getElementById(id);
+  if(!el) return;
+  el.className = kind === "error" ? "error" : "success";
+  el.textContent = text || "";
+}
+
+function clearMsg(id){
+  const el = document.getElementById(id);
+  if(!el) return;
+  el.className = "";
+  el.textContent = "";
+}
+
+function receptionUrl(){
+  return `${location.origin}/reception?tenant=${encodeURIComponent(tenantId)}&token=${encodeURIComponent(receptionToken)}`;
+}
+
+function syncDoctorSelects(items){
+  const ids = ["schedule_doctor_key", "timeoff_doctor_key"];
+  for(const id of ids){
+    const select = document.getElementById(id);
+    if(!select) continue;
+    select.innerHTML = "";
+
+    if(!items || items.length === 0){
+      select.innerHTML = `<option value="">No doctors available</option>`;
+      continue;
+    }
+
+    for(const it of items){
+      const opt = document.createElement("option");
+      opt.value = it.doctor_key || "";
+      opt.textContent = `${it.doctor_name || it.doctor_key} (${it.doctor_key})`;
+      select.appendChild(opt);
+    }
+  }
+}
+
+function setSummaryCounts({doctors=0, rules=0, timeoff=0, slots=0}){
+  document.getElementById("summary_doctors").textContent = doctors;
+  document.getElementById("summary_rules").textContent = rules;
+  document.getElementById("summary_timeoff").textContent = timeoff;
+  document.getElementById("summary_slots").textContent = slots;
+}
+
+async function refreshSummary(){
+  clearMsg("summaryMsg");
+
+  if(!tenantId || !tenantAdminToken){
+    setMsg("summaryMsg", "Create clinic first", "error");
+    return { doctors: 0, rules: 0, timeoff: 0, slots: 0 };
+  }
+
+  try{
+    const [doctorsRes, rulesRes, timeoffRes, slotsRes] = await Promise.all([
+      fetch("/admin/doctors/list", {
+        method: "GET",
+        headers: {
+          "X-Tenant-Id": tenantId,
+          "X-Admin-Token": tenantAdminToken
+        }
+      }),
+      fetch("/admin/schedule_rules/list", {
+        method: "GET",
+        headers: {
+          "X-Tenant-Id": tenantId,
+          "X-Admin-Token": tenantAdminToken
+        }
+      }),
+      fetch("/admin/timeoff/list?limit=500", {
+        method: "GET",
+        headers: {
+          "X-Tenant-Id": tenantId,
+          "X-Admin-Token": tenantAdminToken
+        }
+      }),
+      fetch("/admin/slots/list?limit=500", {
+        method: "GET",
+        headers: {
+          "X-Tenant-Id": tenantId,
+          "X-Admin-Token": tenantAdminToken
+        }
+      })
+    ]);
+
+    const doctorsJson = await doctorsRes.json();
+    const rulesJson = await rulesRes.json();
+    const timeoffJson = await timeoffRes.json();
+    const slotsJson = await slotsRes.json();
+
+    if(!doctorsJson.ok || !rulesJson.ok || !timeoffJson.ok || !slotsJson.ok){
+      setMsg("summaryMsg", "Failed to load summary", "error");
+      return { doctors: 0, rules: 0, timeoff: 0, slots: 0 };
+    }
+
+    const counts = {
+      doctors: (doctorsJson.items || []).length,
+      rules: (rulesJson.items || []).length,
+      timeoff: (timeoffJson.items || []).length,
+      slots: (slotsJson.items || []).length
+    };
+
+    setSummaryCounts(counts);
+    setMsg("summaryMsg", "Summary refreshed");
+    return counts;
+  }catch(e){
+    setMsg("summaryMsg", "Failed to load summary", "error");
+    return { doctors: 0, rules: 0, timeoff: 0, slots: 0 };
+  }
+}
+
+function paintCheck(okDoctors, okRules, okSlots){
+  const panel = document.getElementById("setupCheckPanel");
+  const title = document.getElementById("setupCheckTitle");
+  const liDoctors = document.getElementById("checkDoctors");
+  const liRules = document.getElementById("checkRules");
+  const liSlots = document.getElementById("checkSlots");
+
+  liDoctors.className = okDoctors ? "check-pass" : "check-fail";
+  liRules.className = okRules ? "check-pass" : "check-fail";
+  liSlots.className = okSlots ? "check-pass" : "check-fail";
+
+  liDoctors.textContent = okDoctors ? "✓ At least 1 doctor exists" : "✗ At least 1 doctor exists";
+  liRules.textContent = okRules ? "✓ At least 1 schedule rule exists" : "✗ At least 1 schedule rule exists";
+  liSlots.textContent = okSlots ? "✓ Slots have been generated" : "✗ Slots have been generated";
+
+  const allOk = okDoctors && okRules && okSlots;
+
+  panel.className = allOk ? "check-panel ok" : "check-panel bad";
+  title.className = allOk ? "check-title ok" : "check-title bad";
+  title.textContent = allOk ? "Setup complete" : "Setup incomplete";
+}
+
+async function runSetupCheck(){
+  clearMsg("setupCheckMsg");
+
+  if(!tenantId || !tenantAdminToken){
+    setMsg("setupCheckMsg", "Create clinic first", "error");
+    return;
+  }
+
+  const counts = await refreshSummary();
+
+  const okDoctors = counts.doctors > 0;
+  const okRules = counts.rules > 0;
+  const okSlots = counts.slots > 0;
+
+  paintCheck(okDoctors, okRules, okSlots);
+
+  if(okDoctors && okRules && okSlots){
+    setMsg("setupCheckMsg", "Clinic setup is complete");
+  }else{
+    setMsg("setupCheckMsg", "Clinic setup is not complete yet", "error");
+  }
+}
+
+async function createTenant(){
+  clearMsg("createTenantMsg");
+
+  const payload = {
+    tenant_id: document.getElementById("tenant_id").value.trim(),
+    clinic_name: document.getElementById("clinic_name").value.trim(),
+    default_language: document.getElementById("default_language").value,
+    default_tone: document.getElementById("default_tone").value,
+    timezone: document.getElementById("timezone").value.trim(),
+    country_code: document.getElementById("country_code").value.trim()
+  };
+
+  const r = await fetch("/admin/tenants/create", {
+    method: "POST",
+    headers: platformHeaders(),
+    body: JSON.stringify(payload)
+  });
+
+  const j = await r.json();
+
+  if(!j.ok){
+    setMsg("createTenantMsg", "Error creating tenant", "error");
+    return;
+  }
+
+  tenantId = j.tenant_id;
+  tenantAdminToken = j.admin_token;
+  receptionToken = j.reception_token;
+
+  document.getElementById("tenant_out").innerText = tenantId;
+  document.getElementById("admin_token").innerText = tenantAdminToken;
+  document.getElementById("reception_token").innerText = receptionToken;
+  document.getElementById("public_key").innerText = j.public_api_key;
+
+  document.getElementById("tokensCard").style.display = "block";
+  document.getElementById("linksCard").style.display = "block";
+  document.getElementById("summaryCard").style.display = "block";
+  document.getElementById("setupCheckCard").style.display = "block";
+  document.getElementById("doctorCard").style.display = "block";
+  document.getElementById("scheduleCard").style.display = "block";
+  document.getElementById("timeoffCard").style.display = "block";
+  document.getElementById("slotsCard").style.display = "block";
+
+  document.getElementById("reception_url").innerText = receptionUrl();
+
+  setMsg("createTenantMsg", "Clinic created successfully");
+  await loadDoctors();
+  await loadScheduleRules();
+  await loadTimeOff();
+  await runSetupCheck();
+}
+
+async function addDoctor(){
+  clearMsg("doctorMsg");
+
+  if(!tenantId || !tenantAdminToken){
+    setMsg("doctorMsg", "Create clinic first", "error");
+    return;
+  }
+
+  const payload = {
+    doctor_key: document.getElementById("doctor_key").value.trim(),
+    doctor_name: document.getElementById("doctor_name").value.trim(),
+    specialty_key: document.getElementById("specialty_key").value.trim(),
+    specialty_label: document.getElementById("specialty_label").value.trim(),
+    is_active: true
+  };
+
+  const r = await fetch("/admin/doctors/upsert", {
+    method: "POST",
+    headers: tenantAdminHeaders(),
+    body: JSON.stringify(payload)
+  });
+
+  const j = await r.json();
+
+  if(!j.ok){
+    setMsg("doctorMsg", "Error adding doctor", "error");
+    return;
+  }
+
+  setMsg("doctorMsg", "Doctor added successfully");
+  await loadDoctors();
+  await runSetupCheck();
+}
+
+async function loadDoctors(){
+  if(!tenantId || !tenantAdminToken){
+    return;
+  }
+
+  const r = await fetch("/admin/doctors/list", {
+    method: "GET",
+    headers: {
+      "X-Tenant-Id": tenantId,
+      "X-Admin-Token": tenantAdminToken
+    }
+  });
+
+  const j = await r.json();
+
+  if(!j.ok){
+    setMsg("doctorMsg", "Failed to load doctors", "error");
+    return;
+  }
+
+  const tbody = document.getElementById("doctorsTableBody");
+  tbody.innerHTML = "";
+
+  if(!j.items || j.items.length === 0){
+    tbody.innerHTML = `<tr><td colspan="4" class="muted">No doctors yet.</td></tr>`;
+    syncDoctorSelects([]);
+    return;
+  }
+
+  for(const it of j.items){
+    const tr = document.createElement("tr");
+    tr.innerHTML = `
+      <td>${it.doctor_key || ""}</td>
+      <td>${it.doctor_name || ""}</td>
+      <td>${it.specialty_label || ""}</td>
+      <td>${String(it.is_active)}</td>
+    `;
+    tbody.appendChild(tr);
+  }
+
+  syncDoctorSelects(j.items);
+}
+
+async function addScheduleRule(){
+  clearMsg("scheduleMsg");
+
+  if(!tenantId || !tenantAdminToken){
+    setMsg("scheduleMsg", "Create clinic first", "error");
+    return;
+  }
+
+  const payload = {
+    doctor_key: document.getElementById("schedule_doctor_key").value,
+    day_of_week: parseInt(document.getElementById("schedule_day_of_week").value, 10),
+    start_time: document.getElementById("schedule_start_time").value.trim(),
+    end_time: document.getElementById("schedule_end_time").value.trim(),
+    slot_minutes: parseInt(document.getElementById("schedule_slot_minutes").value, 10),
+    is_active: true
+  };
+
+  const r = await fetch("/admin/schedule_rules/upsert", {
+    method: "POST",
+    headers: tenantAdminHeaders(),
+    body: JSON.stringify(payload)
+  });
+
+  const j = await r.json();
+
+  if(!j.ok){
+    setMsg("scheduleMsg", "Error adding schedule rule", "error");
+    return;
+  }
+
+  setMsg("scheduleMsg", "Schedule rule added successfully");
+  await loadScheduleRules();
+  await runSetupCheck();
+}
+
+async function loadScheduleRules(){
+  if(!tenantId || !tenantAdminToken){
+    return;
+  }
+
+  const r = await fetch("/admin/schedule_rules/list", {
+    method: "GET",
+    headers: {
+      "X-Tenant-Id": tenantId,
+      "X-Admin-Token": tenantAdminToken
+    }
+  });
+
+  const j = await r.json();
+
+  if(!j.ok){
+    setMsg("scheduleMsg", "Failed to load schedule rules", "error");
+    return;
+  }
+
+  const tbody = document.getElementById("scheduleRulesTableBody");
+  tbody.innerHTML = "";
+
+  if(!j.items || j.items.length === 0){
+    tbody.innerHTML = `<tr><td colspan="6" class="muted">No schedule rules yet.</td></tr>`;
+    return;
+  }
+
+  for(const it of j.items){
+    const day = DAY_LABELS[String(it.day_of_week)] || String(it.day_of_week);
+    const tr = document.createElement("tr");
+    tr.innerHTML = `
+      <td>${it.doctor_key || ""}</td>
+      <td>${day}</td>
+      <td>${String(it.start_time || "").slice(0,5)}</td>
+      <td>${String(it.end_time || "").slice(0,5)}</td>
+      <td>${it.slot_minutes || ""}</td>
+      <td>${String(it.is_active)}</td>
+    `;
+    tbody.appendChild(tr);
+  }
+}
+
+async function addTimeOff(){
+  clearMsg("timeoffMsg");
+
+  if(!tenantId || !tenantAdminToken){
+    setMsg("timeoffMsg", "Create clinic first", "error");
+    return;
+  }
+
+  const payload = {
+    doctor_key: document.getElementById("timeoff_doctor_key").value,
+    starts_at: document.getElementById("timeoff_starts_at").value.trim(),
+    ends_at: document.getElementById("timeoff_ends_at").value.trim(),
+    reason: document.getElementById("timeoff_reason").value.trim()
+  };
+
+  const r = await fetch("/admin/timeoff/add", {
+    method: "POST",
+    headers: tenantAdminHeaders(),
+    body: JSON.stringify(payload)
+  });
+
+  const j = await r.json();
+
+  if(!j.ok){
+    setMsg("timeoffMsg", "Error adding time off", "error");
+    return;
+  }
+
+  setMsg("timeoffMsg", "Time off added successfully");
+  await loadTimeOff();
+  await refreshSummary();
+}
+
+async function loadTimeOff(){
+  if(!tenantId || !tenantAdminToken){
+    return;
+  }
+
+  const r = await fetch("/admin/timeoff/list?limit=200", {
+    method: "GET",
+    headers: {
+      "X-Tenant-Id": tenantId,
+      "X-Admin-Token": tenantAdminToken
+    }
+  });
+
+  const j = await r.json();
+
+  if(!j.ok){
+    setMsg("timeoffMsg", "Failed to load time off", "error");
+    return;
+  }
+
+  const tbody = document.getElementById("timeoffTableBody");
+  tbody.innerHTML = "";
+
+  if(!j.items || j.items.length === 0){
+    tbody.innerHTML = `<tr><td colspan="5" class="muted">No time off yet.</td></tr>`;
+    return;
+  }
+
+  for(const it of j.items){
+    const tr = document.createElement("tr");
+    tr.innerHTML = `
+      <td>${it.doctor_key || ""}</td>
+      <td>${it.starts_at || ""}</td>
+      <td>${it.ends_at || ""}</td>
+      <td>${it.reason || ""}</td>
+      <td>${it.created_at || ""}</td>
+    `;
+    tbody.appendChild(tr);
+  }
+}
+
+async function generateSlots(){
+  clearMsg("slotsMsg");
+
+  if(!tenantId || !tenantAdminToken){
+    setMsg("slotsMsg", "Create clinic first", "error");
+    return;
+  }
+
+  const days = document.getElementById("days_ahead").value;
+
+  const r = await fetch(`/admin/slots/generate?days_ahead=${encodeURIComponent(days)}`, {
+    method: "POST",
+    headers: {
+      "X-Tenant-Id": tenantId,
+      "X-Admin-Token": tenantAdminToken
+    }
+  });
+
+  const j = await r.json();
+
+  if(!j.ok){
+    setMsg("slotsMsg", "Error generating slots", "error");
+    return;
+  }
+
+  setMsg("slotsMsg", "Slots generated successfully");
+  await runSetupCheck();
+}
+
+function openReception(){
+  if(!tenantId || !receptionToken){
+    return;
+  }
+  window.open(receptionUrl(), "_blank");
+}
+</script>
+
+</body>
+</html>

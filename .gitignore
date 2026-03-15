@@ -1,0 +1,15 @@
+.env
+*.env
+logs/
+audit/
+stripe_test.py
+**/sessions.json
+**/users.json
+**/admin_users.json
+**/security_state.json
+
+usage/
+clients/*/config/api_key.json
+__pycache__
+audit/audit_log.json
+audit/override_audit_log.py

@@ -1,0 +1,1145 @@
+<!doctype html>
+<html lang="en" dir="ltr">
+<head>
+<meta charset="utf-8"/>
+<title>Tenant Analytics Overview</title>
+
+<style>
+body{
+  font-family:Arial,sans-serif;
+  background:#f7f7f7;
+  margin:0;
+}
+header{
+  background:white;
+  border-bottom:1px solid #ddd;
+  padding:14px 18px;
+}
+.wrap{
+  max-width:1400px;
+  margin:auto;
+  padding:20px;
+}
+.card{
+  background:white;
+  border:1px solid #eee;
+  border-radius:10px;
+  padding:18px;
+  margin-bottom:18px;
+}
+.dashboard-grid{
+  display:grid;
+  grid-template-columns:repeat(auto-fill,minmax(200px,1fr));
+  gap:12px;
+}
+.dash-card{
+  background:#fafafa;
+  border:1px solid #eee;
+  border-radius:10px;
+  padding:16px;
+  text-align:center;
+}
+.dash-number{
+  font-size:28px;
+  font-weight:700;
+}
+.dash-label{
+  font-size:12px;
+  color:#666;
+  margin-top:4px;
+}
+.row{
+  display:grid;
+  grid-template-columns:1fr 220px 220px 220px;
+  gap:12px;
+  margin-bottom:14px;
+}
+input, select{
+  width:100%;
+  padding:8px;
+  box-sizing:border-box;
+}
+button{
+  padding:8px 12px;
+  border-radius:6px;
+  border:1px solid #ccc;
+  background:white;
+  cursor:pointer;
+}
+button.primary{
+  background:#0077ff;
+  color:white;
+  border:none;
+}
+button.small{
+  font-size:12px;
+}
+button.fix-now{
+  background:#fff7ed;
+  border-color:#fdba74;
+  color:#9a3412;
+  font-weight:700;
+}
+button.good{
+  background:#ecfdf3;
+  border-color:#86efac;
+  color:#166534;
+}
+button.info{
+  background:#eff6ff;
+  border-color:#93c5fd;
+  color:#1d4ed8;
+}
+button.warn{
+  background:#fff7ed;
+  border-color:#fdba74;
+  color:#9a3412;
+}
+button.danger{
+  background:#fef2f2;
+  border-color:#fca5a5;
+  color:#991b1b;
+}
+table{
+  width:100%;
+  border-collapse:collapse;
+}
+th, td{
+  border:1px solid #eee;
+  padding:10px;
+  text-align:left;
+  vertical-align:top;
+}
+th{
+  background:#fafafa;
+}
+.muted{
+  color:#666;
+  font-size:12px;
+}
+.metric{
+  font-weight:700;
+}
+.status-pill{
+  display:inline-block;
+  padding:4px 10px;
+  border-radius:999px;
+  font-size:12px;
+  border:1px solid #ccc;
+  font-weight:700;
+  background:#fff;
+}
+.status-active{
+  background:#ecfdf3;
+  border-color:#86efac;
+  color:#166534;
+}
+.status-inactive{
+  background:#fef2f2;
+  border-color:#fca5a5;
+  color:#991b1b;
+}
+.health-pill{
+  display:inline-block;
+  padding:4px 10px;
+  border-radius:999px;
+  font-size:12px;
+  border:1px solid #ccc;
+  font-weight:700;
+  background:#fff;
+}
+.health-good{
+  background:#ecfdf3;
+  border-color:#86efac;
+  color:#166534;
+}
+.health-mid{
+  background:#fff7ed;
+  border-color:#fdba74;
+  color:#9a3412;
+}
+.health-bad{
+  background:#fef2f2;
+  border-color:#fca5a5;
+  color:#991b1b;
+}
+.billing-pill{
+  display:inline-block;
+  padding:4px 10px;
+  border-radius:999px;
+  font-size:12px;
+  border:1px solid #ccc;
+  font-weight:700;
+  background:#fff;
+}
+.billing-active{
+  background:#ecfdf3;
+  border-color:#86efac;
+  color:#166534;
+}
+.billing-trial{
+  background:#eff6ff;
+  border-color:#93c5fd;
+  color:#1d4ed8;
+}
+.billing-pastdue{
+  background:#fff7ed;
+  border-color:#fdba74;
+  color:#9a3412;
+}
+.billing-cancelled{
+  background:#fef2f2;
+  border-color:#fca5a5;
+  color:#991b1b;
+}
+.billing-unknown{
+  background:#f5f5f5;
+  border-color:#d4d4d4;
+  color:#444;
+}
+.block-banner{
+  margin-top:8px;
+  padding:8px 10px;
+  border-radius:10px;
+  border:1px solid #ddd;
+  font-size:12px;
+  line-height:1.4;
+}
+.block-trial-expired{
+  background:#fef2f2;
+  border-color:#fca5a5;
+  color:#991b1b;
+}
+.block-past-due{
+  background:#fff7ed;
+  border-color:#fdba74;
+  color:#9a3412;
+}
+.block-cancelled{
+  background:#fef2f2;
+  border-color:#fca5a5;
+  color:#991b1b;
+}
+.top-stats{
+  display:grid;
+  grid-template-columns:repeat(5,1fr);
+  gap:12px;
+}
+.stat-box{
+  background:#fafafa;
+  border:1px solid #eee;
+  border-radius:10px;
+  padding:14px;
+}
+.stat-label{
+  color:#666;
+  font-size:12px;
+}
+.stat-value{
+  font-size:28px;
+  font-weight:700;
+}
+.actions{
+  display:flex;
+  flex-direction:column;
+  gap:6px;
+}
+td:last-child{
+  min-width:140px;
+}
+.health-cell{
+  display:flex;
+  flex-direction:column;
+  gap:8px;
+  align-items:flex-start;
+}
+.success{
+  color:#0a7f38;
+  font-size:13px;
+}
+.error{
+  color:#b42318;
+  font-size:13px;
+}
+.attention-box{
+  margin-top:10px;
+  padding:10px 12px;
+  border-radius:10px;
+  border:1px solid #fde68a;
+  background:#fffbeb;
+  color:#92400e;
+  font-size:13px;
+}
+.nav{
+  display:flex;
+  gap:8px;
+  flex-wrap:wrap;
+}
+html[dir="rtl"] body{
+  direction:rtl;
+}
+html[dir="rtl"] th,
+html[dir="rtl"] td,
+html[dir="rtl"] input,
+html[dir="rtl"] select,
+html[dir="rtl"] label,
+html[dir="rtl"] .stat-label,
+html[dir="rtl"] .stat-value,
+html[dir="rtl"] .dash-label,
+html[dir="rtl"] .dash-number,
+html[dir="rtl"] .muted,
+html[dir="rtl"] header,
+html[dir="rtl"] h3{
+  text-align:right;
+}
+html[dir="rtl"] .nav{
+  flex-direction:row-reverse;
+}
+html[dir="rtl"] .health-cell{
+  align-items:flex-start;
+}
+@media (max-width:1100px){
+  .top-stats{
+    grid-template-columns:repeat(2,1fr);
+  }
+  .row{
+    grid-template-columns:1fr;
+  }
+}
+</style>
+</head>
+
+<body>
+
+<header>
+<b id="pageTitle">Tenant Analytics / SaaS Overview</b>
+</header>
+
+<div class="wrap">
+
+<div class="card">
+  <div class="nav">
+    <button type="button" id="navAnalytics" onclick="goTo('/admin/analytics')">Analytics</button>
+    <button type="button" id="navBilling" onclick="goTo('/admin/billing')">Billing</button>
+    <button type="button" id="navUsage" onclick="goTo('/admin/usage')">Usage</button>
+    <button type="button" id="navInvoices" onclick="goTo('/admin/invoices')">Invoices</button>
+    <button type="button" id="navTemplates" onclick="goTo('/admin/templates')">Templates</button>
+    <button type="button" id="btnEnglish" onclick="switchLang('en')">English</button>
+    <button type="button" id="btnArabic" onclick="switchLang('ar')">العربية</button>
+  </div>
+</div>
+
+<div class="card">
+  <h3 id="smartDashboardTitle">Smart Clinic Dashboard</h3>
+
+  <div class="dashboard-grid">
+    <div class="dash-card">
+      <div id="todayAppointments" class="dash-number">0</div>
+      <div id="lblTodayAppointments" class="dash-label">Today's Appointments</div>
+    </div>
+
+    <div class="dash-card">
+      <div id="todayCompleted" class="dash-number">0</div>
+      <div id="lblTodayCompleted" class="dash-label">Completed Today</div>
+    </div>
+
+    <div class="dash-card">
+      <div id="todayCancelled" class="dash-number">0</div>
+      <div id="lblTodayCancelled" class="dash-label">Cancelled Today</div>
+    </div>
+
+    <div class="dash-card">
+      <div id="todayNoShow" class="dash-number">0</div>
+      <div id="lblTodayNoShow" class="dash-label">No Shows</div>
+    </div>
+
+    <div class="dash-card">
+      <div id="activeDoctors" class="dash-number">0</div>
+      <div id="lblActiveDoctors" class="dash-label">Active Doctors</div>
+    </div>
+
+    <div class="dash-card">
+      <div id="openSlots" class="dash-number">0</div>
+      <div id="lblOpenSlots" class="dash-label">Open Slots Today</div>
+    </div>
+  </div>
+</div>
+
+<div class="card">
+  <div class="top-stats">
+    <div class="stat-box">
+      <div id="lblStatClinics" class="stat-label">Clinics</div>
+      <div id="statClinics" class="stat-value">0</div>
+    </div>
+
+    <div class="stat-box">
+      <div id="lblStatActive" class="stat-label">Active Clinics</div>
+      <div id="statActive" class="stat-value">0</div>
+    </div>
+
+    <div class="stat-box">
+      <div id="lblStatDoctors" class="stat-label">Doctors</div>
+      <div id="statDoctors" class="stat-value">0</div>
+    </div>
+
+    <div class="stat-box">
+      <div id="lblStatPending" class="stat-label">Pending Requests</div>
+      <div id="statPending" class="stat-value">0</div>
+    </div>
+
+    <div class="stat-box">
+      <div id="lblStatAppointments" class="stat-label">Appointments</div>
+      <div id="statAppointments" class="stat-value">0</div>
+    </div>
+  </div>
+</div>
+
+<div class="card">
+  <div class="row">
+    <div>
+      <label id="lblSearchClinic">Search clinic</label>
+      <input id="searchBox" placeholder="Search by clinic or tenant id"/>
+    </div>
+
+    <div>
+      <label id="lblStatusFilter">Status</label>
+      <select id="statusFilter">
+        <option value="ALL">ALL</option>
+        <option value="ACTIVE">ACTIVE</option>
+        <option value="INACTIVE">INACTIVE</option>
+      </select>
+    </div>
+
+    <div>
+      <label id="lblViewMode">View</label>
+      <select id="viewMode">
+        <option value="ALL">All Clinics</option>
+        <option value="ATTENTION">Needs Attention First</option>
+      </select>
+    </div>
+
+    <div style="display:flex;align-items:end;gap:8px;flex-wrap:wrap;">
+      <button id="btnRefresh" class="primary" type="button" onclick="loadOverview()">Refresh</button>
+      <button id="btnClinicsList" type="button" onclick="openTenants()">Clinics List</button>
+      <button id="btnBilling" type="button" onclick="openBilling()">Billing</button>
+      <button id="btnUsage" type="button" onclick="openUsage()">Usage</button>
+      <button id="btnInvoices" type="button" onclick="openInvoices()">Invoices</button>
+      <button id="btnTemplates" type="button" onclick="openTemplates()">Templates</button>
+    </div>
+  </div>
+
+  <div id="msg"></div>
+
+  <div id="attentionInfo" class="attention-box">
+    Needs Attention view puts incomplete clinics at the top automatically.
+  </div>
+</div>
+
+<div class="card">
+  <table>
+    <thead>
+      <tr>
+        <th id="thClinic">Clinic</th>
+        <th id="thStatus">Status</th>
+        <th id="thHealth">Health</th>
+        <th id="thBilling">Billing</th>
+        <th id="thDoctors">Doctors</th>
+        <th id="thRules">Rules</th>
+        <th id="thSlots">Slots</th>
+        <th id="thPending">Pending</th>
+        <th id="thConfirmed">Confirmed</th>
+        <th id="thToday">Today</th>
+        <th id="thTotalAppts">Total Appts</th>
+        <th id="thLastRequest">Last Request</th>
+        <th id="thLastAppt">Last Appt</th>
+        <th id="thTenant">Tenant</th>
+        <th id="thActions">Actions</th>
+      </tr>
+    </thead>
+
+    <tbody id="overviewBody">
+      <tr>
+        <td colspan="15" class="muted" id="loadingOverview">Loading overview...</td>
+      </tr>
+    </tbody>
+  </table>
+</div>
+
+</div>
+
+<script>
+const qs = new URLSearchParams(location.search);
+const uiLang = (qs.get("lang") || localStorage.getItem("sp_ui_lang") || "en").toLowerCase() === "ar" ? "ar" : "en";
+
+const I18N = {
+  en: {
+    pageTitle: "Tenant Analytics / SaaS Overview",
+    navAnalytics: "Analytics",
+    navBilling: "Billing",
+    navUsage: "Usage",
+    navInvoices: "Invoices",
+    navTemplates: "Templates",
+    btnEnglish: "English",
+    btnArabic: "العربية",
+
+    smartDashboardTitle: "Smart Clinic Dashboard",
+    lblTodayAppointments: "Today's Appointments",
+    lblTodayCompleted: "Completed Today",
+    lblTodayCancelled: "Cancelled Today",
+    lblTodayNoShow: "No Shows",
+    lblActiveDoctors: "Active Doctors",
+    lblOpenSlots: "Open Slots Today",
+
+    lblStatClinics: "Clinics",
+    lblStatActive: "Active Clinics",
+    lblStatDoctors: "Doctors",
+    lblStatPending: "Pending Requests",
+    lblStatAppointments: "Appointments",
+
+    lblSearchClinic: "Search clinic",
+    searchPlaceholder: "Search by clinic or tenant id",
+    lblStatusFilter: "Status",
+    lblViewMode: "View",
+    btnRefresh: "Refresh",
+    btnClinicsList: "Clinics List",
+    btnBilling: "Billing",
+    btnUsage: "Usage",
+    btnInvoices: "Invoices",
+    btnTemplates: "Templates",
+    attentionInfo: "Needs Attention view puts incomplete clinics at the top automatically.",
+
+    thClinic: "Clinic",
+    thStatus: "Status",
+    thHealth: "Health",
+    thBilling: "Billing",
+    thDoctors: "Doctors",
+    thRules: "Rules",
+    thSlots: "Slots",
+    thPending: "Pending",
+    thConfirmed: "Confirmed",
+    thToday: "Today",
+    thTotalAppts: "Total Appts",
+    thLastRequest: "Last Request",
+    thLastAppt: "Last Appt",
+    thTenant: "Tenant",
+    thActions: "Actions",
+
+    loadingOverview: "Loading overview...",
+    failedOverview: "Failed to load overview",
+    failedOverviewStatus: "Failed to load overview",
+    noClinicsFound: "No clinics found",
+
+    all: "ALL",
+    active: "ACTIVE",
+    inactive: "INACTIVE",
+    allClinics: "All Clinics",
+    attentionFirst: "Needs Attention First",
+
+    statusActive: "ACTIVE",
+    statusInactive: "INACTIVE",
+
+    billingActive: "ACTIVE",
+    billingTrial: "TRIAL",
+    billingPastDue: "PAST DUE",
+    billingCancelled: "CANCELLED",
+    billingNoSubscription: "NO SUBSCRIPTION",
+
+    trialExpiredTitle: "Trial expired",
+    trialExpiredText: "Upgrade required. AI access is blocked.",
+    pastDueTitle: "Payment overdue",
+    pastDueText: "Renew billing. AI access may be blocked.",
+    cancelledTitle: "Subscription cancelled",
+    cancelledText: "Reactivation required. AI access is blocked.",
+
+    missingDoctors: "doctors",
+    missingRules: "schedule rules",
+    missingSlots: "slots",
+    healthy: "Healthy",
+    setupIncomplete: "Setup Incomplete",
+    notConfigured: "Not Configured",
+    missingPrefix: "Missing: ",
+
+    planPrefix: "Plan",
+    stripeLinked: "Stripe: Linked",
+    stripeNotLinked: "Stripe: Not linked",
+
+    onboarding: "Onboarding",
+    reception: "Reception",
+    copyReception: "Copy Reception",
+    copyAdminToken: "Copy Admin Token",
+    startStarter: "Start Starter",
+    startGrowth: "Start Growth",
+    billingPortal: "Billing Portal",
+    fixNow: "Fix Now",
+
+    receptionUrlCopied: "Reception URL copied",
+    adminTokenCopied: "Tenant admin token copied",
+
+    checkoutFailed: "Checkout failed",
+    checkoutMissing: "Stripe checkout URL missing",
+    checkoutStartError: "Could not start Stripe checkout",
+    portalFailed: "Portal failed",
+    portalMissing: "Portal URL missing"
+  },
+  ar: {
+    pageTitle: "نظرة عامة على تحليلات العيادات / المنصة",
+    navAnalytics: "التحليلات",
+    navBilling: "الفوترة",
+    navUsage: "الاستخدام",
+    navInvoices: "الفواتير",
+    navTemplates: "القوالب",
+    btnEnglish: "English",
+    btnArabic: "العربية",
+
+    smartDashboardTitle: "لوحة العيادة الذكية",
+    lblTodayAppointments: "مواعيد اليوم",
+    lblTodayCompleted: "المكتمل اليوم",
+    lblTodayCancelled: "الملغى اليوم",
+    lblTodayNoShow: "عدم الحضور",
+    lblActiveDoctors: "الأطباء النشطون",
+    lblOpenSlots: "المواعيد المتاحة اليوم",
+
+    lblStatClinics: "العيادات",
+    lblStatActive: "العيادات النشطة",
+    lblStatDoctors: "الأطباء",
+    lblStatPending: "الطلبات المعلقة",
+    lblStatAppointments: "المواعيد",
+
+    lblSearchClinic: "بحث بالعيادة",
+    searchPlaceholder: "ابحث باسم العيادة أو معرفها",
+    lblStatusFilter: "الحالة",
+    lblViewMode: "العرض",
+    btnRefresh: "تحديث",
+    btnClinicsList: "قائمة العيادات",
+    btnBilling: "الفوترة",
+    btnUsage: "الاستخدام",
+    btnInvoices: "الفواتير",
+    btnTemplates: "القوالب",
+    attentionInfo: "عرض يحتاج انتباه يضع العيادات غير المكتملة في الأعلى تلقائياً.",
+
+    thClinic: "العيادة",
+    thStatus: "الحالة",
+    thHealth: "الجاهزية",
+    thBilling: "الفوترة",
+    thDoctors: "الأطباء",
+    thRules: "القواعد",
+    thSlots: "المواعيد",
+    thPending: "المعلق",
+    thConfirmed: "المؤكد",
+    thToday: "اليوم",
+    thTotalAppts: "إجمالي المواعيد",
+    thLastRequest: "آخر طلب",
+    thLastAppt: "آخر موعد",
+    thTenant: "المعرف",
+    thActions: "الإجراءات",
+
+    loadingOverview: "جاري تحميل النظرة العامة...",
+    failedOverview: "فشل تحميل النظرة العامة",
+    failedOverviewStatus: "فشل تحميل النظرة العامة",
+    noClinicsFound: "لا توجد عيادات",
+
+    all: "الكل",
+    active: "نشط",
+    inactive: "غير نشط",
+    allClinics: "كل العيادات",
+    attentionFirst: "الأكثر احتياجاً أولاً",
+
+    statusActive: "نشط",
+    statusInactive: "غير نشط",
+
+    billingActive: "نشط",
+    billingTrial: "تجريبي",
+    billingPastDue: "متأخر السداد",
+    billingCancelled: "ملغي",
+    billingNoSubscription: "لا يوجد اشتراك",
+
+    trialExpiredTitle: "انتهت الفترة التجريبية",
+    trialExpiredText: "مطلوب ترقية. تم إيقاف وصول الذكاء الاصطناعي.",
+    pastDueTitle: "الدفع متأخر",
+    pastDueText: "يجب تجديد الفوترة. قد يتم إيقاف الوصول.",
+    cancelledTitle: "تم إلغاء الاشتراك",
+    cancelledText: "مطلوب إعادة التفعيل. الوصول موقوف.",
+
+    missingDoctors: "أطباء",
+    missingRules: "قواعد الجدول",
+    missingSlots: "المواعيد",
+    healthy: "جاهزة",
+    setupIncomplete: "الإعداد غير مكتمل",
+    notConfigured: "غير مهيأة",
+    missingPrefix: "النواقص: ",
+
+    planPrefix: "الخطة",
+    stripeLinked: "سترايب: مرتبط",
+    stripeNotLinked: "سترايب: غير مرتبط",
+
+    onboarding: "الإعداد",
+    reception: "الاستقبال",
+    copyReception: "نسخ رابط الاستقبال",
+    copyAdminToken: "نسخ رمز الإدارة",
+    startStarter: "بدء Starter",
+    startGrowth: "بدء Growth",
+    billingPortal: "بوابة الفوترة",
+    fixNow: "إصلاح الآن",
+
+    receptionUrlCopied: "تم نسخ رابط الاستقبال",
+    adminTokenCopied: "تم نسخ رمز الإدارة",
+
+    checkoutFailed: "فشل بدء الدفع",
+    checkoutMissing: "رابط Stripe غير موجود",
+    checkoutStartError: "تعذر بدء Stripe checkout",
+    portalFailed: "فشل فتح البوابة",
+    portalMissing: "رابط البوابة غير موجود"
+  }
+};
+
+function t(key){
+  return (I18N[uiLang] && I18N[uiLang][key]) || key;
+}
+
+function applyLanguage(){
+  document.documentElement.setAttribute("lang", uiLang);
+  document.documentElement.setAttribute("dir", uiLang === "ar" ? "rtl" : "ltr");
+
+  const ids = [
+    "pageTitle","smartDashboardTitle","lblTodayAppointments","lblTodayCompleted",
+    "lblTodayCancelled","lblTodayNoShow","lblActiveDoctors","lblOpenSlots",
+    "lblStatClinics","lblStatActive","lblStatDoctors","lblStatPending","lblStatAppointments",
+    "lblSearchClinic","lblStatusFilter","lblViewMode","btnRefresh","btnClinicsList",
+    "btnBilling","btnUsage","btnInvoices","btnTemplates","attentionInfo","thClinic",
+    "thStatus","thHealth","thBilling","thDoctors","thRules","thSlots","thPending",
+    "thConfirmed","thToday","thTotalAppts","thLastRequest","thLastAppt","thTenant",
+    "thActions","loadingOverview"
+  ];
+
+  for(const id of ids){
+    const el = document.getElementById(id);
+    if(el) el.textContent = t(id);
+  }
+
+  const navMap = {
+    navAnalytics: "navAnalytics",
+    navBilling: "navBilling",
+    navUsage: "navUsage",
+    navInvoices: "navInvoices",
+    navTemplates: "navTemplates",
+    btnEnglish: "btnEnglish",
+    btnArabic: "btnArabic"
+  };
+
+  for(const [id, key] of Object.entries(navMap)){
+    const el = document.getElementById(id);
+    if(el) el.textContent = t(key);
+  }
+
+  document.getElementById("searchBox").placeholder = t("searchPlaceholder");
+
+  const statusFilter = document.getElementById("statusFilter");
+  statusFilter.options[0].textContent = t("all");
+  statusFilter.options[1].textContent = t("active");
+  statusFilter.options[2].textContent = t("inactive");
+
+  const viewMode = document.getElementById("viewMode");
+  viewMode.options[0].textContent = t("allClinics");
+  viewMode.options[1].textContent = t("attentionFirst");
+}
+
+function switchLang(lang){
+  localStorage.setItem("sp_ui_lang", lang);
+  const params = new URLSearchParams(window.location.search);
+  params.set("lang", lang);
+  window.location.href = `${window.location.pathname}?${params.toString()}`;
+}
+
+function goTo(path){
+  const params = new URLSearchParams();
+  if(uiLang) params.set("lang", uiLang);
+  window.location.href = params.toString() ? `${path}?${params.toString()}` : path;
+}
+
+function adminHeaders(){
+  return {};
+}
+
+function setMsg(text, kind="success"){
+  const el = document.getElementById("msg");
+  el.className = kind === "error" ? "error" : "success";
+  el.textContent = text || "";
+  if(text){
+    setTimeout(() => { el.textContent = ""; }, 3000);
+  }
+}
+
+function openAnalytics(){ goTo("/admin/analytics"); }
+function openBilling(){ goTo("/admin/billing"); }
+function openUsage(){ goTo("/admin/usage"); }
+function openInvoices(){ goTo("/admin/invoices"); }
+function openTemplates(){ goTo("/admin/templates"); }
+function openTenants(){ goTo("/admin/tenants"); }
+
+function openTenantOnboarding(tenantId){
+  const params = new URLSearchParams();
+  params.set("tenant", tenantId);
+  if(uiLang) params.set("lang", uiLang);
+  window.open(`/admin/onboarding?${params.toString()}`, "_blank");
+}
+
+function statusPill(status){
+  const s = String(status || "").toUpperCase();
+  if(s === "ACTIVE"){
+    return `<span class="status-pill status-active">${t("statusActive")}</span>`;
+  }
+  if(s === "INACTIVE"){
+    return `<span class="status-pill status-inactive">${t("statusInactive")}</span>`;
+  }
+  return `<span class="status-pill">${s}</span>`;
+}
+
+function billingPill(status){
+  const s = String(status || "").toUpperCase();
+  if(s === "ACTIVE") return `<span class="billing-pill billing-active">${t("billingActive")}</span>`;
+  if(s === "TRIAL") return `<span class="billing-pill billing-trial">${t("billingTrial")}</span>`;
+  if(s === "PAST_DUE") return `<span class="billing-pill billing-pastdue">${t("billingPastDue")}</span>`;
+  if(s === "CANCELLED" || s === "TRIAL_EXPIRED") return `<span class="billing-pill billing-cancelled">${t("billingCancelled")}</span>`;
+  return `<span class="billing-pill billing-unknown">${t("billingNoSubscription")}</span>`;
+}
+
+function billingBlockBanner(status){
+  const s = String(status || "").toUpperCase();
+
+  if(s === "TRIAL_EXPIRED"){
+    return `<div class="block-banner block-trial-expired"><b>${t("trialExpiredTitle")}</b><br/>${t("trialExpiredText")}</div>`;
+  }
+  if(s === "PAST_DUE"){
+    return `<div class="block-banner block-past-due"><b>${t("pastDueTitle")}</b><br/>${t("pastDueText")}</div>`;
+  }
+  if(s === "CANCELLED"){
+    return `<div class="block-banner block-cancelled"><b>${t("cancelledTitle")}</b><br/>${t("cancelledText")}</div>`;
+  }
+  return "";
+}
+
+function healthInfo(it){
+  const doctors = Number(it.doctors_count || 0);
+  const rules = Number(it.schedule_rules_count || 0);
+  const slots = Number(it.slots_count || 0);
+
+  const missing = [];
+  if(doctors === 0) missing.push(t("missingDoctors"));
+  if(rules === 0) missing.push(t("missingRules"));
+  if(slots === 0) missing.push(t("missingSlots"));
+
+  if(missing.length === 0){
+    return { label: t("healthy"), cls: "health-pill health-good", rank: 2, needsFix: false, missingText: "" };
+  }
+  if(doctors > 0){
+    return { label: t("setupIncomplete"), cls: "health-pill health-mid", rank: 1, needsFix: true, missingText: t("missingPrefix") + missing.join(", ") };
+  }
+  return { label: t("notConfigured"), cls: "health-pill health-bad", rank: 0, needsFix: true, missingText: t("missingPrefix") + missing.join(", ") };
+}
+
+function fmtDate(v){
+  if(!v) return "-";
+  const s = String(v).replace("T", " ");
+  return s.slice(0, 16);
+}
+
+function copyText(text, msg){
+  navigator.clipboard.writeText(text);
+  setMsg(msg, "success");
+}
+
+function setTopStats(items){
+  let clinics = items.length;
+  let active = 0;
+  let doctors = 0;
+  let pending = 0;
+  let appts = 0;
+
+  for(const it of items){
+    if((it.status || "").toUpperCase() === "ACTIVE") active++;
+    doctors += Number(it.doctors_count || 0);
+    pending += Number(it.pending_requests || 0);
+    appts += Number(it.appointments_count || 0);
+  }
+
+  document.getElementById("statClinics").textContent = clinics;
+  document.getElementById("statActive").textContent = active;
+  document.getElementById("statDoctors").textContent = doctors;
+  document.getElementById("statPending").textContent = pending;
+  document.getElementById("statAppointments").textContent = appts;
+}
+
+function applyNeedsAttentionSort(items){
+  return items.sort((a, b) => {
+    const ha = healthInfo(a);
+    const hb = healthInfo(b);
+
+    if(ha.rank !== hb.rank) return ha.rank - hb.rank;
+
+    const aInactive = String(a.status || "").toUpperCase() === "INACTIVE" ? 0 : 1;
+    const bInactive = String(b.status || "").toUpperCase() === "INACTIVE" ? 0 : 1;
+    if(aInactive !== bInactive) return aInactive - bInactive;
+
+    const aPending = Number(a.pending_requests || 0);
+    const bPending = Number(b.pending_requests || 0);
+    if(aPending !== bPending) return bPending - aPending;
+
+    return String(a.clinic_name || "").localeCompare(String(b.clinic_name || ""));
+  });
+}
+
+async function loadDashboard(){
+  try{
+    const res = await fetch("/admin/analytics/dashboard", {
+      headers: adminHeaders(),
+      credentials: "same-origin"
+    });
+
+    const json = await res.json();
+    if(!res.ok || !json.ok) return;
+
+    const d = json.items || {};
+    document.getElementById("todayAppointments").textContent = d.today_appointments || 0;
+    document.getElementById("todayCompleted").textContent = d.today_completed || 0;
+    document.getElementById("todayCancelled").textContent = d.today_cancelled || 0;
+    document.getElementById("todayNoShow").textContent = d.today_no_show || 0;
+    document.getElementById("activeDoctors").textContent = d.doctors_active || 0;
+    document.getElementById("openSlots").textContent = d.open_slots || 0;
+  }catch(e){
+    console.error("loadDashboard error:", e);
+  }
+}
+
+async function loadSubscriptionsMap(){
+  try{
+    const res = await fetch("/admin/subscriptions/list", {
+      headers: adminHeaders(),
+      credentials: "same-origin"
+    });
+
+    const json = await res.json();
+    if(!res.ok || !json.ok) return {};
+
+    const map = {};
+    for(const it of (json.items || [])){
+      map[it.tenant_id] = it;
+    }
+    return map;
+  }catch(e){
+    console.error("loadSubscriptionsMap error:", e);
+    return {};
+  }
+}
+
+async function startCheckout(tenantId, planCode){
+  try {
+    const res = await fetch("/billing/checkout/session", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json"
+      },
+      credentials: "same-origin",
+      body: JSON.stringify({
+        tenant_id: tenantId,
+        plan_code: planCode
+      })
+    });
+
+    const json = await res.json();
+
+    if (!res.ok || !json.ok) {
+      alert(`${t("checkoutFailed")}: ` + (json.detail || "unknown error"));
+      return;
+    }
+
+    if (!json.checkout_url) {
+      alert(t("checkoutMissing"));
+      return;
+    }
+
+    window.location.href = json.checkout_url;
+  } catch (e) {
+    console.error("Checkout error:", e);
+    alert(t("checkoutStartError"));
+  }
+}
+
+async function openBillingPortal(tenantId){
+  try{
+    const res = await fetch("/billing/portal/session", {
+      method: "POST",
+      headers: {
+        "Content-Type":"application/json"
+      },
+      credentials: "same-origin",
+      body: JSON.stringify({
+        tenant_id: tenantId
+      })
+    });
+
+    const json = await res.json();
+
+    if(!res.ok || !json.ok){
+      setMsg(`${t("portalFailed")}: ${json.detail || "unknown"}`, "error");
+      return;
+    }
+
+    if(json.portal_url){
+      window.open(json.portal_url, "_blank");
+    } else {
+      setMsg(t("portalMissing"), "error");
+    }
+  }catch(e){
+    console.error("openBillingPortal error:", e);
+    setMsg(t("portalFailed"), "error");
+  }
+}
+
+async function loadOverview(){
+  const body = document.getElementById("overviewBody");
+  body.innerHTML = `<tr><td colspan="15" class="muted">${t("loadingOverview")}</td></tr>`;
+
+  try {
+    const overviewRes = await fetch("/admin/analytics/overview", {
+      headers: adminHeaders(),
+      credentials: "same-origin"
+    });
+
+    if (!overviewRes.ok) {
+      body.innerHTML = `<tr><td colspan="15" class="muted">${t("failedOverviewStatus")} (${overviewRes.status})</td></tr>`;
+      return;
+    }
+
+    const json = await overviewRes.json();
+
+    if (!json.ok) {
+      body.innerHTML = `<tr><td colspan="15" class="muted">${t("failedOverview")}</td></tr>`;
+      return;
+    }
+
+    const subscriptionsMap = await loadSubscriptionsMap();
+    let items = json.items || [];
+
+    const search = String(document.getElementById("searchBox").value || "").toLowerCase();
+    const status = String(document.getElementById("statusFilter").value || "ALL").toUpperCase();
+    const viewMode = String(document.getElementById("viewMode").value || "ALL").toUpperCase();
+
+    if (status !== "ALL") {
+      items = items.filter(x => String(x.status || "").toUpperCase() === status);
+    }
+
+    if (search) {
+      items = items.filter(x =>
+        String(x.tenant_id || "").toLowerCase().includes(search) ||
+        String(x.clinic_name || "").toLowerCase().includes(search)
+      );
+    }
+
+    if (viewMode === "ATTENTION") {
+      items = applyNeedsAttentionSort(items);
+    } else {
+      items = items.sort((a, b) =>
+        String(a.clinic_name || "").localeCompare(String(b.clinic_name || ""))
+      );
+    }
+
+    setTopStats(items);
+    body.innerHTML = "";
+
+    if (items.length === 0) {
+      body.innerHTML = `<tr><td colspan="15" class="muted">${t("noClinicsFound")}</td></tr>`;
+      return;
+    }
+
+    for (const it of items) {
+      const subscription = subscriptionsMap[it.tenant_id] || {};
+      const billingStatus = subscription.status || "";
+      const hasStripeCustomer = !!subscription.stripe_customer_id;
+
+      const receptionUrl = `/reception?tenant=${encodeURIComponent(it.tenant_id || "")}&token=${encodeURIComponent(it.reception_token || "")}&lang=${encodeURIComponent(uiLang)}`;
+      const onboardingUrl = `/admin/onboarding?tenant=${encodeURIComponent(it.tenant_id || "")}&lang=${encodeURIComponent(uiLang)}`;
+
+      const health = healthInfo(it);
+      const safeTenantId = String(it.tenant_id || "").replace(/'/g, "\\'");
+      const safeAdminToken = String(it.admin_token || "").replace(/'/g, "\\'");
+      const safeReceptionUrl = String(receptionUrl).replace(/'/g, "\\'");
+
+      const fixNowHtml = health.needsFix
+        ? `<button class="small fix-now" onclick="openTenantOnboarding('${safeTenantId}')">${t("fixNow")}</button>`
+        : "";
+
+      const tr = document.createElement("tr");
+
+      tr.innerHTML = `
+        <td>
+          <div><b>${it.clinic_name || "-"}</b></div>
+          <div class="muted">${it.country_code || "-"} • ${it.timezone || "-"}</div>
+        </td>
+
+        <td>${statusPill(it.status)}</td>
+
+        <td>
+          <div class="health-cell">
+            <span class="${health.cls}">${health.label}</span>
+            ${health.missingText ? `<div class="muted">${health.missingText}</div>` : ""}
+            ${fixNowHtml}
+          </div>
+        </td>
+
+        <td>
+          <div>${billingPill(billingStatus)}</div>
+          <div class="muted" style="margin-top:6px;">${t("planPrefix")}: ${String(subscription.plan_code || "-").toUpperCase()}</div>
+          <div class="muted">${subscription.stripe_customer_id ? t("stripeLinked") : t("stripeNotLinked")}</div>
+          ${billingBlockBanner(billingStatus)}
+        </td>
+
+        <td class="metric">${it.doctors_count || 0}</td>
+        <td class="metric">${it.schedule_rules_count || 0}</td>
+        <td class="metric">${it.slots_count || 0}</td>
+        <td class="metric">${it.pending_requests || 0}</td>
+        <td class="metric">${it.confirmed_requests || 0}</td>
+        <td class="metric">${it.today_appointments || 0}</td>
+        <td class="metric">${it.appointments_count || 0}</td>
+        <td>${fmtDate(it.last_request_at)}</td>
+        <td>${fmtDate(it.last_appointment_at)}</td>
+        <td><span class="muted">${it.tenant_id || "-"}</span></td>
+
+        <td>
+          <div class="actions">
+            <button class="small" onclick="window.open('${onboardingUrl}','_blank')">${t("onboarding")}</button>
+            <button class="small" onclick="window.open('${safeReceptionUrl}','_blank')">${t("reception")}</button>
+            <button class="small" onclick="copyText('${safeReceptionUrl}','${t("receptionUrlCopied")}')">${t("copyReception")}</button>
+            <button class="small" onclick="copyText('${safeAdminToken}','${t("adminTokenCopied")}')">${t("copyAdminToken")}</button>
+            <button class="small good" onclick="startCheckout('${safeTenantId}','starter')">${t("startStarter")}</button>
+            <button class="small warn" onclick="startCheckout('${safeTenantId}','growth')">${t("startGrowth")}</button>
+            ${
+              hasStripeCustomer
+              ? `<button class="small info" onclick="openBillingPortal('${safeTenantId}')">${t("billingPortal")}</button>`
+              : ``
+            }
+          </div>
+        </td>
+      `;
+
+      body.appendChild(tr);
+    }
+
+  } catch (e) {
+    console.error("loadOverview error:", e);
+    body.innerHTML = `<tr><td colspan="15" class="muted">${t("failedOverview")}</td></tr>`;
+  }
+}
+
+document.getElementById("searchBox").addEventListener("input", loadOverview);
+document.getElementById("statusFilter").addEventListener("change", loadOverview);
+document.getElementById("viewMode").addEventListener("change", loadOverview);
+
+(async function init(){
+  applyLanguage();
+  await loadDashboard();
+  await loadOverview();
+})();
+</script>
+
+</body>
+</html>

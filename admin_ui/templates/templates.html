@@ -1,0 +1,507 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Message Templates</title>
+
+<style>
+body{
+    font-family:Arial,sans-serif;
+    background:#f6f8fb;
+    margin:0;
+    padding:30px;
+    color:#111827;
+}
+
+h1{
+    margin:0 0 20px 0;
+    font-size:28px;
+}
+
+.page{
+    max-width:1200px;
+    margin:0 auto;
+}
+
+.nav{
+    display:flex;
+    gap:10px;
+    flex-wrap:wrap;
+    margin-bottom:20px;
+}
+
+.nav a{
+    text-decoration:none;
+    padding:10px 14px;
+    border:1px solid #d1d5db;
+    border-radius:8px;
+    background:white;
+    color:#111827;
+    font-size:14px;
+}
+
+.nav a.active{
+    background:#2563eb;
+    color:white;
+    border-color:#2563eb;
+}
+
+.card{
+    background:white;
+    padding:22px;
+    border-radius:12px;
+    box-shadow:0 2px 8px rgba(0,0,0,0.08);
+    margin-bottom:20px;
+}
+
+.grid-2{
+    display:grid;
+    grid-template-columns:1fr 1fr;
+    gap:16px;
+}
+
+.grid-3{
+    display:grid;
+    grid-template-columns:1.2fr auto auto;
+    gap:12px;
+    align-items:end;
+}
+
+label{
+    display:block;
+    font-weight:600;
+    margin-bottom:6px;
+}
+
+input, textarea, select{
+    width:100%;
+    padding:10px 12px;
+    margin-top:6px;
+    border:1px solid #d1d5db;
+    border-radius:8px;
+    box-sizing:border-box;
+    font-family:inherit;
+    font-size:14px;
+}
+
+textarea{
+    min-height:150px;
+    resize:vertical;
+}
+
+button{
+    padding:10px 18px;
+    border:none;
+    color:white;
+    border-radius:8px;
+    cursor:pointer;
+    font-size:14px;
+}
+
+button.primary{
+    background:#2563eb;
+}
+
+button.primary:hover{
+    background:#1e4ed8;
+}
+
+button.secondary{
+    background:#6b7280;
+}
+
+button.secondary:hover{
+    background:#4b5563;
+}
+
+button.success{
+    background:#059669;
+}
+
+button.success:hover{
+    background:#047857;
+}
+
+button.warn{
+    background:#d97706;
+}
+
+button.warn:hover{
+    background:#b45309;
+}
+
+.templates{
+    margin-top:20px;
+}
+
+.template-box{
+    border:1px solid #e5e7eb;
+    border-radius:12px;
+    padding:18px;
+    margin-bottom:20px;
+    background:#ffffff;
+}
+
+.template-header{
+    display:flex;
+    justify-content:space-between;
+    align-items:center;
+    gap:10px;
+    margin-bottom:14px;
+    flex-wrap:wrap;
+}
+
+.template-title{
+    font-size:18px;
+    font-weight:700;
+}
+
+.badge{
+    display:inline-block;
+    padding:5px 10px;
+    border-radius:999px;
+    font-size:12px;
+    font-weight:700;
+    background:#eff6ff;
+    color:#1d4ed8;
+    border:1px solid #bfdbfe;
+}
+
+.meta{
+    color:#6b7280;
+    font-size:13px;
+    margin-bottom:12px;
+}
+
+.preview-box{
+    border:1px dashed #cbd5e1;
+    border-radius:10px;
+    padding:14px;
+    background:#f8fafc;
+    white-space:pre-wrap;
+    min-height:100px;
+    margin-top:10px;
+}
+
+.helper{
+    background:#f9fafb;
+    border:1px solid #e5e7eb;
+    border-radius:10px;
+    padding:14px;
+    font-size:14px;
+}
+
+.helper code{
+    background:#eef2ff;
+    padding:2px 6px;
+    border-radius:6px;
+}
+
+.status{
+    margin-top:12px;
+    font-size:14px;
+    font-weight:600;
+}
+
+.status.ok{
+    color:#047857;
+}
+
+.status.err{
+    color:#b91c1c;
+}
+
+.muted{
+    color:#6b7280;
+    font-size:13px;
+}
+
+.top-actions{
+    display:flex;
+    gap:10px;
+    align-items:end;
+    flex-wrap:wrap;
+}
+
+@media (max-width: 900px){
+    .grid-2,
+    .grid-3{
+        grid-template-columns:1fr;
+    }
+}
+</style>
+</head>
+
+<body>
+
+<div class="page">
+
+    <h1>WhatsApp Message Templates</h1>
+
+    <div class="nav">
+        <a id="navAnalytics" href="#">Analytics</a>
+        <a id="navBilling" href="#">Billing</a>
+        <a id="navUsage" href="#">Usage</a>
+        <a id="navInvoices" href="#">Invoices</a>
+        <a id="navSettings" href="#">Settings</a>
+        <a id="navTemplates" class="active" href="#">Templates</a>
+    </div>
+
+    <div class="card">
+        <div class="grid-3">
+            <div>
+                <label>Tenant ID</label>
+                <input id="tenant_id" placeholder="ex: alnoor_clinic">
+            </div>
+
+            <div class="top-actions">
+                <button class="primary" onclick="loadTemplates()">Load Templates</button>
+            </div>
+
+            <div class="top-actions">
+                <button class="warn" onclick="seedDefaults()">Seed Defaults</button>
+            </div>
+        </div>
+
+        <div id="pageStatus" class="status"></div>
+    </div>
+
+    <div class="card">
+        <div class="helper">
+            <b>Supported variables</b>
+            <div style="margin-top:10px;">
+                <code>{patient_name}</code>
+                <code>{doctor_name}</code>
+                <code>{date}</code>
+                <code>{time}</code>
+                <code>{clinic_name}</code>
+            </div>
+            <div class="muted" style="margin-top:10px;">
+                These values will be filled automatically when the WhatsApp message is sent.
+            </div>
+        </div>
+    </div>
+
+    <div id="templates" class="templates"></div>
+
+</div>
+
+<script>
+const sampleValues = {
+    patient_name: "Ahmed Ali",
+    doctor_name: "Dr. Layla",
+    date: "2026-03-12",
+    time: "18:30",
+    clinic_name: "Al Noor Clinic"
+};
+
+function adminHeaders(){
+    return {};
+}
+
+function navUrl(path){
+    return path;
+}
+
+document.getElementById("navAnalytics").href = navUrl("/admin/analytics");
+document.getElementById("navBilling").href = navUrl("/admin/billing");
+document.getElementById("navUsage").href = navUrl("/admin/usage");
+document.getElementById("navInvoices").href = navUrl("/admin/invoices");
+document.getElementById("navSettings").href = navUrl("/admin/settings");
+document.getElementById("navTemplates").href = navUrl("/admin/templates");
+
+function setPageStatus(text, ok=true){
+    const el = document.getElementById("pageStatus");
+    el.className = "status " + (ok ? "ok" : "err");
+    el.textContent = text || "";
+}
+
+function escapeHtml(s){
+    return String(s || "")
+        .replaceAll("&", "&amp;")
+        .replaceAll("<", "&lt;")
+        .replaceAll(">", "&gt;")
+        .replaceAll('"', "&quot;")
+        .replaceAll("'", "&#039;");
+}
+
+function renderPreview(templateText){
+    let out = String(templateText || "");
+    Object.entries(sampleValues).forEach(([k, v]) => {
+        out = out.replaceAll(`{${k}}`, v);
+    });
+    return out;
+}
+
+async function loadTemplates(){
+    const tenant = document.getElementById("tenant_id").value.trim();
+
+    if(!tenant){
+        setPageStatus("Enter tenant_id", false);
+        return;
+    }
+
+    setPageStatus("Loading templates...", true);
+
+    try{
+        const res = await fetch(
+            `/admin/message-templates?tenant_id=${encodeURIComponent(tenant)}`,
+            {
+                headers: adminHeaders(),
+                credentials: "same-origin"
+            }
+        );
+
+        const data = await res.json();
+
+        if(!res.ok || !data.ok){
+            setPageStatus(data.detail || "Failed loading templates", false);
+            return;
+        }
+
+        renderTemplates(data.items || []);
+        setPageStatus(`Loaded ${data.items.length} template(s).`, true);
+    }catch(e){
+        setPageStatus("Failed loading templates", false);
+    }
+}
+
+function renderTemplates(items){
+    const container = document.getElementById("templates");
+
+    if(!items.length){
+        container.innerHTML = `
+            <div class="card">
+                <div class="muted">No templates yet for this tenant. Click <b>Seed Defaults</b> first.</div>
+            </div>
+        `;
+        return;
+    }
+
+    let html = "";
+
+    items.forEach((t, idx) => {
+        const textareaId = `txt_${t.id || idx}_${t.template_key}_${t.language}`;
+        const previewId = `preview_${t.id || idx}_${t.template_key}_${t.language}`;
+        const statusId = `status_${t.id || idx}_${t.template_key}_${t.language}`;
+
+        html += `
+        <div class="template-box">
+            <div class="template-header">
+                <div>
+                    <div class="template-title">${escapeHtml(t.template_key)}</div>
+                    <div class="meta">Tenant: ${escapeHtml(t.tenant_id)} • Language: ${escapeHtml(t.language)}</div>
+                </div>
+                <div class="badge">${escapeHtml(String(t.language || "").toUpperCase())}</div>
+            </div>
+
+            <label>Template Text</label>
+            <textarea id="${textareaId}" oninput="updatePreview('${textareaId}','${previewId}')">${escapeHtml(t.template_text)}</textarea>
+
+            <label>Live Preview</label>
+            <div id="${previewId}" class="preview-box">${escapeHtml(renderPreview(t.template_text))}</div>
+
+            <div style="margin-top:14px; display:flex; gap:10px; flex-wrap:wrap;">
+                <button class="success" onclick="saveTemplate('${escapeJs(t.tenant_id)}','${escapeJs(t.template_key)}','${escapeJs(t.language)}','${textareaId}','${statusId}','${previewId}')">Save</button>
+            </div>
+
+            <div id="${statusId}" class="status"></div>
+        </div>
+        `;
+    });
+
+    container.innerHTML = html;
+}
+
+function updatePreview(textareaId, previewId){
+    const text = document.getElementById(textareaId).value;
+    document.getElementById(previewId).textContent = renderPreview(text);
+}
+
+function escapeJs(v){
+    return String(v || "").replaceAll("\\", "\\\\").replaceAll("'", "\\'");
+}
+
+async function saveTemplate(tenant, key, lang, textareaId, statusId, previewId){
+    const text = document.getElementById(textareaId).value;
+    const statusEl = document.getElementById(statusId);
+
+    statusEl.className = "status";
+    statusEl.textContent = "Saving...";
+
+    try{
+        const res = await fetch(
+            "/admin/message-templates/upsert",
+            {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json"
+                },
+                credentials: "same-origin",
+                body: JSON.stringify({
+                    tenant_id: tenant,
+                    template_key: key,
+                    language: lang,
+                    template_text: text,
+                    is_active: true
+                })
+            }
+        );
+
+        const data = await res.json();
+
+        if(res.ok && data.ok){
+            document.getElementById(previewId).textContent = renderPreview(text);
+            statusEl.className = "status ok";
+            statusEl.textContent = "Template saved successfully.";
+        }else{
+            statusEl.className = "status err";
+            statusEl.textContent = data.detail || "Save failed.";
+        }
+    }catch(e){
+        statusEl.className = "status err";
+        statusEl.textContent = "Save failed.";
+    }
+}
+
+async function seedDefaults(){
+    const tenant = document.getElementById("tenant_id").value.trim();
+
+    if(!tenant){
+        setPageStatus("Enter tenant_id before seeding.", false);
+        return;
+    }
+
+    setPageStatus("Seeding default templates...", true);
+
+    try{
+        const res = await fetch(
+            "/admin/message-templates/seed-defaults",
+            {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json"
+                },
+                credentials: "same-origin",
+                body: JSON.stringify({
+                    tenant_id: tenant
+                })
+            }
+        );
+
+        const data = await res.json();
+
+        if(res.ok && data.ok){
+            setPageStatus("Default templates seeded successfully.", true);
+            await loadTemplates();
+        }else{
+            setPageStatus(data.detail || "Failed to seed default templates.", false);
+        }
+    }catch(e){
+        setPageStatus("Failed to seed default templates.", false);
+    }
+}
+</script>
+
+</body>
+</html>

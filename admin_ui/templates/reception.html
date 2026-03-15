@@ -1,0 +1,1555 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"/>
+  <title>Reception Dashboard</title>
+
+  <style>
+    body{
+      font-family:Arial,sans-serif;
+      margin:0;
+      background:#fafafa;
+    }
+
+    body.rtl{
+      direction:rtl;
+    }
+
+    header{
+      padding:12px 16px;
+      border-bottom:1px solid #ddd;
+      background:white;
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      gap:12px;
+      flex-wrap:wrap;
+    }
+
+    .muted{
+      color:#666;
+      font-size:12px;
+    }
+
+    .wrap{
+      display:grid;
+      grid-template-columns:380px 1fr;
+      height:calc(100vh - 62px);
+    }
+
+    .left{
+      border-right:1px solid #ddd;
+      overflow:auto;
+      background:white;
+    }
+
+    body.rtl .left{
+      border-right:none;
+      border-left:1px solid #ddd;
+    }
+
+    .right{
+      padding:16px;
+      overflow:auto;
+    }
+
+    .item{
+      padding:12px;
+      border-bottom:1px solid #eee;
+      cursor:pointer;
+    }
+
+    .item:hover{
+      background:#f7f7f7;
+    }
+
+    .pill{
+      display:inline-block;
+      padding:2px 8px;
+      border:1px solid #ccc;
+      border-radius:999px;
+      font-size:12px;
+      background:#fff;
+    }
+
+    .insurance-pill{
+      display:inline-block;
+      padding:2px 8px;
+      border:1px solid #ccc;
+      border-radius:999px;
+      font-size:12px;
+      background:#fff;
+      margin-top:6px;
+    }
+
+    .insurance-self{
+      background:#f5f5f5;
+      border-color:#d4d4d4;
+      color:#444;
+    }
+
+    .insurance-unverified{
+      background:#fff7ed;
+      border-color:#fdba74;
+      color:#9a3412;
+    }
+
+    .insurance-verified{
+      background:#ecfdf3;
+      border-color:#86efac;
+      color:#166534;
+    }
+
+    .insurance-expired{
+      background:#fef2f2;
+      border-color:#fca5a5;
+      color:#991b1b;
+    }
+
+    .insurance-approval{
+      background:#eff6ff;
+      border-color:#93c5fd;
+      color:#1d4ed8;
+    }
+
+    .verify-badge{
+      display:inline-block;
+      padding:3px 8px;
+      border-radius:999px;
+      font-size:11px;
+      font-weight:700;
+      border:1px solid #ccc;
+      margin-top:4px;
+      margin-right:4px;
+      background:#fff;
+    }
+
+    body.rtl .verify-badge{
+      margin-right:0;
+      margin-left:4px;
+    }
+
+    textarea{
+      width:100%;
+      min-height:90px;
+      box-sizing:border-box;
+      padding:8px;
+    }
+
+    input[type=text],
+    input[type=date],
+    input[type=tel],
+    select{
+      width:100%;
+      padding:8px;
+      box-sizing:border-box;
+    }
+
+    button{
+      padding:10px 12px;
+      cursor:pointer;
+      border-radius:6px;
+      border:1px solid #ccc;
+      background:white;
+    }
+
+    button.primary{
+      background:#0077ff;
+      color:white;
+      border:none;
+    }
+
+    button.danger{
+      background:#e54848;
+      color:white;
+      border:none;
+    }
+
+    .lang-btn.active,
+    .tab-btn.active{
+      background:#0077ff;
+      color:white;
+      border-color:#0077ff;
+    }
+
+    .row{
+      display:grid;
+      grid-template-columns:1fr 1fr;
+      gap:12px;
+    }
+
+    .card{
+      border:1px solid #eee;
+      border-radius:10px;
+      padding:12px;
+      background:white;
+    }
+
+    .section{
+      margin-top:12px;
+    }
+
+    .topbar{
+      display:flex;
+      flex-direction:column;
+      gap:10px;
+      padding:12px;
+    }
+
+    .toolbar{
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      gap:12px;
+      margin-bottom:12px;
+      flex-wrap:wrap;
+    }
+
+    .tabs{
+      display:flex;
+      gap:8px;
+      flex-wrap:wrap;
+    }
+
+    .tab-btn{
+      padding:10px 12px;
+      border:1px solid #ccc;
+      border-radius:8px;
+      background:#fff;
+      cursor:pointer;
+    }
+
+    .hidden{
+      display:none !important;
+    }
+
+    .success{
+      color:#166534;
+      font-size:13px;
+      margin-top:8px;
+    }
+
+    .error{
+      color:#991b1b;
+      font-size:13px;
+      margin-top:8px;
+    }
+
+    .inline-actions{
+      display:flex;
+      gap:8px;
+      flex-wrap:wrap;
+      align-items:center;
+    }
+
+    .slot-list{
+      display:flex;
+      flex-wrap:wrap;
+      gap:8px;
+      margin-top:8px;
+    }
+
+    .slot-chip{
+      padding:8px 10px;
+      border:1px solid #ccc;
+      border-radius:999px;
+      background:white;
+      cursor:pointer;
+      font-size:13px;
+    }
+
+    .slot-chip.active{
+      background:#0077ff;
+      color:white;
+      border-color:#0077ff;
+    }
+
+    .field-note{
+      margin-top:4px;
+      font-size:11px;
+      color:#777;
+    }
+
+    .search-results{
+      margin-top:8px;
+      border:1px solid #eee;
+      border-radius:8px;
+      background:#fff;
+      max-height:220px;
+      overflow:auto;
+    }
+
+    .search-item{
+      padding:10px;
+      border-bottom:1px solid #f0f0f0;
+      cursor:pointer;
+    }
+
+    .search-item:last-child{
+      border-bottom:none;
+    }
+
+    .search-item:hover{
+      background:#f8f8f8;
+    }
+
+    .selected-patient{
+      margin-top:8px;
+      padding:10px;
+      border:1px solid #dbeafe;
+      background:#eff6ff;
+      border-radius:8px;
+      font-size:13px;
+    }
+
+    .badge-soft{
+      display:inline-block;
+      padding:3px 8px;
+      border-radius:999px;
+      border:1px solid #ccc;
+      font-size:11px;
+      background:#fff;
+      margin-top:4px;
+    }
+
+    .statusline{
+      display:flex;
+      align-items:center;
+      gap:8px;
+    }
+
+    .ws-dot{
+      width:10px;
+      height:10px;
+      border-radius:999px;
+      background:#bbb;
+      display:inline-block;
+      border:1px solid #999;
+    }
+
+    .ws-dot.on{ background:#24c16a; border-color:#1f9f58; }
+    .ws-dot.off{ background:#e54848; border-color:#c93d3d; }
+
+    .checkline{
+      display:flex;
+      align-items:center;
+      gap:8px;
+      margin-top:8px;
+    }
+
+    .left-title{
+      font-weight:700;
+      font-size:14px;
+    }
+
+    @media (max-width: 1000px){
+      .wrap{
+        grid-template-columns:1fr;
+        height:auto;
+      }
+
+      .left{
+        border-right:none;
+        border-bottom:1px solid #ddd;
+      }
+
+      body.rtl .left{
+        border-left:none;
+      }
+
+      .row{
+        grid-template-columns:1fr;
+      }
+    }
+  </style>
+</head>
+
+<body>
+
+<header>
+  <div>
+    <b id="pageTitle">Reception Dashboard</b>
+    <span class="muted" id="tenantAccessText"> — tenant-specific access</span>
+    <div class="muted" id="tenantLabel"></div>
+  </div>
+
+  <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
+    <button type="button" class="lang-btn" id="langEnBtn" onclick="setManualLanguage('en')">English</button>
+    <button type="button" class="lang-btn" id="langArBtn" onclick="setManualLanguage('ar')">العربية</button>
+
+    <div class="statusline">
+      <span id="wsDot" class="ws-dot off"></span>
+      <span id="wsStatus" class="muted">WS: disconnected</span>
+    </div>
+  </div>
+</header>
+
+<div class="wrap">
+
+  <div class="left">
+    <div class="topbar">
+      <div class="left-title" id="queueTitle">Booking Requests</div>
+
+      <div>
+        <label id="statusLabel">Status:</label>
+        <select id="status">
+          <option value="PENDING">PENDING</option>
+          <option value="APPROVED">APPROVED</option>
+          <option value="REJECTED">REJECTED</option>
+          <option value="CONTACTED">CONTACTED</option>
+          <option value="ALL">ALL</option>
+        </select>
+      </div>
+
+      <button type="button" onclick="loadList()" id="refreshBtn">Refresh</button>
+    </div>
+
+    <div id="list"></div>
+  </div>
+
+  <div class="right">
+    <div class="toolbar">
+      <div class="tabs">
+        <button type="button" id="tabRequests" class="tab-btn active" onclick="switchTab('requests')">Request Review</button>
+        <button type="button" id="tabDirectBooking" class="tab-btn hidden" onclick="switchTab('direct-booking')">Front Desk Booking</button>
+      </div>
+
+      <div class="muted" id="modeHelpText"></div>
+    </div>
+
+    <div id="requestPanel">
+      <div id="detail" class="muted">Select a request from the left.</div>
+    </div>
+
+    <div id="directBookingPanel" class="hidden">
+      <div class="card">
+        <div><b id="directBookingTitle">Front Desk Booking</b></div>
+
+        <div class="muted" id="directBookingDesc" style="margin-top:6px;">
+          Use this for walk-in patients or front desk bookings.
+        </div>
+
+        <hr/>
+
+        <div class="section">
+          <b id="patientBasicTitle">Patient / Front Desk Intake</b>
+
+          <div class="row" style="margin-top:8px;">
+            <div>
+              <label id="dbPatientSearchLabel">Search Existing Patient</label>
+              <input id="db_patient_search" type="text" placeholder="Search by name / phone / national ID / patient ID"/>
+              <div class="field-note" id="dbPatientSearchNote">Find returning patients before creating a new record.</div>
+              <div id="patientSearchResults" class="search-results hidden"></div>
+              <div id="selectedPatientBox" class="selected-patient hidden"></div>
+            </div>
+
+            <div>
+              <label id="dbPatientRegistryLabel">Patient Registry ID</label>
+              <input id="db_registry_patient_id" type="text" readonly placeholder="Auto-filled from registry"/>
+              <div class="field-note" id="dbPatientRegistryNote">This links the booking to the patient registry foundation.</div>
+            </div>
+          </div>
+
+          <div class="row" style="margin-top:8px;">
+            <div>
+              <label id="dbPatientNameLabel">Patient Name</label>
+              <input id="db_patient_name" type="text" placeholder="Full patient name"/>
+            </div>
+
+            <div>
+              <label id="dbPatientMobileLabel">Phone Number</label>
+              <input id="db_patient_mobile" type="tel" placeholder="e.g. 9665xxxxxxx"/>
+            </div>
+
+            <div>
+              <label id="dbPatientIdLabel">National ID / Patient ID</label>
+              <input id="db_patient_id" type="text" placeholder="National ID / MRN / Iqama"/>
+              <div class="field-note" id="dbPatientIdNote">For now this is stored in the patient registry and appointment record.</div>
+            </div>
+
+            <div>
+              <label id="dbPatientTypeLabel">Patient Type</label>
+              <select id="db_patient_type">
+                <option value="NEW">NEW</option>
+                <option value="RETURNING">RETURNING</option>
+              </select>
+              <div class="field-note" id="dbPatientTypeNote">Used by front desk flow. Full patient registration module will expand later.</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="section">
+          <b id="appointmentBookingTitle">Appointment Management</b>
+
+          <div class="row" style="margin-top:8px;">
+            <div>
+              <label id="dbDoctorKeyLabel">Doctor Key</label>
+              <input id="db_doctor_key" type="text" placeholder="e.g. dr_ahmed"/>
+              <div class="field-note" id="dbDoctorKeyNote">Use the doctor key currently configured in the system.</div>
+            </div>
+
+            <div>
+              <label id="dbApptDateLabel">Appointment Date</label>
+              <input id="db_appt_date" type="date"/>
+            </div>
+          </div>
+
+          <div class="inline-actions" style="margin-top:8px;">
+            <button type="button" onclick="loadAvailableSlots()" id="loadSlotsBtn">Load Available Slots</button>
+            <span class="muted" id="slotsHintText">Select doctor key and date, then load slots.</span>
+          </div>
+
+          <div id="slotList" class="slot-list"></div>
+
+          <div class="row" style="margin-top:8px;">
+            <div>
+              <label id="dbSelectedTimeLabel">Selected Time</label>
+              <input id="db_appt_time" type="text" placeholder="HH:MM" readonly/>
+            </div>
+
+            <div>
+              <label id="dbNotesLabel">Front Desk Notes</label>
+              <input id="db_notes" type="text" placeholder="Walk-in / phone booking / notes"/>
+            </div>
+          </div>
+        </div>
+
+        <div class="section">
+          <b id="dbInsuranceTitle">Insurance</b>
+
+          <div class="row" style="margin-top:8px;">
+            <div>
+              <label id="dbInsuranceProviderLabel">Provider</label>
+              <input id="db_insurance_provider" type="text" placeholder="e.g. Daman / Bupa / Tawuniya"/>
+            </div>
+
+            <div>
+              <label id="dbInsurancePlanLabel">Plan</label>
+              <input id="db_insurance_plan" type="text" placeholder="e.g. Gold"/>
+            </div>
+
+            <div>
+              <label id="dbInsuranceMemberIdLabel">Member ID</label>
+              <input id="db_insurance_member_id" type="text" placeholder="Insurance member ID"/>
+            </div>
+
+            <div>
+              <label id="dbInsurancePolicyNumberLabel">Policy Number</label>
+              <input id="db_insurance_policy_number" type="text" placeholder="Policy number"/>
+            </div>
+
+            <div>
+              <label id="dbInsuranceExpiryLabel">Expiry</label>
+              <input id="db_insurance_expiry" type="date"/>
+            </div>
+
+            <div>
+              <label id="dbInsuranceStatusLabel">Status</label>
+              <select id="db_insurance_status">
+                <option value="SELF_PAY">SELF_PAY</option>
+                <option value="INSURED_UNVERIFIED">INSURED_UNVERIFIED</option>
+                <option value="INSURED_VERIFIED">INSURED_VERIFIED</option>
+                <option value="INSURANCE_EXPIRED">INSURANCE_EXPIRED</option>
+                <option value="APPROVAL_REQUIRED">APPROVAL_REQUIRED</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="checkline">
+            <input id="db_insurance_verified" type="checkbox"/>
+            <label for="db_insurance_verified" id="dbInsuranceVerifiedLabel">Insurance verified</label>
+          </div>
+        </div>
+
+        <div class="section">
+          <button type="button" class="primary" onclick="bookDirect()" id="confirmDirectBookingBtn">Confirm Direct Booking</button>
+          <button type="button" onclick="resetDirectBookingForm()" id="resetDirectBookingBtn">Reset Form</button>
+        </div>
+
+        <div id="directBookingMessage"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+  const qs = new URLSearchParams(location.search);
+  const token = qs.get("token") || "";
+  const tenant = qs.get("tenant") || qs.get("client") || "";
+  window.__currentRequestId = "";
+  window.__currentTab = "requests";
+  window.__uiLang = "en";
+  window.__manualLang = "";
+  window.__receptionConfig = null;
+  window.__selectedSlotTime = "";
+  window.__patientSearchTimer = null;
+  window.__selectedPatient = null;
+  window.__wsConnected = false;
+
+  const I18N = {
+    en: {
+      pageTitle: "Reception Dashboard",
+      tenantAccessText: " — tenant-specific access",
+      tenantLabelPrefix: "Tenant",
+      queueTitle: "Booking Requests",
+      wsConnected: "WS: connected",
+      wsDisconnected: "WS: disconnected",
+      statusLabel: "Status:",
+      refreshBtn: "Refresh",
+      tabRequests: "Request Review",
+      tabDirectBooking: "Front Desk Booking",
+      modeHelpRequests: "Review AI / WhatsApp booking requests here.",
+      modeHelpDirect: "Create direct front-desk appointments here.",
+      modeHelpDirectDisabled: "Front desk booking is disabled for this tenant.",
+      selectRequestMsg: "Select a request from the left.",
+      requestCreatedUpdated: "Created",
+      requestUpdatedAt: "Updated",
+      patientTitle: "Patient",
+      appointmentTitle: "Appointment",
+      insuranceTitle: "Insurance",
+      providerLabel: "Provider",
+      planLabel: "Plan",
+      memberIdLabel: "Member ID",
+      policyNumberLabel: "Policy Number",
+      expiryLabel: "Expiry",
+      insuranceStatusLabel: "Status",
+      insuranceVerifiedLabel: "Insurance verified",
+      receptionistNoteTitle: "Receptionist note",
+      optionalWhatsappTitle: "Optional WhatsApp message",
+      optionalWhatsappHint: "Tip: If empty and backend supports templates, a template may be generated automatically.",
+      confirmAppointmentBtn: "Confirm Appointment",
+      markContactedBtn: "Mark Contacted",
+      rejectBtn: "Reject",
+      directBookingTitle: "Front Desk Booking",
+      directBookingDesc: "Use this for walk-in patients or front desk bookings.",
+      patientBasicTitle: "Patient / Front Desk Intake",
+      patientName: "Patient Name",
+      patientMobile: "Phone Number",
+      patientId: "National ID / Patient ID",
+      patientIdNote: "For now this is stored in the patient registry and appointment record.",
+      patientType: "Patient Type",
+      patientTypeNote: "Used by front desk flow. Full patient registration module will expand later.",
+      patientSearch: "Search Existing Patient",
+      patientSearchNote: "Find returning patients before creating a new record.",
+      patientSearchPlaceholder: "Search by name / phone / national ID / patient ID",
+      patientRegistryLabel: "Patient Registry ID",
+      patientRegistryNote: "This links the booking to the patient registry foundation.",
+      noPatientMatches: "No matching patients found.",
+      selectedPatient: "Selected patient",
+      clearSelectedPatient: "Clear selected patient",
+      patientIdDisplay: "Patient ID",
+      appointmentBookingTitle: "Appointment Management",
+      doctorKey: "Doctor Key",
+      doctorKeyNote: "Use the doctor key currently configured in the system.",
+      apptDate: "Appointment Date",
+      loadSlotsBtn: "Load Available Slots",
+      slotsHintText: "Select doctor key and date, then load slots.",
+      selectedTime: "Selected Time",
+      frontDeskNotes: "Front Desk Notes",
+      insuranceSection: "Insurance",
+      confirmDirectBookingBtn: "Confirm Direct Booking",
+      resetDirectBookingBtn: "Reset Form",
+      noSlotsFound: "No open slots found for the selected doctor and date.",
+      loadListError: "Error loading list",
+      loadItemError: "Error loading item",
+      confirmFailed: "Confirmation failed",
+      appointmentConfirmed: "Appointment confirmed",
+      updateFailed: "Update failed",
+      loadSlotsError: "Unable to load slots",
+      directBookingSuccess: "Direct booking created successfully.",
+      directBookingFailed: "Direct booking failed",
+      selectSlotFirst: "Please load and select a time slot first.",
+      doctorDateRequired: "Doctor key and date are required.",
+      patientNameRequired: "Patient name is required.",
+      selfPay: "SELF PAY",
+      insuredVerified: "INSURED VERIFIED",
+      insuredUnverified: "INSURED UNVERIFIED",
+      insuranceExpired: "INSURANCE EXPIRED",
+      approvalRequired: "APPROVAL REQUIRED",
+      verified: "Verified",
+      unverified: "Unverified",
+      expired: "Expired",
+      expiringSoon: "Expiring Soon",
+      selfPayBadge: "Self Pay",
+      approvalRequiredBadge: "Approval Required",
+      walkInPlaceholder: "Walk-in / phone booking / notes",
+      doctorKeyPlaceholder: "e.g. dr_ahmed",
+      patientNamePlaceholder: "Full patient name",
+      phonePlaceholder: "e.g. 9665xxxxxxx",
+      nationalIdPlaceholder: "National ID / MRN / Iqama",
+      providerPlaceholder: "e.g. Daman / Bupa / Tawuniya",
+      planPlaceholder: "e.g. Gold",
+      memberIdPlaceholder: "Insurance member ID",
+      policyPlaceholder: "Policy number",
+      selectedTimePlaceholder: "HH:MM",
+      optionalMsgPlaceholder: "Type message to patient (optional)",
+      tenantDefault: "default",
+      newPatient: "NEW",
+      returningPatient: "RETURNING"
+    },
+    ar: {
+      pageTitle: "لوحة الاستقبال",
+      tenantAccessText: " — وصول خاص بالمنشأة",
+      tenantLabelPrefix: "المنشأة",
+      queueTitle: "طلبات الحجز",
+      wsConnected: "الاتصال اللحظي: متصل",
+      wsDisconnected: "الاتصال اللحظي: غير متصل",
+      statusLabel: "الحالة:",
+      refreshBtn: "تحديث",
+      tabRequests: "مراجعة الطلبات",
+      tabDirectBooking: "حجز مكتب الاستقبال",
+      modeHelpRequests: "راجع هنا طلبات الحجز القادمة من واتساب / الذكاء الاصطناعي.",
+      modeHelpDirect: "أنشئ هنا مواعيد مباشرة من مكتب الاستقبال.",
+      modeHelpDirectDisabled: "الحجز المباشر من الاستقبال غير مفعّل لهذه المنشأة.",
+      selectRequestMsg: "اختر طلبًا من القائمة على اليسار.",
+      requestCreatedUpdated: "تم الإنشاء",
+      requestUpdatedAt: "آخر تحديث",
+      patientTitle: "المريض",
+      appointmentTitle: "الموعد",
+      insuranceTitle: "التأمين",
+      providerLabel: "شركة التأمين",
+      planLabel: "الخطة",
+      memberIdLabel: "رقم العضوية",
+      policyNumberLabel: "رقم الوثيقة",
+      expiryLabel: "تاريخ الانتهاء",
+      insuranceStatusLabel: "الحالة",
+      insuranceVerifiedLabel: "تم التحقق من التأمين",
+      receptionistNoteTitle: "ملاحظة موظف الاستقبال",
+      optionalWhatsappTitle: "رسالة واتساب اختيارية",
+      optionalWhatsappHint: "إذا تُركت فارغة وكان الخادم يدعم القوالب فقد يتم إنشاء رسالة تلقائيًا.",
+      confirmAppointmentBtn: "تأكيد الموعد",
+      markContactedBtn: "تم التواصل",
+      rejectBtn: "رفض",
+      directBookingTitle: "حجز مكتب الاستقبال",
+      directBookingDesc: "استخدم هذا للمرضى الحاضرين أو حجوزات مكتب الاستقبال.",
+      patientBasicTitle: "بيانات المريض / الاستقبال",
+      patientName: "اسم المريض",
+      patientMobile: "رقم الهاتف",
+      patientId: "الهوية الوطنية / رقم المريض",
+      patientIdNote: "حاليًا يتم حفظه داخل سجل المريض والموعد.",
+      patientType: "نوع المريض",
+      patientTypeNote: "يُستخدم في تدفق الاستقبال. سيتم توسيع وحدة تسجيل المرضى لاحقًا.",
+      patientSearch: "البحث عن مريض موجود",
+      patientSearchNote: "ابحث عن المرضى المراجعين قبل إنشاء سجل جديد.",
+      patientSearchPlaceholder: "ابحث بالاسم / الهاتف / الهوية / رقم المريض",
+      patientRegistryLabel: "رقم المريض في السجل",
+      patientRegistryNote: "هذا يربط الحجز بسجل المرضى.",
+      noPatientMatches: "لا توجد نتائج مطابقة.",
+      selectedPatient: "المريض المختار",
+      clearSelectedPatient: "إلغاء اختيار المريض",
+      patientIdDisplay: "رقم المريض",
+      appointmentBookingTitle: "إدارة المواعيد",
+      doctorKey: "مفتاح الطبيب",
+      doctorKeyNote: "استخدم مفتاح الطبيب الموجود حاليًا في النظام.",
+      apptDate: "تاريخ الموعد",
+      loadSlotsBtn: "تحميل المواعيد المتاحة",
+      slotsHintText: "اختر مفتاح الطبيب والتاريخ ثم حمّل المواعيد.",
+      selectedTime: "الوقت المختار",
+      frontDeskNotes: "ملاحظات الاستقبال",
+      insuranceSection: "التأمين",
+      confirmDirectBookingBtn: "تأكيد الحجز المباشر",
+      resetDirectBookingBtn: "إعادة تعيين",
+      noSlotsFound: "لا توجد مواعيد مفتوحة للطبيب والتاريخ المحددين.",
+      loadListError: "خطأ في تحميل القائمة",
+      loadItemError: "خطأ في تحميل البيانات",
+      confirmFailed: "فشل تأكيد الموعد",
+      appointmentConfirmed: "تم تأكيد الموعد",
+      updateFailed: "فشل التحديث",
+      loadSlotsError: "تعذر تحميل المواعيد المتاحة",
+      directBookingSuccess: "تم إنشاء الحجز المباشر بنجاح.",
+      directBookingFailed: "فشل الحجز المباشر",
+      selectSlotFirst: "يرجى تحميل واختيار موعد أولاً.",
+      doctorDateRequired: "مفتاح الطبيب والتاريخ مطلوبان.",
+      patientNameRequired: "اسم المريض مطلوب.",
+      selfPay: "دفع ذاتي",
+      insuredVerified: "مؤمّن وتم التحقق",
+      insuredUnverified: "مؤمّن غير متحقق",
+      insuranceExpired: "التأمين منتهي",
+      approvalRequired: "تحتاج موافقة",
+      verified: "تم التحقق",
+      unverified: "غير متحقق",
+      expired: "منتهي",
+      expiringSoon: "ينتهي قريبًا",
+      selfPayBadge: "دفع ذاتي",
+      approvalRequiredBadge: "تحتاج موافقة",
+      walkInPlaceholder: "مراجع حضوري / حجز هاتفي / ملاحظات",
+      doctorKeyPlaceholder: "مثال: dr_ahmed",
+      patientNamePlaceholder: "الاسم الكامل للمريض",
+      phonePlaceholder: "مثال: 9665xxxxxxx",
+      nationalIdPlaceholder: "الهوية / الرقم الطبي / الإقامة",
+      providerPlaceholder: "مثال: ضمان / بوبا / التعاونية",
+      planPlaceholder: "مثال: Gold",
+      memberIdPlaceholder: "رقم عضوية التأمين",
+      policyPlaceholder: "رقم الوثيقة",
+      selectedTimePlaceholder: "HH:MM",
+      optionalMsgPlaceholder: "اكتب رسالة اختيارية للمريض",
+      tenantDefault: "الافتراضي",
+      newPatient: "جديد",
+      returningPatient: "راجع"
+    }
+  };
+
+  function t(key){
+    const lang = window.__uiLang || "en";
+    return (I18N[lang] && I18N[lang][key]) || I18N.en[key] || key;
+  }
+
+  function headers(){
+    const h = {};
+    if(token) h["X-Reception-Token"] = token;
+    if(tenant) h["X-Tenant-Id"] = tenant;
+    return h;
+  }
+
+  function withTenant(url){
+    if(!tenant) return url;
+    return url.includes("?")
+      ? `${url}&tenant=${encodeURIComponent(tenant)}`
+      : `${url}?tenant=${encodeURIComponent(tenant)}`;
+  }
+
+  function updateLanguageButtons(){
+    document.getElementById("langEnBtn").classList.toggle("active", window.__uiLang === "en");
+    document.getElementById("langArBtn").classList.toggle("active", window.__uiLang === "ar");
+  }
+
+  function setManualLanguage(lang){
+    window.__manualLang = (lang === "ar") ? "ar" : "en";
+    applyLanguage(window.__manualLang);
+  }
+
+  function setWSStatus(connected){
+    window.__wsConnected = !!connected;
+    const dot = document.getElementById("wsDot");
+    const txt = document.getElementById("wsStatus");
+
+    dot.classList.toggle("on", connected);
+    dot.classList.toggle("off", !connected);
+    txt.textContent = connected ? t("wsConnected") : t("wsDisconnected");
+  }
+
+  function applyLanguage(lang){
+    window.__uiLang = (lang === "ar") ? "ar" : "en";
+    document.body.classList.toggle("rtl", window.__uiLang === "ar");
+    document.documentElement.lang = window.__uiLang;
+
+    document.getElementById("pageTitle").textContent = t("pageTitle");
+    document.getElementById("tenantAccessText").textContent = t("tenantAccessText");
+    document.getElementById("queueTitle").textContent = t("queueTitle");
+    document.getElementById("statusLabel").textContent = t("statusLabel");
+    document.getElementById("refreshBtn").textContent = t("refreshBtn");
+    document.getElementById("tabRequests").textContent = t("tabRequests");
+    document.getElementById("tabDirectBooking").textContent = t("tabDirectBooking");
+    document.getElementById("directBookingTitle").textContent = t("directBookingTitle");
+    document.getElementById("directBookingDesc").textContent = t("directBookingDesc");
+    document.getElementById("patientBasicTitle").textContent = t("patientBasicTitle");
+    document.getElementById("dbPatientSearchLabel").textContent = t("patientSearch");
+    document.getElementById("dbPatientSearchNote").textContent = t("patientSearchNote");
+    document.getElementById("dbPatientRegistryLabel").textContent = t("patientRegistryLabel");
+    document.getElementById("dbPatientRegistryNote").textContent = t("patientRegistryNote");
+    document.getElementById("dbPatientNameLabel").textContent = t("patientName");
+    document.getElementById("dbPatientMobileLabel").textContent = t("patientMobile");
+    document.getElementById("dbPatientIdLabel").textContent = t("patientId");
+    document.getElementById("dbPatientIdNote").textContent = t("patientIdNote");
+    document.getElementById("dbPatientTypeLabel").textContent = t("patientType");
+    document.getElementById("dbPatientTypeNote").textContent = t("patientTypeNote");
+    document.getElementById("appointmentBookingTitle").textContent = t("appointmentBookingTitle");
+    document.getElementById("dbDoctorKeyLabel").textContent = t("doctorKey");
+    document.getElementById("dbDoctorKeyNote").textContent = t("doctorKeyNote");
+    document.getElementById("dbApptDateLabel").textContent = t("apptDate");
+    document.getElementById("loadSlotsBtn").textContent = t("loadSlotsBtn");
+    document.getElementById("slotsHintText").textContent = t("slotsHintText");
+    document.getElementById("dbSelectedTimeLabel").textContent = t("selectedTime");
+    document.getElementById("dbNotesLabel").textContent = t("frontDeskNotes");
+    document.getElementById("dbInsuranceTitle").textContent = t("insuranceSection");
+    document.getElementById("dbInsuranceProviderLabel").textContent = t("providerLabel");
+    document.getElementById("dbInsurancePlanLabel").textContent = t("planLabel");
+    document.getElementById("dbInsuranceMemberIdLabel").textContent = t("memberIdLabel");
+    document.getElementById("dbInsurancePolicyNumberLabel").textContent = t("policyNumberLabel");
+    document.getElementById("dbInsuranceExpiryLabel").textContent = t("expiryLabel");
+    document.getElementById("dbInsuranceStatusLabel").textContent = t("insuranceStatusLabel");
+    document.getElementById("dbInsuranceVerifiedLabel").textContent = t("insuranceVerifiedLabel");
+    document.getElementById("confirmDirectBookingBtn").textContent = t("confirmDirectBookingBtn");
+    document.getElementById("resetDirectBookingBtn").textContent = t("resetDirectBookingBtn");
+
+    document.getElementById("db_patient_search").placeholder = t("patientSearchPlaceholder");
+    document.getElementById("db_registry_patient_id").placeholder = t("patientRegistryLabel");
+    document.getElementById("db_patient_name").placeholder = t("patientNamePlaceholder");
+    document.getElementById("db_patient_mobile").placeholder = t("phonePlaceholder");
+    document.getElementById("db_patient_id").placeholder = t("nationalIdPlaceholder");
+    document.getElementById("db_doctor_key").placeholder = t("doctorKeyPlaceholder");
+    document.getElementById("db_appt_time").placeholder = t("selectedTimePlaceholder");
+    document.getElementById("db_notes").placeholder = t("walkInPlaceholder");
+    document.getElementById("db_insurance_provider").placeholder = t("providerPlaceholder");
+    document.getElementById("db_insurance_plan").placeholder = t("planPlaceholder");
+    document.getElementById("db_insurance_member_id").placeholder = t("memberIdPlaceholder");
+    document.getElementById("db_insurance_policy_number").placeholder = t("policyPlaceholder");
+
+    const patientType = document.getElementById("db_patient_type");
+    patientType.options[0].text = t("newPatient");
+    patientType.options[1].text = t("returningPatient");
+
+    const tenantLabelValue = tenant || t("tenantDefault");
+    document.getElementById("tenantLabel").textContent = `${t("tenantLabelPrefix")}: ${tenantLabelValue}`;
+
+    updateLanguageButtons();
+    setWSStatus(window.__wsConnected);
+    switchTab(window.__currentTab || "requests");
+    renderSelectedPatientBox();
+  }
+
+  function switchTab(tab){
+    const reqBtn = document.getElementById("tabRequests");
+    const directBtn = document.getElementById("tabDirectBooking");
+    const reqPanel = document.getElementById("requestPanel");
+    const directPanel = document.getElementById("directBookingPanel");
+    const help = document.getElementById("modeHelpText");
+    const directEnabled = !!(window.__receptionConfig && window.__receptionConfig.enable_reception_direct_booking);
+
+    reqBtn.classList.remove("active");
+    directBtn.classList.remove("active");
+    reqPanel.classList.add("hidden");
+    directPanel.classList.add("hidden");
+
+    if(tab === "direct-booking" && directEnabled){
+      window.__currentTab = "direct-booking";
+      directBtn.classList.add("active");
+      directPanel.classList.remove("hidden");
+      help.textContent = t("modeHelpDirect");
+    } else {
+      window.__currentTab = "requests";
+      reqBtn.classList.add("active");
+      reqPanel.classList.remove("hidden");
+      help.textContent = directEnabled ? t("modeHelpRequests") : t("modeHelpDirectDisabled");
+    }
+  }
+
+  function parseDateOnly(value){
+    if(!value) return null;
+    const s = String(value).slice(0, 10);
+    const d = new Date(s + "T00:00:00");
+    return isNaN(d.getTime()) ? null : d;
+  }
+
+  function daysUntil(dateObj){
+    if(!dateObj) return null;
+    const now = new Date();
+    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const target = new Date(dateObj.getFullYear(), dateObj.getMonth(), dateObj.getDate());
+    return Math.floor((target - today) / 86400000);
+  }
+
+  function insurancePill(status, verified){
+    const s = String(status || "SELF_PAY").toUpperCase();
+
+    if(s === "INSURED_VERIFIED" || verified){
+      return `<span class="insurance-pill insurance-verified">${t("insuredVerified")}</span>`;
+    }
+    if(s === "INSURED_UNVERIFIED"){
+      return `<span class="insurance-pill insurance-unverified">${t("insuredUnverified")}</span>`;
+    }
+    if(s === "INSURANCE_EXPIRED"){
+      return `<span class="insurance-pill insurance-expired">${t("insuranceExpired")}</span>`;
+    }
+    if(s === "APPROVAL_REQUIRED"){
+      return `<span class="insurance-pill insurance-approval">${t("approvalRequired")}</span>`;
+    }
+    return `<span class="insurance-pill insurance-self">${t("selfPay")}</span>`;
+  }
+
+  function insuranceExtraBadges(it){
+    const status = String(it.insurance_status || "SELF_PAY").toUpperCase();
+    const verified = !!it.insurance_verified;
+    const expiryDate = parseDateOnly(it.insurance_expiry);
+    const days = daysUntil(expiryDate);
+
+    let html = "";
+
+    if(status === "SELF_PAY"){
+      html += `<span class="verify-badge verify-info">${t("selfPayBadge")}</span>`;
+      return html;
+    }
+
+    if(status === "APPROVAL_REQUIRED"){
+      html += `<span class="verify-badge verify-info">${t("approvalRequiredBadge")}</span>`;
+    }
+
+    if(status === "INSURANCE_EXPIRED" || (days !== null && days < 0)){
+      html += `<span class="verify-badge verify-bad">${t("expired")}</span>`;
+      return html;
+    }
+
+    if(status === "INSURED_VERIFIED" || verified){
+      html += `<span class="verify-badge verify-ok">${t("verified")}</span>`;
+    } else {
+      html += `<span class="verify-badge verify-warn">${t("unverified")}</span>`;
+    }
+
+    if(days !== null && days >= 0 && days <= 30){
+      html += `<span class="verify-badge verify-warn">${t("expiringSoon")}</span>`;
+    }
+
+    return html;
+  }
+
+  function insuranceSummary(it){
+    return `
+      <div>${insurancePill(it.insurance_status, it.insurance_verified)}</div>
+      <div style="margin-top:4px;">${insuranceExtraBadges(it)}</div>
+      <div class="muted">${it.insurance_provider || "-"}</div>
+      <div class="muted">${it.insurance_plan ? t("planLabel") + ": " + it.insurance_plan : ""}</div>
+      <div class="muted">${it.insurance_member_id ? t("memberIdLabel") + ": " + it.insurance_member_id : ""}</div>
+      <div class="muted">${it.insurance_expiry ? t("expiryLabel") + ": " + it.insurance_expiry : ""}</div>
+    `;
+  }
+
+  function collectInsurancePayload(){
+    return {
+      insurance_provider: document.getElementById("insurance_provider")?.value || "",
+      insurance_plan: document.getElementById("insurance_plan")?.value || "",
+      insurance_member_id: document.getElementById("insurance_member_id")?.value || "",
+      insurance_policy_number: document.getElementById("insurance_policy_number")?.value || "",
+      insurance_expiry: document.getElementById("insurance_expiry")?.value || "",
+      insurance_status: document.getElementById("insurance_status")?.value || "SELF_PAY",
+      insurance_verified: !!document.getElementById("insurance_verified")?.checked
+    };
+  }
+
+  function collectDirectInsurancePayload(){
+    return {
+      insurance_provider: document.getElementById("db_insurance_provider").value || "",
+      insurance_plan: document.getElementById("db_insurance_plan").value || "",
+      insurance_member_id: document.getElementById("db_insurance_member_id").value || "",
+      insurance_policy_number: document.getElementById("db_insurance_policy_number").value || "",
+      insurance_expiry: document.getElementById("db_insurance_expiry").value || "",
+      insurance_status: document.getElementById("db_insurance_status").value || "SELF_PAY",
+      insurance_verified: !!document.getElementById("db_insurance_verified").checked
+    };
+  }
+
+  function renderSelectedPatientBox(){
+    const box = document.getElementById("selectedPatientBox");
+    const p = window.__selectedPatient;
+
+    if(!p){
+      box.classList.add("hidden");
+      box.innerHTML = "";
+      return;
+    }
+
+    box.classList.remove("hidden");
+    box.innerHTML = `
+      <div><b>${t("selectedPatient")}:</b> ${p.full_name || "-"}</div>
+      <div class="muted">${p.patient_id || "-"} ${p.mobile ? "— " + p.mobile : ""}</div>
+      <div class="muted">${p.national_id || ""}</div>
+      <button type="button" onclick="clearSelectedPatient()">${t("clearSelectedPatient")}</button>
+    `;
+  }
+
+  function clearSelectedPatient(){
+    window.__selectedPatient = null;
+    document.getElementById("db_registry_patient_id").value = "";
+    document.getElementById("db_patient_search").value = "";
+    document.getElementById("patientSearchResults").innerHTML = "";
+    document.getElementById("patientSearchResults").classList.add("hidden");
+    renderSelectedPatientBox();
+  }
+
+  function applyPatientToForm(p){
+    window.__selectedPatient = p || null;
+    document.getElementById("db_registry_patient_id").value = p.patient_id || "";
+    document.getElementById("db_patient_name").value = p.full_name || "";
+    document.getElementById("db_patient_mobile").value = p.mobile || "";
+    document.getElementById("db_patient_id").value = p.national_id || "";
+    document.getElementById("db_patient_type").value = "RETURNING";
+    document.getElementById("db_insurance_provider").value = p.insurance_provider || "";
+    document.getElementById("db_insurance_plan").value = p.insurance_plan || "";
+    document.getElementById("db_insurance_member_id").value = p.insurance_member_id || "";
+    document.getElementById("db_insurance_policy_number").value = p.insurance_policy_number || "";
+    document.getElementById("db_insurance_expiry").value = p.insurance_expiry || "";
+    document.getElementById("db_insurance_status").value = p.insurance_status || "SELF_PAY";
+    document.getElementById("db_insurance_verified").checked = !!p.insurance_verified;
+
+    renderSelectedPatientBox();
+    const results = document.getElementById("patientSearchResults");
+    results.classList.add("hidden");
+    results.innerHTML = "";
+  }
+
+  async function searchPatients(){
+    const q = document.getElementById("db_patient_search").value.trim();
+    const results = document.getElementById("patientSearchResults");
+
+    if(!q){
+      results.classList.add("hidden");
+      results.innerHTML = "";
+      return;
+    }
+
+    try{
+      const r = await fetch(withTenant(`/api/reception/patients/search?q=${encodeURIComponent(q)}`), {
+        headers: headers()
+      });
+      const j = await r.json();
+
+      if(!j.ok){
+        results.classList.add("hidden");
+        results.innerHTML = "";
+        return;
+      }
+
+      const items = j.items || [];
+      results.innerHTML = "";
+
+      if(!items.length){
+        results.innerHTML = `<div class="search-item muted">${t("noPatientMatches")}</div>`;
+        results.classList.remove("hidden");
+        return;
+      }
+
+      for(const p of items){
+        const div = document.createElement("div");
+        div.className = "search-item";
+        div.innerHTML = `
+          <div><b>${p.full_name || "-"}</b></div>
+          <div class="muted">${p.patient_id || "-"} ${p.mobile ? "— " + p.mobile : ""}</div>
+          <div class="muted">${p.national_id || ""}</div>
+          <div class="badge-soft">${p.insurance_status || "SELF_PAY"}</div>
+        `;
+        div.onclick = () => applyPatientToForm(p);
+        results.appendChild(div);
+      }
+
+      results.classList.remove("hidden");
+    }catch(e){
+      results.classList.add("hidden");
+      results.innerHTML = "";
+    }
+  }
+
+  async function loadConfig(){
+    try{
+      const r = await fetch(withTenant("/api/reception/config"), {
+        headers: headers()
+      });
+      const j = await r.json();
+
+      if(!j.ok){
+        applyLanguage(window.__manualLang || "en");
+        return;
+      }
+
+      window.__receptionConfig = j;
+
+      const lang = window.__manualLang || (String(j.language || "en").toLowerCase() === "ar" ? "ar" : "en");
+      applyLanguage(lang);
+
+      const directBtn = document.getElementById("tabDirectBooking");
+      if(j.enable_reception_direct_booking){
+        directBtn.classList.remove("hidden");
+      } else {
+        directBtn.classList.add("hidden");
+      }
+
+      switchTab("requests");
+    }catch(e){
+      applyLanguage(window.__manualLang || "en");
+    }
+  }
+
+  async function loadList(){
+    const status = document.getElementById("status").value;
+    const r = await fetch(withTenant(`/api/reception/requests?status=${encodeURIComponent(status)}`), {
+      headers: headers()
+    });
+    const j = await r.json();
+
+    if(!j.ok){
+      alert(`${t("loadListError")}: ${j.detail || "unknown"}`);
+      return;
+    }
+
+    const el = document.getElementById("list");
+    el.innerHTML = "";
+
+    for(const it of j.items){
+      const div = document.createElement("div");
+      div.className = "item";
+      div.onclick = () => loadDetail(it.request_id);
+
+      div.innerHTML = `
+        <div><b>${it.request_id}</b> <span class="pill">${it.status}</span></div>
+        <div class="muted">${it.patient_name || ""} — ${it.patient_mobile || ""}</div>
+        <div class="muted">${it.dept_label || ""} — ${it.doctor_label || ""}</div>
+        <div class="muted">${it.appt_date || ""} — ${it.appt_time || ""}</div>
+        <div style="margin-top:4px;">${insuranceSummary(it)}</div>
+      `;
+      el.appendChild(div);
+    }
+  }
+
+  async function loadDetail(requestId){
+    window.__currentRequestId = requestId;
+
+    const r = await fetch(withTenant(`/api/reception/requests/${encodeURIComponent(requestId)}`), {
+      headers: headers()
+    });
+    const j = await r.json();
+
+    if(!j.ok){
+      alert(`${t("loadItemError")}: ${j.detail || "unknown"}`);
+      return;
+    }
+
+    const it = j.item;
+
+    document.getElementById("detail").innerHTML = `
+      <div class="card">
+        <div>
+          <b>${it.request_id}</b>
+          <span class="pill">${it.status}</span>
+        </div>
+
+        <div class="muted">
+          ${t("requestCreatedUpdated")}: ${it.created_at} | ${t("requestUpdatedAt")}: ${it.updated_at}
+        </div>
+
+        <hr/>
+
+        <div class="row">
+          <div>
+            <b>${t("patientTitle")}</b>
+            <div>${it.patient_name || "-"}</div>
+            <div class="muted">${it.patient_mobile || "-"}</div>
+            <div class="muted">${it.registry_patient_id ? t("patientIdDisplay") + ": " + it.registry_patient_id : ""}</div>
+          </div>
+
+          <div>
+            <b>${t("appointmentTitle")}</b>
+            <div>${it.dept_label || "-"}</div>
+            <div>${it.doctor_label || "-"}</div>
+            <div class="muted">${it.appt_date || ""} — ${it.appt_time || ""}</div>
+          </div>
+        </div>
+
+        <div class="section">
+          <b>${t("insuranceTitle")}</b>
+          <div style="margin-top:8px;">${insuranceSummary(it)}</div>
+
+          <div class="row" style="margin-top:8px;">
+            <div>
+              <label>${t("providerLabel")}</label>
+              <input id="insurance_provider" type="text" value="${it.insurance_provider || ""}" placeholder="${t("providerPlaceholder")}"/>
+            </div>
+
+            <div>
+              <label>${t("planLabel")}</label>
+              <input id="insurance_plan" type="text" value="${it.insurance_plan || ""}" placeholder="${t("planPlaceholder")}"/>
+            </div>
+
+            <div>
+              <label>${t("memberIdLabel")}</label>
+              <input id="insurance_member_id" type="text" value="${it.insurance_member_id || ""}" placeholder="${t("memberIdPlaceholder")}"/>
+            </div>
+
+            <div>
+              <label>${t("policyNumberLabel")}</label>
+              <input id="insurance_policy_number" type="text" value="${it.insurance_policy_number || ""}" placeholder="${t("policyPlaceholder")}"/>
+            </div>
+
+            <div>
+              <label>${t("expiryLabel")}</label>
+              <input id="insurance_expiry" type="date" value="${it.insurance_expiry || ""}"/>
+            </div>
+
+            <div>
+              <label>${t("insuranceStatusLabel")}</label>
+              <select id="insurance_status">
+                <option value="SELF_PAY" ${String(it.insurance_status || "SELF_PAY").toUpperCase() === "SELF_PAY" ? "selected" : ""}>SELF_PAY</option>
+                <option value="INSURED_UNVERIFIED" ${String(it.insurance_status || "").toUpperCase() === "INSURED_UNVERIFIED" ? "selected" : ""}>INSURED_UNVERIFIED</option>
+                <option value="INSURED_VERIFIED" ${String(it.insurance_status || "").toUpperCase() === "INSURED_VERIFIED" ? "selected" : ""}>INSURED_VERIFIED</option>
+                <option value="INSURANCE_EXPIRED" ${String(it.insurance_status || "").toUpperCase() === "INSURANCE_EXPIRED" ? "selected" : ""}>INSURANCE_EXPIRED</option>
+                <option value="APPROVAL_REQUIRED" ${String(it.insurance_status || "").toUpperCase() === "APPROVAL_REQUIRED" ? "selected" : ""}>APPROVAL_REQUIRED</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="checkline">
+            <input id="insurance_verified" type="checkbox" ${it.insurance_verified ? "checked" : ""}/>
+            <label for="insurance_verified">${t("insuranceVerifiedLabel")}</label>
+          </div>
+        </div>
+
+        <div class="section">
+          <b>${t("receptionistNoteTitle")}</b>
+          <textarea id="note">${it.receptionist_note || ""}</textarea>
+        </div>
+
+        <div class="section">
+          <b>${t("optionalWhatsappTitle")}</b>
+          <input id="msg" type="text" placeholder="${t("optionalMsgPlaceholder")}"/>
+          <div class="muted" style="margin-top:6px;">${t("optionalWhatsappHint")}</div>
+        </div>
+
+        <div class="section">
+          <button type="button" class="primary" onclick="confirmAppointment('${it.request_id}')">${t("confirmAppointmentBtn")}</button>
+          <button type="button" onclick="updateStatus('${it.request_id}','CONTACTED')">${t("markContactedBtn")}</button>
+          <button type="button" onclick="updateStatus('${it.request_id}','REJECTED')">${t("rejectBtn")}</button>
+        </div>
+      </div>
+    `;
+  }
+
+  async function confirmAppointment(requestId){
+    const note = document.getElementById("note")?.value || "";
+    const insurance = collectInsurancePayload();
+
+    const r = await fetch(withTenant("/admin/appointments/confirm"), {
+      method: "POST",
+      headers: Object.assign({"Content-Type":"application/json"}, headers()),
+      body: JSON.stringify({
+        request_id: requestId,
+        notes: note,
+        ...insurance
+      })
+    });
+    const j = await r.json();
+
+    if(!j.ok){
+      alert(`${t("confirmFailed")}: ${j.detail || "unknown"}`);
+      return;
+    }
+
+    alert(t("appointmentConfirmed"));
+    await loadList();
+    if(window.__currentRequestId === requestId){
+      await loadDetail(requestId);
+    }
+  }
+
+  async function updateStatus(requestId, status){
+    const note = document.getElementById("note")?.value || "";
+    const msg = document.getElementById("msg")?.value || "";
+    const insurance = collectInsurancePayload();
+
+    const r = await fetch(withTenant(`/api/reception/requests/${encodeURIComponent(requestId)}/update`), {
+      method: "POST",
+      headers: Object.assign({"Content-Type":"application/json"}, headers()),
+      body: JSON.stringify({
+        status,
+        receptionist_note: note,
+        send_message: msg.trim().length > 0,
+        message_text: msg,
+        ...insurance
+      })
+    });
+    const j = await r.json();
+
+    if(!j.ok){
+      alert(`${t("updateFailed")}: ${j.detail || "unknown"}`);
+      return;
+    }
+
+    await loadList();
+    await loadDetail(requestId);
+  }
+
+  async function loadAvailableSlots(){
+    const doctorKey = document.getElementById("db_doctor_key").value.trim();
+    const apptDate = document.getElementById("db_appt_date").value.trim();
+
+    if(!doctorKey || !apptDate){
+      alert(t("doctorDateRequired"));
+      return;
+    }
+
+    const slotList = document.getElementById("slotList");
+    slotList.innerHTML = "";
+    document.getElementById("db_appt_time").value = "";
+    window.__selectedSlotTime = "";
+
+    try{
+      const r = await fetch(withTenant(`/api/reception/available-slots?doctor_key=${encodeURIComponent(doctorKey)}&appt_date=${encodeURIComponent(apptDate)}`), {
+        headers: headers()
+      });
+      const j = await r.json();
+
+      if(!j.ok){
+        alert(`${t("loadSlotsError")}: ${j.detail || "unknown"}`);
+        return;
+      }
+
+      if(!j.items || !j.items.length){
+        slotList.innerHTML = `<div class="muted">${t("noSlotsFound")}</div>`;
+        return;
+      }
+
+      for(const slot of j.items){
+        const chip = document.createElement("button");
+        chip.type = "button";
+        chip.className = "slot-chip";
+        chip.textContent = slot;
+        chip.onclick = () => {
+          document.querySelectorAll(".slot-chip").forEach(x => x.classList.remove("active"));
+          chip.classList.add("active");
+          document.getElementById("db_appt_time").value = slot;
+          window.__selectedSlotTime = slot;
+        };
+        slotList.appendChild(chip);
+      }
+    }catch(e){
+      alert(t("loadSlotsError"));
+    }
+  }
+
+  async function bookDirect(){
+    const doctor_key = document.getElementById("db_doctor_key").value.trim();
+    const appt_date = document.getElementById("db_appt_date").value.trim();
+    const appt_time = document.getElementById("db_appt_time").value.trim();
+    const patient_name = document.getElementById("db_patient_name").value.trim();
+    const patient_mobile = document.getElementById("db_patient_mobile").value.trim();
+    const patient_id = document.getElementById("db_patient_id").value.trim();
+    const notes = document.getElementById("db_notes").value.trim();
+    const msgEl = document.getElementById("directBookingMessage");
+
+    if(!doctor_key || !appt_date){
+      alert(t("doctorDateRequired"));
+      return;
+    }
+    if(!patient_name){
+      alert(t("patientNameRequired"));
+      return;
+    }
+    if(!appt_time){
+      alert(t("selectSlotFirst"));
+      return;
+    }
+
+    msgEl.className = "";
+    msgEl.textContent = "";
+
+    try{
+      const r = await fetch(withTenant("/api/reception/book-direct"), {
+        method: "POST",
+        headers: Object.assign({"Content-Type":"application/json"}, headers()),
+        body: JSON.stringify({
+          registry_patient_id: document.getElementById("db_registry_patient_id").value.trim() || null,
+          doctor_key,
+          appt_date,
+          appt_time,
+          patient_name,
+          patient_mobile,
+          patient_id,
+          patient_type: document.getElementById("db_patient_type").value.trim(),
+          notes,
+          ...collectDirectInsurancePayload()
+        })
+      });
+      const j = await r.json();
+
+      if(!j.ok){
+        msgEl.className = "error";
+        msgEl.textContent = `${t("directBookingFailed")}: ${j.detail || "unknown"}`;
+        return;
+      }
+
+      msgEl.className = "success";
+      msgEl.textContent = `${t("directBookingSuccess")} ${j.appointment_id ? "(" + j.appointment_id + ")" : ""}`;
+      resetDirectBookingForm(false);
+    }catch(e){
+      msgEl.className = "error";
+      msgEl.textContent = t("directBookingFailed");
+    }
+  }
+
+  function resetDirectBookingForm(clearMessage=true){
+    document.getElementById("db_patient_search").value = "";
+    document.getElementById("db_registry_patient_id").value = "";
+    document.getElementById("db_patient_name").value = "";
+    document.getElementById("db_patient_mobile").value = "";
+    document.getElementById("db_patient_id").value = "";
+    document.getElementById("db_patient_type").value = "NEW";
+    document.getElementById("db_doctor_key").value = "";
+    document.getElementById("db_appt_date").value = "";
+    document.getElementById("db_appt_time").value = "";
+    document.getElementById("db_notes").value = "";
+    document.getElementById("db_insurance_provider").value = "";
+    document.getElementById("db_insurance_plan").value = "";
+    document.getElementById("db_insurance_member_id").value = "";
+    document.getElementById("db_insurance_policy_number").value = "";
+    document.getElementById("db_insurance_expiry").value = "";
+    document.getElementById("db_insurance_status").value = "SELF_PAY";
+    document.getElementById("db_insurance_verified").checked = false;
+    document.getElementById("slotList").innerHTML = "";
+    document.getElementById("patientSearchResults").innerHTML = "";
+    document.getElementById("patientSearchResults").classList.add("hidden");
+    window.__selectedSlotTime = "";
+    window.__selectedPatient = null;
+    renderSelectedPatientBox();
+
+    if(clearMessage){
+      const msgEl = document.getElementById("directBookingMessage");
+      msgEl.className = "";
+      msgEl.textContent = "";
+    }
+  }
+
+  function bindPatientSearch(){
+    const el = document.getElementById("db_patient_search");
+    el.addEventListener("input", () => {
+      if(window.__patientSearchTimer) clearTimeout(window.__patientSearchTimer);
+      window.__patientSearchTimer = setTimeout(searchPatients, 350);
+    });
+  }
+
+  let ws = null;
+
+  function connectWS(){
+    if(!token){
+      setWSStatus(false);
+      return;
+    }
+
+    const proto = location.protocol === "https:" ? "wss" : "ws";
+    const wsUrl = tenant
+      ? `${proto}://${location.host}/ws/reception?tenant=${encodeURIComponent(tenant)}&token=${encodeURIComponent(token)}`
+      : `${proto}://${location.host}/ws/reception?token=${encodeURIComponent(token)}`;
+
+    ws = new WebSocket(wsUrl);
+
+    ws.onopen = () => setWSStatus(true);
+    ws.onclose = () => {
+      setWSStatus(false);
+      setTimeout(connectWS, 2000);
+    };
+    ws.onmessage = async (ev) => {
+      try{
+        const msg = JSON.parse(ev.data);
+        if(
+          msg.type === "appointment_request_updated" ||
+          msg.type === "appointment_confirmed" ||
+          msg.type === "direct_booking_created"
+        ){
+          if(tenant && msg.tenant_id && msg.tenant_id !== tenant) return;
+          await loadList();
+          if(window.__currentRequestId && msg.request_id && window.__currentRequestId === msg.request_id){
+            await loadDetail(window.__currentRequestId);
+          }
+        }
+      }catch(e){}
+    };
+  }
+
+  async function init(){
+    applyLanguage("en");
+    bindPatientSearch();
+    await loadConfig();
+    await loadList();
+    connectWS();
+  }
+
+  init();
+</script>
+
+</body>
+</html>

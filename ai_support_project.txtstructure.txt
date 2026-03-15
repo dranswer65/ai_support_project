@@ -1,0 +1,31 @@
+ai_support_project/
+│
+├── audit/audit
+├── frontend/
+├── __pycache__/
+├── Admin/
+├── clients/
+├── logs/
+├── Admin data/
+├── docs/
+├── prompts/
+├── admin_ui/
+├── embedding/
+├── rag/
+│
+├── chunk_docs.py
+├── session_manager.py
+├── whatsapp_bot.py
+├── kpi.txt
+├── .env
+├── from openai import OpenAI.txt
+├── make_hash.py
+├── rag_engine.py
+├── test_server.py
+├── requirements.txt
+├── api_server.py
+├── generate_key.py
+├── ren main.py.txt
+├── main.py
+├── test-prompts.py
+└── version 2.txt

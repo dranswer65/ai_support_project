@@ -1,0 +1,845 @@
+<!doctype html>
+<html lang="en" dir="ltr">
+<head>
+<meta charset="utf-8"/>
+<title>Doctor Availability Calendar</title>
+
+<style>
+body{
+  font-family:Arial,sans-serif;
+  background:#f7f7f7;
+  margin:0;
+}
+
+header{
+  background:white;
+  border-bottom:1px solid #ddd;
+  padding:14px 18px;
+}
+
+.wrap{
+  max-width:1450px;
+  margin:auto;
+  padding:20px;
+}
+
+.card{
+  background:white;
+  border:1px solid #eee;
+  border-radius:10px;
+  padding:18px;
+  margin-bottom:18px;
+}
+
+.filters{
+  display:grid;
+  grid-template-columns:1.2fr 1.2fr 180px 180px 220px;
+  gap:12px;
+  margin-bottom:14px;
+}
+
+.subgrid{
+  display:grid;
+  grid-template-columns:1fr 1fr 1fr 1fr;
+  gap:12px;
+}
+
+input, select, textarea{
+  width:100%;
+  padding:8px;
+  box-sizing:border-box;
+}
+
+textarea{
+  min-height:90px;
+}
+
+button{
+  padding:8px 12px;
+  border-radius:6px;
+  border:1px solid #ccc;
+  background:white;
+  cursor:pointer;
+}
+
+button.primary{
+  background:#0077ff;
+  color:white;
+  border:none;
+}
+
+button.warn{
+  background:#fff7ed;
+  border-color:#fdba74;
+  color:#9a3412;
+}
+
+button.good{
+  background:#ecfdf3;
+  border-color:#86efac;
+  color:#166534;
+}
+
+table{
+  width:100%;
+  border-collapse:collapse;
+}
+
+th, td{
+  border:1px solid #eee;
+  padding:10px;
+  text-align:left;
+  vertical-align:top;
+}
+
+th{
+  background:#fafafa;
+}
+
+.muted{
+  color:#666;
+  font-size:12px;
+}
+
+.success{
+  color:#0a7f38;
+  font-size:13px;
+}
+
+.error{
+  color:#b42318;
+  font-size:13px;
+}
+
+.slot-pill{
+  display:inline-block;
+  padding:4px 10px;
+  border-radius:999px;
+  font-size:12px;
+  border:1px solid #ccc;
+  font-weight:700;
+  margin-right:6px;
+  margin-bottom:6px;
+  background:#fff;
+}
+
+.slot-open{
+  background:#ecfdf3;
+  border-color:#86efac;
+  color:#166534;
+}
+
+.slot-booked{
+  background:#eff6ff;
+  border-color:#93c5fd;
+  color:#1d4ed8;
+}
+
+.slot-held{
+  background:#fff7ed;
+  border-color:#fdba74;
+  color:#9a3412;
+}
+
+.day-card{
+  border:1px solid #eee;
+  border-radius:10px;
+  padding:12px;
+  background:#fafafa;
+}
+
+.calendar-grid{
+  display:grid;
+  grid-template-columns:repeat(3, 1fr);
+  gap:12px;
+}
+
+.section-title{
+  margin:0 0 10px 0;
+}
+
+.nav{
+  display:flex;
+  gap:8px;
+  flex-wrap:wrap;
+}
+
+html[dir="rtl"] body{
+  direction: rtl;
+}
+
+html[dir="rtl"] th,
+html[dir="rtl"] td,
+html[dir="rtl"] input,
+html[dir="rtl"] select,
+html[dir="rtl"] textarea,
+html[dir="rtl"] label,
+html[dir="rtl"] .section-title,
+html[dir="rtl"] header{
+  text-align:right;
+}
+
+html[dir="rtl"] .nav{
+  flex-direction:row-reverse;
+}
+
+html[dir="rtl"] .slot-pill{
+  margin-right:0;
+  margin-left:6px;
+}
+
+@media (max-width:1200px){
+  .filters, .subgrid{
+    grid-template-columns:1fr;
+  }
+  .calendar-grid{
+    grid-template-columns:1fr;
+  }
+}
+</style>
+</head>
+
+<body>
+
+<header>
+  <b id="pageTitle">Doctor Availability Calendar</b>
+</header>
+
+<div class="wrap">
+
+  <div class="card">
+    <div class="nav" style="margin-bottom:12px;">
+      <button id="navAppointments" onclick="openAppointments()">Appointments</button>
+      <button id="navPatients" onclick="openPatients()">Patients</button>
+      <button id="navCalendar" onclick="openCalendar()">Calendar</button>
+      <button id="navDoctors" onclick="openDoctors()">Doctors</button>
+      <button id="navAnalytics" onclick="openAnalytics()">Analytics</button>
+      <button id="btnEnglish" onclick="switchLang('en')">English</button>
+      <button id="btnArabic" onclick="switchLang('ar')">العربية</button>
+    </div>
+
+    <div class="filters">
+      <div>
+        <label id="lblClinic">Clinic / Tenant</label>
+        <select id="tenantFilter">
+          <option value="">Select clinic</option>
+        </select>
+      </div>
+
+      <div>
+        <label id="lblDoctor">Doctor</label>
+        <select id="doctorFilter">
+          <option value="">Select doctor</option>
+        </select>
+      </div>
+
+      <div>
+        <label id="lblDateFrom">Date From</label>
+        <input id="dateFrom" type="date"/>
+      </div>
+
+      <div>
+        <label id="lblDateTo">Date To</label>
+        <input id="dateTo" type="date"/>
+      </div>
+
+      <div style="display:flex;align-items:end;gap:8px;">
+        <button id="btnRefreshCalendar" class="primary" onclick="loadCalendar()">Refresh Calendar</button>
+      </div>
+    </div>
+
+    <div style="display:flex;gap:8px;flex-wrap:wrap;">
+      <button id="btnGenerateSlots" class="good" onclick="generateSlots()">Generate Slots</button>
+      <button id="btnAddTimeOffTop" class="warn" onclick="addTimeOff()">Add Time Off</button>
+      <button id="btnOpenDoctors" onclick="openDoctors()">Doctors</button>
+      <button id="btnOpenAnalytics" onclick="openAnalytics()">Analytics</button>
+    </div>
+
+    <div id="msg" style="margin-top:10px;"></div>
+  </div>
+
+  <div class="card">
+    <h3 id="titleScheduleRules" class="section-title">Doctor Schedule Rules</h3>
+    <div id="rulesBox" class="muted">No schedule rules loaded.</div>
+  </div>
+
+  <div class="card">
+    <h3 id="titleTimeOff" class="section-title">Time Off</h3>
+    <table>
+      <thead>
+        <tr>
+          <th id="thStarts">Starts</th>
+          <th id="thEnds">Ends</th>
+          <th id="thReason">Reason</th>
+          <th id="thCreated">Created</th>
+        </tr>
+      </thead>
+      <tbody id="timeOffBody">
+        <tr><td colspan="4" class="muted">No time off loaded.</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="card">
+    <h3 id="titleAvailability" class="section-title">Availability Calendar</h3>
+    <div id="calendarGrid" class="calendar-grid">
+      <div class="muted">Choose clinic, doctor, and date range to load calendar.</div>
+    </div>
+  </div>
+
+  <div class="card">
+    <h3 id="titleAddTimeOff" class="section-title">Add Time Off</h3>
+    <div class="subgrid">
+      <div>
+        <label id="lblStartsAt">Starts At</label>
+        <input id="timeoffStartsAt" type="datetime-local"/>
+      </div>
+      <div>
+        <label id="lblEndsAt">Ends At</label>
+        <input id="timeoffEndsAt" type="datetime-local"/>
+      </div>
+      <div>
+        <label id="lblReasonInput">Reason</label>
+        <input id="timeoffReason" placeholder="Vacation / leave / conference"/>
+      </div>
+      <div style="display:flex;align-items:end;">
+        <button id="btnSaveTimeOff" class="warn" onclick="addTimeOff()">Save Time Off</button>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<script>
+const qs = new URLSearchParams(location.search);
+const platformToken = qs.get("token") || "";
+const uiLang = (qs.get("lang") || "en").toLowerCase() === "ar" ? "ar" : "en";
+let doctorsCache = [];
+
+const I18N = {
+  en: {
+    pageTitle: "Doctor Availability Calendar",
+    navAppointments: "Appointments",
+    navPatients: "Patients",
+    navCalendar: "Calendar",
+    navDoctors: "Doctors",
+    navAnalytics: "Analytics",
+    btnEnglish: "English",
+    btnArabic: "العربية",
+
+    lblClinic: "Clinic / Tenant",
+    lblDoctor: "Doctor",
+    lblDateFrom: "Date From",
+    lblDateTo: "Date To",
+    btnRefreshCalendar: "Refresh Calendar",
+    btnGenerateSlots: "Generate Slots",
+    btnAddTimeOffTop: "Add Time Off",
+    btnOpenDoctors: "Doctors",
+    btnOpenAnalytics: "Analytics",
+
+    titleScheduleRules: "Doctor Schedule Rules",
+    noScheduleRulesLoaded: "No schedule rules loaded.",
+    noScheduleRulesFound: "No schedule rules found for this doctor.",
+
+    titleTimeOff: "Time Off",
+    thStarts: "Starts",
+    thEnds: "Ends",
+    thReason: "Reason",
+    thCreated: "Created",
+    noTimeOffLoaded: "No time off loaded.",
+    noTimeOffFound: "No time off found in this range.",
+
+    titleAvailability: "Availability Calendar",
+    chooseToLoad: "Choose clinic, doctor, and date range to load calendar.",
+    noSlotsFound: "No slots found in this date range.",
+
+    titleAddTimeOff: "Add Time Off",
+    lblStartsAt: "Starts At",
+    lblEndsAt: "Ends At",
+    lblReasonInput: "Reason",
+    reasonPlaceholder: "Vacation / leave / conference",
+    btnSaveTimeOff: "Save Time Off",
+
+    selectClinic: "Select clinic",
+    selectDoctor: "Select doctor",
+
+    clinicRequired: "Clinic is required",
+    doctorRequired: "Doctor is required",
+    dateRangeRequired: "Date range is required",
+    failedLoadCalendar: "Failed to load calendar",
+    chooseClinicFirst: "Choose clinic first",
+    failedGenerateSlots: "Generate slots failed",
+    slotsGenerated: "Slots generated",
+    startsEndsRequired: "Starts and ends are required",
+    timeOffSaveFailed: "Time off save failed",
+    timeOffAdded: "Time off added",
+
+    daySun: "Sun",
+    dayMon: "Mon",
+    dayTue: "Tue",
+    dayWed: "Wed",
+    dayThu: "Thu",
+    dayFri: "Fri",
+    daySat: "Sat",
+
+    active: "ACTIVE",
+    inactive: "INACTIVE",
+    open: "OPEN",
+    booked: "BOOKED",
+    held: "HELD"
+  },
+  ar: {
+    pageTitle: "تقويم توفر الأطباء",
+    navAppointments: "المواعيد",
+    navPatients: "المرضى",
+    navCalendar: "التقويم",
+    navDoctors: "الأطباء",
+    navAnalytics: "التحليلات",
+    btnEnglish: "English",
+    btnArabic: "العربية",
+
+    lblClinic: "العيادة",
+    lblDoctor: "الطبيب",
+    lblDateFrom: "من تاريخ",
+    lblDateTo: "إلى تاريخ",
+    btnRefreshCalendar: "تحديث التقويم",
+    btnGenerateSlots: "توليد المواعيد",
+    btnAddTimeOffTop: "إضافة إجازة",
+    btnOpenDoctors: "الأطباء",
+    btnOpenAnalytics: "التحليلات",
+
+    titleScheduleRules: "قواعد جدول الطبيب",
+    noScheduleRulesLoaded: "لا توجد قواعد جدول محملة.",
+    noScheduleRulesFound: "لا توجد قواعد جدول لهذا الطبيب.",
+
+    titleTimeOff: "الإجازات",
+    thStarts: "من",
+    thEnds: "إلى",
+    thReason: "السبب",
+    thCreated: "تاريخ الإنشاء",
+    noTimeOffLoaded: "لا توجد إجازات محملة.",
+    noTimeOffFound: "لا توجد إجازات في هذا النطاق.",
+
+    titleAvailability: "تقويم التوفر",
+    chooseToLoad: "اختر العيادة والطبيب ونطاق التاريخ لتحميل التقويم.",
+    noSlotsFound: "لا توجد مواعيد في هذا النطاق.",
+
+    titleAddTimeOff: "إضافة إجازة",
+    lblStartsAt: "تبدأ في",
+    lblEndsAt: "تنتهي في",
+    lblReasonInput: "السبب",
+    reasonPlaceholder: "إجازة / مؤتمر / غياب",
+    btnSaveTimeOff: "حفظ الإجازة",
+
+    selectClinic: "اختر العيادة",
+    selectDoctor: "اختر الطبيب",
+
+    clinicRequired: "العيادة مطلوبة",
+    doctorRequired: "الطبيب مطلوب",
+    dateRangeRequired: "نطاق التاريخ مطلوب",
+    failedLoadCalendar: "فشل تحميل التقويم",
+    chooseClinicFirst: "اختر العيادة أولاً",
+    failedGenerateSlots: "فشل توليد المواعيد",
+    slotsGenerated: "تم توليد المواعيد",
+    startsEndsRequired: "وقت البداية والنهاية مطلوبان",
+    timeOffSaveFailed: "فشل حفظ الإجازة",
+    timeOffAdded: "تمت إضافة الإجازة",
+
+    daySun: "الأحد",
+    dayMon: "الاثنين",
+    dayTue: "الثلاثاء",
+    dayWed: "الأربعاء",
+    dayThu: "الخميس",
+    dayFri: "الجمعة",
+    daySat: "السبت",
+
+    active: "نشط",
+    inactive: "غير نشط",
+    open: "متاح",
+    booked: "محجوز",
+    held: "معلّق"
+  }
+};
+
+function t(key){
+  return (I18N[uiLang] && I18N[uiLang][key]) || key;
+}
+
+function applyLanguage(){
+  document.documentElement.setAttribute("lang", uiLang);
+  document.documentElement.setAttribute("dir", uiLang === "ar" ? "rtl" : "ltr");
+
+  const ids = [
+    "pageTitle",
+    "navAppointments",
+    "navPatients",
+    "navCalendar",
+    "navDoctors",
+    "navAnalytics",
+    "btnEnglish",
+    "btnArabic",
+    "lblClinic",
+    "lblDoctor",
+    "lblDateFrom",
+    "lblDateTo",
+    "btnRefreshCalendar",
+    "btnGenerateSlots",
+    "btnAddTimeOffTop",
+    "btnOpenDoctors",
+    "btnOpenAnalytics",
+    "titleScheduleRules",
+    "titleTimeOff",
+    "thStarts",
+    "thEnds",
+    "thReason",
+    "thCreated",
+    "titleAvailability",
+    "titleAddTimeOff",
+    "lblStartsAt",
+    "lblEndsAt",
+    "lblReasonInput",
+    "btnSaveTimeOff"
+  ];
+
+  for(const id of ids){
+    const el = document.getElementById(id);
+    if(el){
+      el.textContent = t(id);
+    }
+  }
+
+  document.getElementById("tenantFilter").innerHTML = `<option value="">${t("selectClinic")}</option>`;
+  document.getElementById("doctorFilter").innerHTML = `<option value="">${t("selectDoctor")}</option>`;
+  document.getElementById("rulesBox").textContent = t("noScheduleRulesLoaded");
+  document.getElementById("timeoffReason").placeholder = t("reasonPlaceholder");
+  document.getElementById("timeOffBody").innerHTML = `<tr><td colspan="4" class="muted">${t("noTimeOffLoaded")}</td></tr>`;
+  document.getElementById("calendarGrid").innerHTML = `<div class="muted">${t("chooseToLoad")}</div>`;
+}
+
+function switchLang(lang){
+  const params = new URLSearchParams(window.location.search);
+  params.set("lang", lang);
+  params.set("token", platformToken);
+  window.location.href = `${window.location.pathname}?${params.toString()}`;
+}
+
+function adminHeaders(){
+  return {
+    "X-Admin-Token": platformToken
+  };
+}
+
+function navUrl(path){
+  return `${path}?token=${encodeURIComponent(platformToken)}&lang=${encodeURIComponent(uiLang)}`;
+}
+
+function setMsg(text, kind="success"){
+  const el = document.getElementById("msg");
+  el.className = kind === "error" ? "error" : "success";
+  el.textContent = text || "";
+  if(text){
+    setTimeout(() => { el.textContent = ""; }, 2500);
+  }
+}
+
+function openDoctors(){
+  window.location.href = navUrl("/admin/doctors");
+}
+
+function openAnalytics(){
+  window.location.href = navUrl("/admin/analytics");
+}
+
+function openAppointments(){
+  window.location.href = navUrl("/admin/appointments");
+}
+
+function openPatients(){
+  window.location.href = navUrl("/admin/patients");
+}
+
+function openCalendar(){
+  window.location.href = navUrl("/admin/calendar");
+}
+
+function todayStr(){
+  const d = new Date();
+  return d.toISOString().slice(0,10);
+}
+
+function plusDaysStr(days){
+  const d = new Date();
+  d.setDate(d.getDate() + days);
+  return d.toISOString().slice(0,10);
+}
+
+async function loadTenants(){
+  const res = await fetch("/admin/appointments/tenants", {
+    headers: adminHeaders()
+  });
+  const json = await res.json();
+  if(!json.ok) return;
+
+  const sel = document.getElementById("tenantFilter");
+  const current = sel.value;
+  sel.innerHTML = `<option value="">${t("selectClinic")}</option>`;
+
+  for(const it of (json.items || [])){
+    const opt = document.createElement("option");
+    opt.value = it.tenant_id || "";
+    opt.textContent = `${it.clinic_name || it.tenant_id} (${it.tenant_id})`;
+    sel.appendChild(opt);
+  }
+
+  sel.value = current;
+}
+
+async function loadDoctors(){
+  const tenantId = document.getElementById("tenantFilter").value.trim();
+  const sel = document.getElementById("doctorFilter");
+  const current = sel.value;
+
+  sel.innerHTML = `<option value="">${t("selectDoctor")}</option>`;
+  doctorsCache = [];
+
+  if(!tenantId){
+    return;
+  }
+
+  const res = await fetch(`/admin/calendar/doctors?tenant_id=${encodeURIComponent(tenantId)}`, {
+    headers: adminHeaders()
+  });
+  const json = await res.json();
+  if(!json.ok) return;
+
+  doctorsCache = json.items || [];
+
+  for(const it of doctorsCache){
+    const opt = document.createElement("option");
+    opt.value = it.doctor_key || "";
+    opt.textContent = `${it.doctor_name || it.doctor_key} (${it.doctor_key})`;
+    sel.appendChild(opt);
+  }
+
+  sel.value = current;
+}
+
+function renderRules(items){
+  const box = document.getElementById("rulesBox");
+
+  if(!items || items.length === 0){
+    box.innerHTML = `<div class="muted">${t("noScheduleRulesFound")}</div>`;
+    return;
+  }
+
+  const dayNames = [
+    t("daySun"),
+    t("dayMon"),
+    t("dayTue"),
+    t("dayWed"),
+    t("dayThu"),
+    t("dayFri"),
+    t("daySat")
+  ];
+
+  box.innerHTML = items.map(it => `
+    <div style="margin-bottom:8px;">
+      <b>${dayNames[Number(it.day_of_week || 0)]}</b>
+      — ${String(it.start_time || "").slice(0,5)} ${uiLang === "ar" ? "إلى" : "to"} ${String(it.end_time || "").slice(0,5)}
+      — ${it.slot_minutes || 0} ${uiLang === "ar" ? "دقيقة" : "min"}
+      — ${it.is_active ? t("active") : t("inactive")}
+    </div>
+  `).join("");
+}
+
+function renderTimeOff(items){
+  const body = document.getElementById("timeOffBody");
+  body.innerHTML = "";
+
+  if(!items || items.length === 0){
+    body.innerHTML = `<tr><td colspan="4" class="muted">${t("noTimeOffFound")}</td></tr>`;
+    return;
+  }
+
+  for(const it of items){
+    const tr = document.createElement("tr");
+    tr.innerHTML = `
+      <td>${it.starts_at || "-"}</td>
+      <td>${it.ends_at || "-"}</td>
+      <td>${it.reason || "-"}</td>
+      <td>${it.created_at || "-"}</td>
+    `;
+    body.appendChild(tr);
+  }
+}
+
+function slotClass(status){
+  const s = String(status || "").toUpperCase();
+  if(s === "BOOKED") return "slot-pill slot-booked";
+  if(s === "HELD") return "slot-pill slot-held";
+  return "slot-pill slot-open";
+}
+
+function slotLabel(status){
+  const s = String(status || "").toUpperCase();
+  if(s === "BOOKED") return t("booked");
+  if(s === "HELD") return t("held");
+  return t("open");
+}
+
+function renderCalendar(slots){
+  const grid = document.getElementById("calendarGrid");
+  grid.innerHTML = "";
+
+  if(!slots || slots.length === 0){
+    grid.innerHTML = `<div class="muted">${t("noSlotsFound")}</div>`;
+    return;
+  }
+
+  const grouped = {};
+  for(const it of slots){
+    const d = String(it.slot_date || "");
+    if(!grouped[d]) grouped[d] = [];
+    grouped[d].push(it);
+  }
+
+  for(const [date, items] of Object.entries(grouped)){
+    const div = document.createElement("div");
+    div.className = "day-card";
+
+    div.innerHTML = `
+      <div style="margin-bottom:8px;"><b>${date}</b></div>
+      <div>
+        ${items.map(it => `
+          <span class="${slotClass(it.status)}">
+            ${String(it.slot_time || "").slice(0,5)} — ${slotLabel(it.status)}
+          </span>
+        `).join("")}
+      </div>
+    `;
+
+    grid.appendChild(div);
+  }
+}
+
+async function loadCalendar(){
+  const tenantId = document.getElementById("tenantFilter").value.trim();
+  const doctorKey = document.getElementById("doctorFilter").value.trim();
+  const dateFrom = document.getElementById("dateFrom").value.trim();
+  const dateTo = document.getElementById("dateTo").value.trim();
+
+  if(!tenantId){
+    setMsg(t("clinicRequired"), "error");
+    return;
+  }
+  if(!doctorKey){
+    setMsg(t("doctorRequired"), "error");
+    return;
+  }
+  if(!dateFrom || !dateTo){
+    setMsg(t("dateRangeRequired"), "error");
+    return;
+  }
+
+  const url = `/admin/calendar/slots?tenant_id=${encodeURIComponent(tenantId)}&doctor_key=${encodeURIComponent(doctorKey)}&date_from=${encodeURIComponent(dateFrom)}&date_to=${encodeURIComponent(dateTo)}`;
+
+  const res = await fetch(url, {
+    headers: adminHeaders()
+  });
+  const json = await res.json();
+
+  if(!json.ok){
+    setMsg(`${t("failedLoadCalendar")}: ${json.detail || "unknown"}`, "error");
+    return;
+  }
+
+  renderRules(json.schedule_rules || []);
+  renderTimeOff(json.time_off || []);
+  renderCalendar(json.slots || []);
+}
+
+async function generateSlots(){
+  const tenantId = document.getElementById("tenantFilter").value.trim();
+  if(!tenantId){
+    setMsg(t("chooseClinicFirst"), "error");
+    return;
+  }
+
+  const days_ahead = 30;
+
+  const res = await fetch("/admin/calendar/generate-slots", {
+    method: "POST",
+    headers: Object.assign({"Content-Type":"application/json"}, adminHeaders()),
+    body: JSON.stringify({
+      tenant_id: tenantId,
+      days_ahead: days_ahead,
+      tz_name: "Asia/Riyadh"
+    })
+  });
+  const json = await res.json();
+
+  if(!json.ok){
+    setMsg(`${t("failedGenerateSlots")}: ${json.detail || "unknown"}`, "error");
+    return;
+  }
+
+  setMsg(t("slotsGenerated"));
+  await loadCalendar();
+}
+
+async function addTimeOff(){
+  const tenantId = document.getElementById("tenantFilter").value.trim();
+  const doctorKey = document.getElementById("doctorFilter").value.trim();
+  const startsAt = document.getElementById("timeoffStartsAt").value.trim();
+  const endsAt = document.getElementById("timeoffEndsAt").value.trim();
+  const reason = document.getElementById("timeoffReason").value.trim();
+
+  if(!tenantId){
+    setMsg(t("clinicRequired"), "error");
+    return;
+  }
+  if(!doctorKey){
+    setMsg(t("doctorRequired"), "error");
+    return;
+  }
+  if(!startsAt || !endsAt){
+    setMsg(t("startsEndsRequired"), "error");
+    return;
+  }
+
+  const res = await fetch("/admin/calendar/timeoff/add", {
+    method: "POST",
+    headers: Object.assign({"Content-Type":"application/json"}, adminHeaders()),
+    body: JSON.stringify({
+      tenant_id: tenantId,
+      doctor_key: doctorKey,
+      starts_at: startsAt,
+      ends_at: endsAt,
+      reason: reason
+    })
+  });
+  const json = await res.json();
+
+  if(!json.ok){
+    setMsg(`${t("timeOffSaveFailed")}: ${json.detail || "unknown"}`, "error");
+    return;
+  }
+
+  setMsg(t("timeOffAdded"));
+  await loadCalendar();
+}
+
+document.getElementById("tenantFilter").addEventListener("change", async function(){
+  await loadDoctors();
+});
+
+(async function init(){
+  applyLanguage();
+  document.getElementById("dateFrom").value = todayStr();
+  document.getElementById("dateTo").value = plusDaysStr(14);
+  await loadTenants();
+})();
+</script>
+
+</body>
+</html>

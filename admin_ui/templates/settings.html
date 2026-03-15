@@ -1,0 +1,560 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"/>
+  <title>Tenant Settings</title>
+
+  <style>
+    body{
+      font-family:Arial,sans-serif;
+      background:#f7f7f7;
+      margin:0;
+    }
+
+    header{
+      background:white;
+      border-bottom:1px solid #ddd;
+      padding:14px 18px;
+    }
+
+    .wrap{
+      max-width:1100px;
+      margin:auto;
+      padding:20px;
+    }
+
+    .card{
+      background:white;
+      border:1px solid #eee;
+      border-radius:10px;
+      padding:18px;
+      margin-bottom:18px;
+    }
+
+    .row{
+      display:grid;
+      grid-template-columns:1fr 1fr;
+      gap:14px;
+      margin-bottom:14px;
+    }
+
+    .row-1{
+      display:grid;
+      grid-template-columns:1fr;
+      gap:14px;
+      margin-bottom:14px;
+    }
+
+    label{
+      display:block;
+      font-size:13px;
+      margin-bottom:6px;
+      color:#444;
+      font-weight:700;
+    }
+
+    input, select, textarea{
+      width:100%;
+      padding:10px;
+      box-sizing:border-box;
+      border:1px solid #ccc;
+      border-radius:8px;
+      background:white;
+    }
+
+    textarea{
+      min-height:110px;
+      resize:vertical;
+    }
+
+    button{
+      padding:8px 12px;
+      border-radius:6px;
+      border:1px solid #ccc;
+      background:white;
+      cursor:pointer;
+    }
+
+    button.primary{
+      background:#0077ff;
+      color:white;
+      border:none;
+    }
+
+    button.good{
+      background:#ecfdf3;
+      border-color:#86efac;
+      color:#166534;
+    }
+
+    button.info{
+      background:#eff6ff;
+      border-color:#93c5fd;
+      color:#1d4ed8;
+    }
+
+    button.warn{
+      background:#fff7ed;
+      border-color:#fdba74;
+      color:#9a3412;
+    }
+
+    .preview{
+      border:1px dashed #ccc;
+      border-radius:10px;
+      padding:16px;
+      background:#fafafa;
+    }
+
+    .preview-title{
+      font-weight:700;
+      margin-bottom:8px;
+    }
+
+    .muted{
+      color:#666;
+      font-size:12px;
+    }
+
+    .success{
+      color:#0a7f38;
+      font-size:13px;
+    }
+
+    .error{
+      color:#b42318;
+      font-size:13px;
+    }
+
+    .check-grid{
+      display:grid;
+      grid-template-columns:1fr 1fr;
+      gap:14px;
+      margin-top:8px;
+    }
+
+    .check-card{
+      border:1px solid #e5e7eb;
+      border-radius:10px;
+      padding:14px;
+      background:#fafafa;
+    }
+
+    .checkline{
+      display:flex;
+      align-items:flex-start;
+      gap:10px;
+    }
+
+    .checkline input[type="checkbox"]{
+      width:auto;
+      margin-top:3px;
+    }
+
+    .badge{
+      display:inline-block;
+      padding:4px 10px;
+      border-radius:999px;
+      font-size:12px;
+      font-weight:700;
+      border:1px solid #ccc;
+      background:#fff;
+    }
+
+    .badge-on{
+      background:#ecfdf3;
+      border-color:#86efac;
+      color:#166534;
+    }
+
+    .badge-off{
+      background:#fef2f2;
+      border-color:#fca5a5;
+      color:#991b1b;
+    }
+
+    .nav{
+      display:flex;
+      gap:8px;
+      flex-wrap:wrap;
+    }
+
+    @media (max-width: 900px){
+      .row{
+        grid-template-columns:1fr;
+      }
+
+      .check-grid{
+        grid-template-columns:1fr;
+      }
+    }
+  </style>
+</head>
+
+<body>
+
+<header>
+  <b>Tenant Settings</b>
+</header>
+
+<div class="wrap">
+
+  <div class="card">
+    <div class="nav">
+      <button type="button" onclick="openAnalytics()">Analytics</button>
+      <button type="button" onclick="openBilling()">Billing</button>
+      <button type="button" onclick="openUsage()">Usage</button>
+      <button type="button" onclick="openInvoices()">Invoices</button>
+      <button type="button" onclick="openTemplates()">Templates</button>
+      <button type="button" onclick="openSettings()">Settings</button>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="row">
+      <div>
+        <label>Tenant</label>
+        <input id="tenantId" placeholder="e.g. alnoor_clinic"/>
+      </div>
+
+      <div style="display:flex;align-items:end;gap:8px;">
+        <button type="button" class="info" onclick="loadSettings()">Load Settings</button>
+      </div>
+    </div>
+
+    <div id="msg"></div>
+  </div>
+
+  <div class="card">
+    <h3 style="margin-top:0;">Branding & Assistant Settings</h3>
+
+    <div class="row">
+      <div>
+        <label>Clinic Name</label>
+        <input id="clinicName" placeholder="Clinic display name"/>
+      </div>
+
+      <div>
+        <label>Logo URL</label>
+        <input id="logoUrl" placeholder="https://..."/>
+      </div>
+    </div>
+
+    <div class="row">
+      <div>
+        <label>Brand Color</label>
+        <input id="brandColor" placeholder="#0077ff"/>
+      </div>
+
+      <div>
+        <label>Timezone</label>
+        <input id="timezone" placeholder="Asia/Riyadh"/>
+      </div>
+    </div>
+
+    <div class="row">
+      <div>
+        <label>Language</label>
+        <select id="language">
+          <option value="en">English</option>
+          <option value="ar">Arabic</option>
+        </select>
+      </div>
+
+      <div>
+        <label>AI Tone</label>
+        <select id="aiTone">
+          <option value="formal">Formal</option>
+          <option value="friendly">Friendly</option>
+        </select>
+      </div>
+    </div>
+
+    <div class="row">
+      <div>
+        <label>Reminder Hours Before</label>
+        <input id="reminderHoursBefore" type="number" min="1" max="168" value="24"/>
+      </div>
+
+      <div>
+        <label>WhatsApp Greeting</label>
+        <div class="muted" style="margin-bottom:6px;">
+          This is the clinic welcome message used by your assistant.
+        </div>
+      </div>
+    </div>
+
+    <div class="row-1">
+      <div>
+        <label>Greeting Text</label>
+        <textarea id="whatsappGreeting" placeholder="Welcome to our clinic..."></textarea>
+      </div>
+    </div>
+
+    <h3>Booking Channel Controls</h3>
+
+    <div class="muted" style="margin-bottom:12px;">
+      Configure whether this tenant uses AI WhatsApp booking, reception direct booking, or both.
+    </div>
+
+    <div class="check-grid">
+      <div class="check-card">
+        <div class="checkline">
+          <input id="enableAiBooking" type="checkbox" checked/>
+          <div>
+            <label for="enableAiBooking" style="margin:0;">Enable AI Booking</label>
+            <div class="muted">
+              Allows appointment booking through the WhatsApp AI assistant.
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="check-card">
+        <div class="checkline">
+          <input id="enableReceptionDirectBooking" type="checkbox"/>
+          <div>
+            <label for="enableReceptionDirectBooking" style="margin:0;">Enable Reception Direct Booking</label>
+            <div class="muted">
+              Allows the reception dashboard to create direct front-desk bookings.
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:16px;">
+      <button type="button" class="primary" onclick="saveSettings()">Save Settings</button>
+      <button type="button" class="good" onclick="fillGreetingTemplate()">Generate Greeting</button>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="preview">
+      <div class="preview-title">Preview</div>
+
+      <div id="previewClinicName">Clinic Name</div>
+      <div id="previewGreeting" style="margin-top:8px;white-space:pre-wrap;">Greeting preview</div>
+      <div id="previewMeta" class="muted" style="margin-top:10px;">Timezone / language / tone</div>
+
+      <div style="margin-top:14px;display:flex;gap:8px;flex-wrap:wrap;">
+        <span id="previewAiBooking" class="badge badge-on">AI Booking ON</span>
+        <span id="previewReceptionBooking" class="badge badge-off">Reception Direct Booking OFF</span>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<script>
+const qs = new URLSearchParams(location.search);
+const platformToken = qs.get("token") || "";
+
+function adminHeaders(){
+  return {
+    "X-Admin-Token": platformToken
+  };
+}
+
+function setMsg(text, kind="success"){
+  const el = document.getElementById("msg");
+  el.className = kind === "error" ? "error" : "success";
+  el.textContent = text || "";
+  if(text){
+    setTimeout(() => { el.textContent = ""; }, 3000);
+  }
+}
+
+function openAnalytics(){
+  window.location.href = `/admin/analytics?token=${encodeURIComponent(platformToken)}`;
+}
+
+function openBilling(){
+  window.location.href = `/admin/billing?token=${encodeURIComponent(platformToken)}`;
+}
+
+function openUsage(){
+  window.location.href = `/admin/usage?token=${encodeURIComponent(platformToken)}`;
+}
+
+function openInvoices(){
+  window.location.href = `/admin/invoices?token=${encodeURIComponent(platformToken)}`;
+}
+
+function openTemplates(){
+  window.location.href = `/admin/templates?token=${encodeURIComponent(platformToken)}`;
+}
+
+function openSettings(){
+  window.location.href = `/admin/settings?token=${encodeURIComponent(platformToken)}`;
+}
+
+function preview(){
+  const clinicName = document.getElementById("clinicName").value.trim() || "Clinic Name";
+  const greeting = document.getElementById("whatsappGreeting").value.trim() || "Greeting preview";
+  const timezone = document.getElementById("timezone").value.trim() || "-";
+  const language = document.getElementById("language").value.trim() || "-";
+  const aiTone = document.getElementById("aiTone").value.trim() || "-";
+  const enableAiBooking = document.getElementById("enableAiBooking").checked;
+  const enableReceptionDirectBooking = document.getElementById("enableReceptionDirectBooking").checked;
+
+  document.getElementById("previewClinicName").textContent = clinicName;
+  document.getElementById("previewGreeting").textContent = greeting;
+  document.getElementById("previewMeta").textContent =
+    `Timezone: ${timezone} | Language: ${language} | Tone: ${aiTone}`;
+
+  const aiBadge = document.getElementById("previewAiBooking");
+  const receptionBadge = document.getElementById("previewReceptionBooking");
+
+  aiBadge.textContent = enableAiBooking ? "AI Booking ON" : "AI Booking OFF";
+  aiBadge.className = enableAiBooking ? "badge badge-on" : "badge badge-off";
+
+  receptionBadge.textContent = enableReceptionDirectBooking
+    ? "Reception Direct Booking ON"
+    : "Reception Direct Booking OFF";
+  receptionBadge.className = enableReceptionDirectBooking ? "badge badge-on" : "badge badge-off";
+}
+
+function fillGreetingTemplate(){
+  const clinicName = document.getElementById("clinicName").value.trim() || "Our Clinic";
+  const language = document.getElementById("language").value;
+
+  let text = "";
+
+  if(language === "ar"){
+    text =
+      `مرحبًا بكم في *${clinicName}* 🏥\n\n` +
+      `يسعدنا خدمتكم.\n` +
+      `يمكنكم الحجز، تعديل الموعد، أو إلغاؤه من خلال هذه المحادثة.`;
+  } else {
+    text =
+      `Welcome to *${clinicName}* 🏥\n\n` +
+      `We are happy to assist you.\n` +
+      `You can book, reschedule, or cancel appointments through this chat.`;
+  }
+
+  document.getElementById("whatsappGreeting").value = text;
+  preview();
+}
+
+async function loadSettings(){
+  const tenantId = document.getElementById("tenantId").value.trim();
+
+  if(!tenantId){
+    setMsg("Tenant is required", "error");
+    return;
+  }
+
+  try{
+    const url = new URL("/admin/tenant-settings", window.location.origin);
+    url.searchParams.set("tenant_id", tenantId);
+
+    const res = await fetch(url.toString(), {
+      headers: adminHeaders(),
+      credentials: "same-origin"
+    });
+
+    const json = await res.json();
+
+    if(!json.ok){
+      setMsg(json.detail || "Failed to load settings", "error");
+      return;
+    }
+
+    const item = json.item || {};
+
+    document.getElementById("clinicName").value = item.clinic_name || "";
+    document.getElementById("logoUrl").value = item.logo_url || "";
+    document.getElementById("brandColor").value = item.brand_color || "";
+    document.getElementById("timezone").value = item.timezone || "Asia/Riyadh";
+    document.getElementById("language").value = item.language || "en";
+    document.getElementById("aiTone").value = item.ai_tone || "formal";
+    document.getElementById("reminderHoursBefore").value = item.reminder_hours_before || 24;
+    document.getElementById("whatsappGreeting").value = item.whatsapp_greeting || "";
+    document.getElementById("enableAiBooking").checked =
+      item.enable_ai_booking === undefined ? true : !!item.enable_ai_booking;
+    document.getElementById("enableReceptionDirectBooking").checked =
+      !!item.enable_reception_direct_booking;
+
+    preview();
+    setMsg("Settings loaded");
+  }catch(e){
+    setMsg("Failed to load settings", "error");
+  }
+}
+
+async function saveSettings(){
+  const tenantId = document.getElementById("tenantId").value.trim();
+
+  if(!tenantId){
+    setMsg("Tenant is required", "error");
+    return;
+  }
+
+  const payload = {
+    tenant_id: tenantId,
+    clinic_name: document.getElementById("clinicName").value.trim(),
+    logo_url: document.getElementById("logoUrl").value.trim() || null,
+    brand_color: document.getElementById("brandColor").value.trim() || null,
+    timezone: document.getElementById("timezone").value.trim() || "Asia/Riyadh",
+    language: document.getElementById("language").value.trim() || "en",
+    ai_tone: document.getElementById("aiTone").value.trim() || "formal",
+    reminder_hours_before: Number(document.getElementById("reminderHoursBefore").value || 24),
+    whatsapp_greeting: document.getElementById("whatsappGreeting").value.trim() || null,
+    enable_ai_booking: document.getElementById("enableAiBooking").checked,
+    enable_reception_direct_booking: document.getElementById("enableReceptionDirectBooking").checked
+  };
+
+  if(!payload.clinic_name){
+    setMsg("Clinic name is required", "error");
+    return;
+  }
+
+  try{
+    const res = await fetch("/admin/tenant-settings/upsert", {
+      method: "POST",
+      headers: Object.assign(
+        {"Content-Type":"application/json"},
+        adminHeaders()
+      ),
+      credentials: "same-origin",
+      body: JSON.stringify(payload)
+    });
+
+    const json = await res.json();
+
+    if(!json.ok){
+      setMsg(json.detail || "Failed to save settings", "error");
+      return;
+    }
+
+    preview();
+    setMsg("Settings saved successfully");
+  }catch(e){
+    setMsg("Failed to save settings", "error");
+  }
+}
+
+[
+  "clinicName",
+  "logoUrl",
+  "brandColor",
+  "timezone",
+  "language",
+  "aiTone",
+  "reminderHoursBefore",
+  "whatsappGreeting",
+  "enableAiBooking",
+  "enableReceptionDirectBooking"
+].forEach(id => {
+  const el = document.getElementById(id);
+  if(!el) return;
+  el.addEventListener("input", preview);
+  el.addEventListener("change", preview);
+});
+
+preview();
+</script>
+
+</body>
+</html>

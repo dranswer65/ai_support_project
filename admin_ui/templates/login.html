@@ -1,0 +1,127 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8"/>
+<title>Admin Login</title>
+<style>
+body{
+  font-family:Arial,sans-serif;
+  background:#f7f7f7;
+  margin:0;
+}
+.wrap{
+  max-width:420px;
+  margin:60px auto;
+  background:white;
+  border:1px solid #eee;
+  border-radius:12px;
+  padding:24px;
+}
+input, button{
+  width:100%;
+  padding:10px;
+  box-sizing:border-box;
+  margin-top:10px;
+}
+button{
+  background:#0077ff;
+  color:white;
+  border:none;
+  border-radius:8px;
+  cursor:pointer;
+}
+.muted{
+  color:#666;
+  font-size:12px;
+  margin-top:8px;
+}
+.error{
+  color:#b42318;
+  margin-top:10px;
+}
+.success{
+  color:#0a7f38;
+  margin-top:10px;
+}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h2>Admin Login</h2>
+
+  <label>Email</label>
+  <input id="email" type="email" placeholder="admin@clinic.com"/>
+
+  <label>Password</label>
+  <input id="password" type="password" placeholder="Password"/>
+
+  <label>Tenant ID (leave blank for platform admin)</label>
+  <input id="tenantId" type="text" placeholder="alnoor_clinic"/>
+
+  <button onclick="login()">Login</button>
+
+  <div id="msg" class="muted"></div>
+</div>
+
+<script>
+async function login(){
+  const email = document.getElementById("email").value.trim();
+  const password = document.getElementById("password").value.trim();
+  const tenantId = document.getElementById("tenantId").value.trim();
+  const msg = document.getElementById("msg");
+
+  msg.className = "muted";
+  msg.textContent = "Signing in...";
+
+  try{
+    const res = await fetch("/admin/login", {
+      method: "POST",
+      headers: {"Content-Type":"application/json"},
+      credentials: "same-origin",
+      body: JSON.stringify({
+        email: email,
+        password: password,
+        tenant_id: tenantId || null
+      })
+    });
+
+    const json = await res.json();
+
+    if(!res.ok || !json.ok){
+      msg.className = "error";
+      msg.textContent = json.detail || "Login failed";
+      return;
+    }
+
+    msg.className = "success";
+    msg.textContent = "Login successful";
+
+    if(json.is_platform_admin){
+      window.location.href = "/admin/analytics";
+      return;
+    }
+
+    if(json.role_code === "RECEPTION"){
+      window.location.href = `/reception?tenant=${encodeURIComponent(json.tenant_id || "")}`;
+      return;
+    }
+
+    if(json.role_code === "CLINIC_ADMIN"){
+      window.location.href = "/admin/appointments";
+      return;
+    }
+
+    if(json.role_code === "DOCTOR"){
+      window.location.href = "/admin/calendar";
+      return;
+    }
+
+    window.location.href = "/admin/analytics";
+  }catch(e){
+    msg.className = "error";
+    msg.textContent = "Login failed";
+  }
+}
+</script>
+</body>
+</html>

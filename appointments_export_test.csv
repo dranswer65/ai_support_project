@@ -1,0 +1,2 @@
+appointment_id,tenant_id,clinic_name,doctor_key,patient_name,patient_mobile,slot_date,slot_time,insurance_provider,insurance_plan,insurance_member_id,insurance_policy_number,insurance_expiry,insurance_status,insurance_verified,status,created_at
+2,alnoor_clinic,Al Noor Clinic,derma_1,PS Test Insurance Patient,+966500000099,2026-03-09,09:00,,,,,2028-05-04,,,CONFIRMED,2026-03-08 10:00:15.422553+00:00

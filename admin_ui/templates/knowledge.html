@@ -1,0 +1,607 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8"/>
+<title>Knowledge Base</title>
+
+<style>
+body{
+  font-family:Arial,sans-serif;
+  background:#f7f7f7;
+  margin:0;
+}
+
+header{
+  background:white;
+  border-bottom:1px solid #ddd;
+  padding:14px 18px;
+}
+
+.wrap{
+  max-width:1400px;
+  margin:auto;
+  padding:20px;
+}
+
+.card{
+  background:white;
+  border:1px solid #eee;
+  border-radius:10px;
+  padding:18px;
+  margin-bottom:18px;
+}
+
+.row{
+  display:grid;
+  grid-template-columns:1fr 220px 220px 220px;
+  gap:12px;
+  margin-bottom:14px;
+}
+
+.row-2{
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  gap:12px;
+  margin-bottom:14px;
+}
+
+.row-1{
+  display:grid;
+  grid-template-columns:1fr;
+  gap:12px;
+  margin-bottom:14px;
+}
+
+input, select, textarea{
+  width:100%;
+  padding:10px;
+  box-sizing:border-box;
+  border:1px solid #ccc;
+  border-radius:8px;
+  background:white;
+}
+
+textarea{
+  min-height:140px;
+  resize:vertical;
+}
+
+button{
+  padding:8px 12px;
+  border-radius:6px;
+  border:1px solid #ccc;
+  background:white;
+  cursor:pointer;
+}
+
+button.primary{
+  background:#0077ff;
+  color:white;
+  border:none;
+}
+
+button.good{
+  background:#ecfdf3;
+  border-color:#86efac;
+  color:#166534;
+}
+
+button.warn{
+  background:#fff7ed;
+  border-color:#fdba74;
+  color:#9a3412;
+}
+
+button.info{
+  background:#eff6ff;
+  border-color:#93c5fd;
+  color:#1d4ed8;
+}
+
+button.danger{
+  background:#fef2f2;
+  border-color:#fca5a5;
+  color:#991b1b;
+}
+
+table{
+  width:100%;
+  border-collapse:collapse;
+}
+
+th, td{
+  border:1px solid #eee;
+  padding:10px;
+  text-align:left;
+  vertical-align:top;
+}
+
+th{
+  background:#fafafa;
+}
+
+.nav{
+  display:flex;
+  gap:8px;
+  flex-wrap:wrap;
+}
+
+.muted{
+  color:#666;
+  font-size:12px;
+}
+
+.success{
+  color:#0a7f38;
+  font-size:13px;
+}
+
+.error{
+  color:#b42318;
+  font-size:13px;
+}
+
+.badge{
+  display:inline-block;
+  padding:4px 10px;
+  border-radius:999px;
+  font-size:12px;
+  border:1px solid #ccc;
+  background:#fff;
+}
+
+.badge-active{
+  background:#ecfdf3;
+  border-color:#86efac;
+  color:#166534;
+}
+
+.badge-inactive{
+  background:#fef2f2;
+  border-color:#fca5a5;
+  color:#991b1b;
+}
+
+.badge-lang{
+  background:#eff6ff;
+  border-color:#93c5fd;
+  color:#1d4ed8;
+}
+
+.badge-cat{
+  background:#fff7ed;
+  border-color:#fdba74;
+  color:#9a3412;
+}
+
+.actions{
+  display:flex;
+  gap:6px;
+  flex-wrap:wrap;
+}
+
+@media (max-width:1100px){
+  .row{
+    grid-template-columns:1fr;
+  }
+  .row-2{
+    grid-template-columns:1fr;
+  }
+}
+</style>
+</head>
+
+<body>
+
+<header>
+  <b>Knowledge Base</b>
+</header>
+
+<div class="wrap">
+
+  <div class="card">
+    <div class="nav">
+      <button onclick="openAnalytics()">Analytics</button>
+      <button onclick="openBilling()">Billing</button>
+      <button onclick="openUsage()">Usage</button>
+      <button onclick="openInvoices()">Invoices</button>
+      <button onclick="openTemplates()">Templates</button>
+      <button onclick="openSettings()">Settings</button>
+      <button onclick="openReminders()">Reminders</button>
+      <button onclick="openKnowledge()">Knowledge</button>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="row">
+      <div>
+        <label>Tenant</label>
+        <input id="tenantId" placeholder="e.g. alnoor_clinic"/>
+      </div>
+
+      <div>
+        <label>Language Filter</label>
+        <select id="filterLanguage">
+          <option value="">ALL</option>
+          <option value="en">English</option>
+          <option value="ar">Arabic</option>
+        </select>
+      </div>
+
+      <div>
+        <label>Category Filter</label>
+        <select id="filterCategory">
+          <option value="">ALL</option>
+          <option value="faq">FAQ</option>
+          <option value="services">Services</option>
+          <option value="doctors">Doctors</option>
+          <option value="insurance">Insurance</option>
+          <option value="location">Location</option>
+          <option value="hours">Hours</option>
+          <option value="policies">Policies</option>
+          <option value="other">Other</option>
+        </select>
+      </div>
+
+      <div style="display:flex;align-items:end;gap:8px;flex-wrap:wrap;">
+        <button class="primary" onclick="loadKnowledge()">Load</button>
+        <button class="good" onclick="seedDefaults()">Seed Defaults</button>
+      </div>
+    </div>
+
+    <div id="msg"></div>
+  </div>
+
+  <div class="card">
+    <h3 style="margin-top:0;">Create / Edit Knowledge Item</h3>
+
+    <input type="hidden" id="itemId"/>
+
+    <div class="row-2">
+      <div>
+        <label>Category</label>
+        <select id="category">
+          <option value="faq">FAQ</option>
+          <option value="services">Services</option>
+          <option value="doctors">Doctors</option>
+          <option value="insurance">Insurance</option>
+          <option value="location">Location</option>
+          <option value="hours">Hours</option>
+          <option value="policies">Policies</option>
+          <option value="other">Other</option>
+        </select>
+      </div>
+
+      <div>
+        <label>Language</label>
+        <select id="language">
+          <option value="en">English</option>
+          <option value="ar">Arabic</option>
+        </select>
+      </div>
+    </div>
+
+    <div class="row-2">
+      <div>
+        <label>Title</label>
+        <input id="title" placeholder="e.g. Accepted Insurance"/>
+      </div>
+
+      <div>
+        <label>Sort Order</label>
+        <input id="sortOrder" type="number" value="0"/>
+      </div>
+    </div>
+
+    <div class="row-1">
+      <div>
+        <label>Content</label>
+        <textarea id="content" placeholder="Enter clinic knowledge here..."></textarea>
+      </div>
+    </div>
+
+    <div class="row-2">
+      <div>
+        <label>Source</label>
+        <input id="source" placeholder="manual / seed / imported"/>
+      </div>
+
+      <div>
+        <label>Status</label>
+        <select id="isActive">
+          <option value="true">Active</option>
+          <option value="false">Inactive</option>
+        </select>
+      </div>
+    </div>
+
+    <div style="display:flex;gap:8px;flex-wrap:wrap;">
+      <button class="primary" onclick="saveKnowledge()">Save Item</button>
+      <button class="info" onclick="resetForm()">New Item</button>
+    </div>
+  </div>
+
+  <div class="card">
+    <h3 style="margin-top:0;">Knowledge Items</h3>
+
+    <table>
+      <thead>
+        <tr>
+          <th>ID</th>
+          <th>Category</th>
+          <th>Language</th>
+          <th>Title</th>
+          <th>Content</th>
+          <th>Status</th>
+          <th>Sort</th>
+          <th>Source</th>
+          <th>Actions</th>
+        </tr>
+      </thead>
+      <tbody id="kbBody">
+        <tr>
+          <td colspan="9" class="muted">Load a tenant to view knowledge base items.</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+</div>
+
+<script>
+const qs = new URLSearchParams(location.search);
+const platformToken = qs.get("token") || "";
+
+function adminHeaders(){
+  return {
+    "X-Admin-Token": platformToken
+  };
+}
+
+function setMsg(text, kind="success"){
+  const el = document.getElementById("msg");
+  el.className = kind === "error" ? "error" : "success";
+  el.textContent = text || "";
+  if(text){
+    setTimeout(() => { el.textContent = ""; }, 3500);
+  }
+}
+
+function openAnalytics(){
+  window.location.href = `/admin/analytics?token=${encodeURIComponent(platformToken)}`;
+}
+function openBilling(){
+  window.location.href = `/admin/billing?token=${encodeURIComponent(platformToken)}`;
+}
+function openUsage(){
+  window.location.href = `/admin/usage?token=${encodeURIComponent(platformToken)}`;
+}
+function openInvoices(){
+  window.location.href = `/admin/invoices?token=${encodeURIComponent(platformToken)}`;
+}
+function openTemplates(){
+  window.location.href = `/admin/templates?token=${encodeURIComponent(platformToken)}`;
+}
+function openSettings(){
+  window.location.href = `/admin/settings?token=${encodeURIComponent(platformToken)}`;
+}
+function openReminders(){
+  window.location.href = `/admin/reminders?token=${encodeURIComponent(platformToken)}`;
+}
+function openKnowledge(){
+  window.location.href = `/admin/knowledge?token=${encodeURIComponent(platformToken)}`;
+}
+
+function value(id){
+  return document.getElementById(id).value || "";
+}
+
+function setValue(id, v){
+  document.getElementById(id).value = v ?? "";
+}
+
+function fmt(v){
+  return v === null || v === undefined || v === "" ? "-" : String(v);
+}
+
+function activeBadge(v){
+  return v
+    ? `<span class="badge badge-active">ACTIVE</span>`
+    : `<span class="badge badge-inactive">INACTIVE</span>`;
+}
+
+function languageBadge(v){
+  return `<span class="badge badge-lang">${fmt(v)}</span>`;
+}
+
+function categoryBadge(v){
+  return `<span class="badge badge-cat">${fmt(v)}</span>`;
+}
+
+function resetForm(){
+  setValue("itemId", "");
+  setValue("category", "faq");
+  setValue("language", "en");
+  setValue("title", "");
+  setValue("content", "");
+  setValue("sortOrder", "0");
+  setValue("source", "");
+  setValue("isActive", "true");
+}
+
+function fillForm(item){
+  setValue("itemId", item.id);
+  setValue("category", item.category || "faq");
+  setValue("language", item.language || "en");
+  setValue("title", item.title || "");
+  setValue("content", item.content || "");
+  setValue("sortOrder", item.sort_order ?? 0);
+  setValue("source", item.source || "");
+  setValue("isActive", item.is_active ? "true" : "false");
+  window.scrollTo({ top: 0, behavior: "smooth" });
+}
+
+async function loadKnowledge(){
+  const tenantId = value("tenantId").trim();
+  const body = document.getElementById("kbBody");
+
+  if(!tenantId){
+    setMsg("tenant_id required", "error");
+    body.innerHTML = `<tr><td colspan="9" class="muted">Enter a tenant first.</td></tr>`;
+    return;
+  }
+
+  body.innerHTML = `<tr><td colspan="9" class="muted">Loading knowledge...</td></tr>`;
+
+  const url = new URL("/admin/knowledge/list", window.location.origin);
+  url.searchParams.set("tenant_id", tenantId);
+
+  const filterLanguage = value("filterLanguage").trim();
+  const filterCategory = value("filterCategory").trim();
+
+  if(filterLanguage) url.searchParams.set("language", filterLanguage);
+  if(filterCategory) url.searchParams.set("category", filterCategory);
+
+  const res = await fetch(url.toString(), {
+    headers: adminHeaders()
+  });
+
+  const json = await res.json();
+
+  if(!json.ok){
+    body.innerHTML = `<tr><td colspan="9" class="muted">Failed to load knowledge</td></tr>`;
+    setMsg(json.detail || "Failed to load knowledge", "error");
+    return;
+  }
+
+  const items = json.items || [];
+  body.innerHTML = "";
+
+  if(items.length === 0){
+    body.innerHTML = `<tr><td colspan="9" class="muted">No knowledge items found</td></tr>`;
+    return;
+  }
+
+  for(const it of items){
+    const tr = document.createElement("tr");
+    tr.innerHTML = `
+      <td>${fmt(it.id)}</td>
+      <td>${categoryBadge(it.category)}</td>
+      <td>${languageBadge(it.language)}</td>
+      <td><b>${fmt(it.title)}</b></td>
+      <td style="white-space:pre-wrap;">${fmt(it.content)}</td>
+      <td>${activeBadge(it.is_active)}</td>
+      <td>${fmt(it.sort_order)}</td>
+      <td>${fmt(it.source)}</td>
+      <td>
+        <div class="actions">
+          <button class="info" onclick='fillForm(${JSON.stringify(it).replace(/'/g, "&apos;")})'>Edit</button>
+          <button class="danger" onclick="deactivateKnowledge(${it.id})">Deactivate</button>
+        </div>
+      </td>
+    `;
+    body.appendChild(tr);
+  }
+}
+
+async function saveKnowledge(){
+  const tenantId = value("tenantId").trim();
+  if(!tenantId){
+    setMsg("tenant_id required", "error");
+    return;
+  }
+
+  const payload = {
+    id: value("itemId").trim() || null,
+    tenant_id: tenantId,
+    category: value("category").trim(),
+    language: value("language").trim(),
+    title: value("title").trim(),
+    content: value("content").trim(),
+    sort_order: Number(value("sortOrder") || 0),
+    source: value("source").trim(),
+    is_active: value("isActive") === "true"
+  };
+
+  const res = await fetch("/admin/knowledge/upsert", {
+    method: "POST",
+    headers: Object.assign(
+      {"Content-Type": "application/json"},
+      adminHeaders()
+    ),
+    body: JSON.stringify(payload)
+  });
+
+  const json = await res.json();
+
+  if(!json.ok){
+    setMsg(json.detail || "Failed to save knowledge item", "error");
+    return;
+  }
+
+  setMsg("Knowledge item saved");
+  resetForm();
+  loadKnowledge();
+}
+
+async function deactivateKnowledge(itemId){
+  const tenantId = value("tenantId").trim();
+  if(!tenantId){
+    setMsg("tenant_id required", "error");
+    return;
+  }
+
+  const url = new URL(`/admin/knowledge/${itemId}/deactivate`, window.location.origin);
+  url.searchParams.set("tenant_id", tenantId);
+
+  const res = await fetch(url.toString(), {
+    method: "POST",
+    headers: adminHeaders()
+  });
+
+  const json = await res.json();
+
+  if(!json.ok){
+    setMsg(json.detail || "Failed to deactivate knowledge item", "error");
+    return;
+  }
+
+  setMsg("Knowledge item deactivated");
+  loadKnowledge();
+}
+
+async function seedDefaults(){
+  const tenantId = value("tenantId").trim();
+  if(!tenantId){
+    setMsg("tenant_id required", "error");
+    return;
+  }
+
+  const res = await fetch("/admin/knowledge/seed-defaults", {
+    method: "POST",
+    headers: Object.assign(
+      {"Content-Type": "application/json"},
+      adminHeaders()
+    ),
+    body: JSON.stringify({ tenant_id: tenantId })
+  });
+
+  const json = await res.json();
+
+  if(!json.ok){
+    setMsg(json.detail || "Failed to seed defaults", "error");
+    return;
+  }
+
+  setMsg("Default knowledge seeded");
+  loadKnowledge();
+}
+
+document.getElementById("filterLanguage").addEventListener("change", loadKnowledge);
+document.getElementById("filterCategory").addEventListener("change", loadKnowledge);
+
+resetForm();
+</script>
+
+</body>
+</html>

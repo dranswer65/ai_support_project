@@ -1,0 +1,427 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8"/>
+<title>Invoice History</title>
+
+<style>
+body{
+  font-family:Arial,sans-serif;
+  background:#f7f7f7;
+  margin:0;
+}
+header{
+  background:white;
+  border-bottom:1px solid #ddd;
+  padding:14px 18px;
+}
+.wrap{
+  max-width:1400px;
+  margin:auto;
+  padding:20px;
+}
+.card{
+  background:white;
+  border:1px solid #eee;
+  border-radius:10px;
+  padding:18px;
+  margin-bottom:18px;
+}
+.row{
+  display:grid;
+  grid-template-columns:1fr 220px 220px 220px;
+  gap:12px;
+  margin-bottom:14px;
+}
+.top-stats{
+  display:grid;
+  grid-template-columns:repeat(4,1fr);
+  gap:12px;
+}
+.stat-box{
+  background:#fafafa;
+  border:1px solid #eee;
+  border-radius:10px;
+  padding:14px;
+}
+.stat-label{
+  color:#666;
+  font-size:12px;
+}
+.stat-value{
+  font-size:28px;
+  font-weight:700;
+}
+input, select{
+  width:100%;
+  padding:8px;
+  box-sizing:border-box;
+}
+button, a.btn{
+  padding:8px 12px;
+  border-radius:6px;
+  border:1px solid #ccc;
+  background:white;
+  cursor:pointer;
+  text-decoration:none;
+  display:inline-block;
+  color:inherit;
+}
+button.primary{
+  background:#0077ff;
+  color:white;
+  border:none;
+}
+button.small, a.small{
+  font-size:12px;
+}
+button.info, a.info{
+  background:#eff6ff;
+  border-color:#93c5fd;
+  color:#1d4ed8;
+}
+button.good, a.good{
+  background:#ecfdf3;
+  border-color:#86efac;
+  color:#166534;
+}
+table{
+  width:100%;
+  border-collapse:collapse;
+}
+th, td{
+  border:1px solid #eee;
+  padding:10px;
+  text-align:left;
+  vertical-align:top;
+}
+th{
+  background:#fafafa;
+}
+.muted{
+  color:#666;
+  font-size:12px;
+}
+.success{
+  color:#0a7f38;
+  font-size:13px;
+}
+.error{
+  color:#b42318;
+  font-size:13px;
+}
+.actions{
+  display:flex;
+  flex-wrap:wrap;
+  gap:6px;
+}
+.status-pill{
+  display:inline-block;
+  padding:4px 10px;
+  border-radius:999px;
+  font-size:12px;
+  border:1px solid #ccc;
+  font-weight:700;
+  background:#fff;
+}
+.status-paid{
+  background:#ecfdf3;
+  border-color:#86efac;
+  color:#166534;
+}
+.status-open{
+  background:#fff7ed;
+  border-color:#fdba74;
+  color:#9a3412;
+}
+.status-draft{
+  background:#eff6ff;
+  border-color:#93c5fd;
+  color:#1d4ed8;
+}
+.status-void{
+  background:#fef2f2;
+  border-color:#fca5a5;
+  color:#991b1b;
+}
+.status-other{
+  background:#f5f5f5;
+  border-color:#d4d4d4;
+  color:#444;
+}
+#msg{
+  margin-top:8px;
+}
+@media (max-width:1100px){
+  .row{
+    grid-template-columns:1fr;
+  }
+  .top-stats{
+    grid-template-columns:repeat(2,1fr);
+  }
+}
+</style>
+</head>
+
+<body>
+
+<header>
+  <b>Invoice History</b>
+</header>
+
+<div class="wrap">
+
+  <div class="card">
+    <div style="display:flex;gap:8px;flex-wrap:wrap;">
+      <button onclick="openAnalytics()">Analytics</button>
+      <button onclick="openBilling()">Billing</button>
+      <button onclick="openUsage()">Usage</button>
+      <button onclick="openInvoices()">Invoices</button>
+      <button onclick="openTemplates()">Templates</button>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="top-stats">
+      <div class="stat-box">
+        <div class="stat-label">Invoices</div>
+        <div id="statTotal" class="stat-value">0</div>
+      </div>
+
+      <div class="stat-box">
+        <div class="stat-label">Paid</div>
+        <div id="statPaid" class="stat-value">0</div>
+      </div>
+
+      <div class="stat-box">
+        <div class="stat-label">Open</div>
+        <div id="statOpen" class="stat-value">0</div>
+      </div>
+
+      <div class="stat-box">
+        <div class="stat-label">Total Amount</div>
+        <div id="statAmount" class="stat-value">0</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="row">
+      <div>
+        <label>Search clinic</label>
+        <input id="searchBox" placeholder="Search by clinic, tenant, invoice id"/>
+      </div>
+
+      <div>
+        <label>Status</label>
+        <select id="statusFilter">
+          <option value="ALL">ALL</option>
+          <option value="PAID">PAID</option>
+          <option value="OPEN">OPEN</option>
+          <option value="DRAFT">DRAFT</option>
+          <option value="VOID">VOID</option>
+        </select>
+      </div>
+
+      <div>
+        <label>Tenant</label>
+        <input id="tenantFilter" placeholder="e.g. alnoor_clinic"/>
+      </div>
+
+      <div style="display:flex;align-items:end;gap:8px;flex-wrap:wrap;">
+        <button class="primary" onclick="loadInvoices()">Refresh</button>
+        <button onclick="openBilling()">Billing</button>
+        <button onclick="openUsage()">Usage</button>
+        <button onclick="openAnalytics()">Analytics</button>
+        <button onclick="openTemplates()">Templates</button>
+      </div>
+    </div>
+
+    <div id="msg"></div>
+  </div>
+
+  <div class="card">
+    <table>
+      <thead>
+        <tr>
+          <th>Clinic</th>
+          <th>Tenant</th>
+          <th>Invoice</th>
+          <th>Date</th>
+          <th>Amount</th>
+          <th>Status</th>
+          <th>Plan</th>
+          <th>Hosted</th>
+          <th>PDF</th>
+        </tr>
+      </thead>
+      <tbody id="invoicesBody">
+        <tr>
+          <td colspan="9" class="muted">Loading invoices...</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+</div>
+
+<script>
+function adminHeaders(){
+  return {};
+}
+
+function setMsg(text, kind="success"){
+  const el = document.getElementById("msg");
+  el.className = kind === "error" ? "error" : "success";
+  el.textContent = text || "";
+}
+
+function openAnalytics(){
+  window.location.href = "/admin/analytics";
+}
+
+function openBilling(){
+  window.location.href = "/admin/billing";
+}
+
+function openUsage(){
+  window.location.href = "/admin/usage";
+}
+
+function openInvoices(){
+  window.location.href = "/admin/invoices";
+}
+
+function openTemplates(){
+  window.location.href = "/admin/templates";
+}
+
+function fmt(v){
+  return v === null || v === undefined || v === "" ? "-" : String(v);
+}
+
+function money(amount, currency){
+  const n = Number(amount || 0);
+  const c = String(currency || "USD").toUpperCase();
+  return `${n.toFixed(2)} ${c}`;
+}
+
+function statusPill(status){
+  const s = String(status || "").toUpperCase();
+  if(s === "PAID") return `<span class="status-pill status-paid">PAID</span>`;
+  if(s === "OPEN") return `<span class="status-pill status-open">OPEN</span>`;
+  if(s === "DRAFT") return `<span class="status-pill status-draft">DRAFT</span>`;
+  if(s === "VOID") return `<span class="status-pill status-void">VOID</span>`;
+  return `<span class="status-pill status-other">${s || "UNKNOWN"}</span>`;
+}
+
+function setStats(items){
+  let total = items.length;
+  let paid = 0;
+  let open = 0;
+  let amount = 0;
+
+  for(const it of items){
+    const s = String(it.status || "").toUpperCase();
+    if(s === "PAID") paid++;
+    if(s === "OPEN") open++;
+    amount += Number(it.amount || 0);
+  }
+
+  document.getElementById("statTotal").textContent = total;
+  document.getElementById("statPaid").textContent = paid;
+  document.getElementById("statOpen").textContent = open;
+  document.getElementById("statAmount").textContent = amount.toFixed(2);
+}
+
+async function loadInvoices(){
+  const body = document.getElementById("invoicesBody");
+  body.innerHTML = `<tr><td colspan="9" class="muted">Loading invoices...</td></tr>`;
+  setMsg("");
+
+  const tenantId = document.getElementById("tenantFilter").value.trim();
+  const status = document.getElementById("statusFilter").value;
+  const q = document.getElementById("searchBox").value.trim().toLowerCase();
+
+  const url = new URL("/admin/invoices/list", window.location.origin);
+  if(tenantId) url.searchParams.set("tenant_id", tenantId);
+  if(status && status !== "ALL") url.searchParams.set("status", status);
+
+  try{
+    const res = await fetch(url.toString(), {
+      headers: adminHeaders(),
+      credentials: "same-origin"
+    });
+
+    const json = await res.json();
+
+    if(!res.ok || !json.ok){
+      body.innerHTML = `<tr><td colspan="9" class="muted">Failed to load invoices</td></tr>`;
+      setMsg(json.detail || "Failed to load invoices", "error");
+      return;
+    }
+
+    let items = json.items || [];
+
+    if(q){
+      items = items.filter(x =>
+        String(x.clinic_name || "").toLowerCase().includes(q) ||
+        String(x.tenant_id || "").toLowerCase().includes(q) ||
+        String(x.invoice_id || "").toLowerCase().includes(q) ||
+        String(x.invoice_number || "").toLowerCase().includes(q)
+      );
+    }
+
+    setStats(items);
+    body.innerHTML = "";
+
+    if(items.length === 0){
+      body.innerHTML = `<tr><td colspan="9" class="muted">No invoices found</td></tr>`;
+      return;
+    }
+
+    for(const it of items){
+      const tr = document.createElement("tr");
+      tr.innerHTML = `
+        <td><b>${fmt(it.clinic_name)}</b></td>
+        <td><span class="muted">${fmt(it.tenant_id)}</span></td>
+        <td>
+          <div><b>${fmt(it.invoice_number || it.invoice_id)}</b></div>
+          <div class="muted">${fmt(it.invoice_id)}</div>
+        </td>
+        <td>${fmt(it.invoice_date)}</td>
+        <td>${money(it.amount, it.currency)}</td>
+        <td>${statusPill(it.status)}</td>
+        <td>${fmt(it.plan_code)}</td>
+        <td>
+          ${
+            it.hosted_invoice_url
+            ? `<a class="btn small info" href="${it.hosted_invoice_url}" target="_blank">Open</a>`
+            : `<span class="muted">-</span>`
+          }
+        </td>
+        <td>
+          ${
+            it.invoice_pdf
+            ? `<a class="btn small good" href="${it.invoice_pdf}" target="_blank">PDF</a>`
+            : `<span class="muted">-</span>`
+          }
+        </td>
+      `;
+      body.appendChild(tr);
+    }
+  }catch(e){
+    console.error(e);
+    body.innerHTML = `<tr><td colspan="9" class="muted">Failed to load invoices</td></tr>`;
+    setMsg("Failed to load invoices", "error");
+  }
+}
+
+document.getElementById("searchBox").addEventListener("input", loadInvoices);
+document.getElementById("statusFilter").addEventListener("change", loadInvoices);
+
+loadInvoices();
+</script>
+
+</body>
+</html>
