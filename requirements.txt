@@ -91,3 +91,4 @@ wrapt==2.0.1
 yarl==1.22.0
 asyncpg
 SQLAlchemy>=2.0
+passlib[bcrypt]
